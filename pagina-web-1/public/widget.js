@@ -188,6 +188,7 @@
       return `
         <button
           type="button"
+          ${eventConfig.sales_enabled === false ? 'disabled aria-disabled="true" title="Venta disponible proximamente"' : ''}
           onclick="window.selectTicket('${t.ticket_number}')"
           class="tk ${cls}"
         >
