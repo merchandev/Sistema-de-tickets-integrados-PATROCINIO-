@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Comprar entrada | Iluminando Caminos</title>
-  <meta name="theme-color" content="#650b10" />
+  <title>Adquirir entrada | Iluminando Caminos · Maturín</title>
+  <meta name="theme-color" content="#210407" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Poppins:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,400;1,600&family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/styles.css" />
   <script src="/config-client.js"></script>
 </head>
@@ -15,20 +15,23 @@
 
   <nav class="nav">
     <div class="container nav-inner">
-      <a href="/" class="logo"><span class="logo-badge" data-logo>IC</span><span>Iluminando Caminos<small>Maturín</small></span></a>
+      <a href="/" class="logo">
+        <span class="logo-badge" data-logo>IC</span>
+        <span>Iluminando Caminos<small>Campaña Social · Maturín</small></span>
+      </a>
       <a href="/" class="back">← Volver al inicio</a>
     </div>
   </nav>
 
   <div class="shop-band">
     <div class="container shop-head">
-      <div>
-        <span id="site-badge" class="tag">Venta de entradas</span>
-        <h1 id="event-title">Tu entrada, <span class="serif">un nuevo camino.</span></h1>
-        <p id="event-subtitle">Elige tu número y acompáñanos en un encuentro con propósito.</p>
+      <div class="hero-enter" style="--d:0.08s">
+        <span id="site-badge" class="tag">Plataforma Oficial de Entradas</span>
+        <h1 id="event-title">Tu entrada, <span class="serif hl">un nuevo camino.</span></h1>
+        <p id="event-subtitle">Selecciona tu número del 001 al 250 y acompáñanos en el ciclo de conferencias y el concierto benéfico.</p>
       </div>
-      <div class="rate-card">
-        <div class="l">Precio entrada / Referencia BCV</div>
+      <div class="rate-card hero-enter" style="--d:0.2s">
+        <div class="l">Precio Oficial / Referencia BCV en Tiempo Real</div>
         <div class="v"><span id="price-usd">$5.00 USD</span> = <span id="price-ves">Bs. --</span></div>
         <div class="s">Tasa BCV: <strong id="bcv-rate">Bs. --</strong> <span id="sync-indicator" class="sync">● Sincronizado</span></div>
         <div id="bcv-source" class="src"></div>
@@ -45,12 +48,12 @@
           <div id="event-location" class="n">Salón Ángeles Gold, Maturín</div>
         </div>
         <div class="cell">
-          <div class="k">Parte 1 · Conferencias</div>
+          <div class="k">Parte 1 · Ciclo de Conferencias</div>
           <div id="event-conf-hours" class="v">4:00 PM a 7:00 PM</div>
           <div class="n">Acceso incluido con tu entrada</div>
         </div>
         <div class="cell">
-          <div class="k">Parte 2 · Sorpresas y más</div>
+          <div class="k">Parte 2 · Concierto Benéfico</div>
           <div id="event-concert-hours" class="v">A partir de las 7:00 PM</div>
           <div class="n">Acceso incluido con tu entrada</div>
         </div>
@@ -62,9 +65,9 @@
       <section id="checkout-section" class="checkout hidden">
         <div class="checkout-head">
           <div>
-            <span class="tag-lock">Puesto bloqueado solo para ti</span>
+            <span class="tag-lock">✦ Puesto bloqueado exclusivamente para ti</span>
             <h2>Entrada seleccionada: #<span id="selected-ticket-label">001</span></h2>
-            <p>Completa tu reporte de pago antes de que finalice el contador de 3 minutos.</p>
+            <p>Completa los datos de tu pago antes de que finalice el contador de 3 minutos.</p>
           </div>
           <div class="timer">
             <div class="l">Tiempo restante de reserva</div>
@@ -85,7 +88,7 @@
           </div>
 
           <form id="payment-form" onsubmit="submitPaymentForm(event)" class="form">
-            <h3 class="full">2. Carga tus datos y la captura para verificación</h3>
+            <h3 class="full">2. Carga tus datos y el comprobante para verificación</h3>
 
             <div>
               <label for="buyer_name">Nombre y apellido *</label>
@@ -104,7 +107,7 @@
               <input id="buyer_email" name="buyer_email" type="email" required placeholder="tu@correo.com" />
             </div>
             <div>
-              <label for="payment_phone">Teléfono que utilizó para realizar el pago *</label>
+              <label for="payment_phone">Teléfono desde el que realizó el pago *</label>
               <input id="payment_phone" name="payment_phone" type="tel" required placeholder="Ej: 0412-9876543" />
             </div>
             <div>
@@ -116,18 +119,18 @@
               <input id="screenshot" name="screenshot" type="file" accept="image/*" required />
             </div>
             <div class="full actions">
-              <button type="submit" id="btn-submit-order" class="btn btn-lime btn-lg no-arrow">Enviar soporte de pago para verificación</button>
+              <button type="submit" id="btn-submit-order" class="btn btn-lg no-arrow">Enviar soporte de pago para verificación</button>
             </div>
           </form>
         </div>
       </section>
 
-      <!-- Mapa de entradas -->
+      <!-- Mapa de entradas con explorador inteligente -->
       <section>
         <div class="map-head">
           <div>
-            <h2>Elige tu número <span class="hl">001 al 250</span></h2>
-            <p>Haz clic en una entrada disponible. Al seleccionarla se bloqueará por 3 minutos para que nadie más pueda tomarla.</p>
+            <h2>Selecciona tu número <span class="serif hl">(001 al 250)</span></h2>
+            <p>Haz clic sobre una entrada disponible. Al seleccionarla se bloqueará por 3 minutos para que nadie más pueda tomarla.</p>
           </div>
           <div class="legend">
             <span><i class="lg-free"></i> Disponible</span>
@@ -136,6 +139,26 @@
             <span><i class="lg-sold"></i> Vendida</span>
           </div>
         </div>
+
+        <!-- Barra de herramientas rápida: filtro por bloque, búsqueda y selección aleatoria -->
+        <div class="ticket-toolbar" id="ticket-toolbar">
+          <div class="tt-filters" role="group" aria-label="Filtrar entradas">
+            <button type="button" class="tt-btn active" data-filter="all">Todas (250)</button>
+            <button type="button" class="tt-btn" data-filter="free">Solo disponibles</button>
+            <button type="button" class="tt-btn" data-range="1-50">001–050</button>
+            <button type="button" class="tt-btn" data-range="51-100">051–100</button>
+            <button type="button" class="tt-btn" data-range="101-150">101–150</button>
+            <button type="button" class="tt-btn" data-range="151-200">151–200</button>
+            <button type="button" class="tt-btn" data-range="201-250">201–250</button>
+          </div>
+          <div class="tt-actions">
+            <div class="tt-search-wrap">
+              <input type="text" id="ticket-search" class="tt-search" placeholder="Buscar # (ej. 042)" maxlength="3" inputmode="numeric" aria-label="Buscar número de entrada" />
+            </div>
+            <button type="button" id="btn-random-ticket" class="tt-random">✦ Elegir al azar</button>
+          </div>
+        </div>
+
         <div id="tickets-grid" class="tickets-grid"></div>
       </section>
 
@@ -158,12 +181,16 @@
 
   <footer>
     <div class="container foot">
-      <a href="/" class="logo"><span class="logo-badge" data-logo>IC</span><span>Iluminando Caminos<small>Maturín</small></span></a>
-      <div>© Iluminando Caminos · <a href="https://instagram.com/iluminando_caminoss" target="_blank" rel="noopener" style="text-decoration:underline">@iluminando_caminoss</a></div>
+      <a href="/" class="logo">
+        <span class="logo-badge" data-logo>IC</span>
+        <span>Iluminando Caminos<small>Campaña Social · Maturín</small></span>
+      </a>
+      <div>© Iluminando Caminos · Estudiantes de Publicidad y Mercadeo IUTIRLA · <a href="https://instagram.com/iluminando_caminoss" target="_blank" rel="noopener" style="color:var(--gold);text-decoration:underline">@iluminando_caminoss</a></div>
     </div>
   </footer>
 
   <script src="/brand.js"></script>
   <script src="/widget.js"></script>
+  <script src="/design.js"></script>
 </body>
 </html>

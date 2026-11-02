@@ -47,3 +47,9 @@ Los logs de cada servicio rotan a 10 MB con tres archivos como máximo. Los dem�
 Se comprobaron respuestas HTTPS 200 para ambas portadas, redirecciones HTTP a HTTPS, WebSocket seguro desde los dos dominios, las 250 entradas compartidas y acceso autenticado al dashboard. Sin credenciales, administrador, API administrativa y archivos de entradas devuelven 401. Las rutas de reserva y reporte de pago devuelven 503 con `SALES_NOT_OPEN` mientras las ventas están cerradas.
 
 Los cuatro contenedores están saludables y aplican los límites de la tabla. La comparación con el estado anterior al despliegue confirmó que los otros 21 contenedores conservaron identificadores, fechas de arranque y puertos.
+
+## Revisión visual de las dos webs
+
+Se integró y revisó la nueva composición editorial de ambas páginas: vino y crema para Iluminando Caminos y hero morado con acentos lima y rosa para Marketing. Se retiraron la apertura con porcentaje ficticio, el movimiento de botones con el cursor y el reproductor simulado. El espacio del video indica que el material está pendiente y permite incorporar `/media/promo.mp4` cuando esté disponible.
+
+Se verificaron portadas y compra a 320, 768 y 1440 píxeles sin desbordamientos en el contenido, menú móvil, búsqueda por número, filtro por rango y las 250 entradas. Las ventas permanecen cerradas. El script `scripts/desplegar-webs.sh` publica únicamente los dos frontends y conserva una copia de sus archivos previos; comprueba que los demás contenedores conserven arranque y puertos.

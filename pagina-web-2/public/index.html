@@ -3,193 +3,416 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Hablemos de Marketing | Marketing Digital con Propósito · Maturín</title>
-  <meta name="description" content="Conferencias + sorpresas sobre marketing digital con propósito en Maturín. Asegura tu entrada del 001 al 250." />
-  <meta name="theme-color" content="#5b21d6" />
+  <title>Hablemos de Marketing | Maturín · Marketing Digital con Propósito</title>
+  <meta name="description" content="Marketing Digital con Propósito en Maturín. Conferencias + Sorpresas en el Salón Ángeles Gold. Aprende a conquistar las redes sociales sin humo." />
+  <meta name="theme-color" content="#0d0819" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Poppins:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/styles.css" />
   <script src="/config-client.js"></script>
 </head>
-<body class="landing" data-theme="purple">
+<body data-theme="purple">
 
-  <!-- NAV -->
-  <nav class="nav" id="nav">
+  <!-- BARRA DE PROGRESO SUPERIOR EN LIMA ÁCIDO -->
+  <div class="scroll-progress" id="scroll-progress" aria-hidden="true"></div>
+
+  <!-- NAVEGACIÓN PRINCIPAL -->
+  <nav id="nav" class="nav">
     <div class="container nav-inner">
-      <a href="#inicio" class="logo"><span class="logo-badge" data-logo>HDM</span><span>Hablemos de Marketing<small>Maturín</small></span></a>
+      <a href="#inicio" class="logo" aria-label="Hablemos de Marketing - Inicio">
+        <span class="logo-badge" data-logo>HDM</span>
+        <span>Hablemos de Marketing<small>Maturín · Edición 2026</small></span>
+      </a>
       <div class="nav-links">
-        <a href="#video">Video</a>
-        <a href="#nosotros">Nosotros</a>
-        <a href="#programa">Programa</a>
-        <a href="#entradas">Entradas</a>
-        <a href="#faq">Preguntas</a>
+        <a href="#video">El encuentro</a>
+        <a href="#nosotros">Manifiesto & Pilares</a>
+        <a href="#programa">Agenda</a>
+        <a href="#entradas">Credenciales</a>
+        <a href="#faq">FAQ</a>
       </div>
-<details class="mobile-menu"><summary aria-label="Abrir navegación">Menú <span>＋</span></summary><div><a href="#nosotros">Nosotros</a><a href="#programa">Programa</a><a href="#entradas">Entradas</a><a href="#faq">Preguntas frecuentes</a><a href="/comprar">Comprar entrada ↗</a></div></details>
-      <a href="/comprar" class="btn btn-lime">Comprar entrada</a>
+      <div class="nav-cta">
+        <a href="/comprar" class="btn btn-lime magnetic">Comprar entrada</a>
+        <details class="mobile-menu">
+          <summary aria-label="Abrir menú de navegación"><span></span></summary>
+          <div class="mobile-panel">
+            <a href="#video">El encuentro</a>
+            <a href="#nosotros">Manifiesto & Pilares</a>
+            <a href="#programa">Agenda</a>
+            <a href="#entradas">Credenciales</a>
+            <a href="#faq">Preguntas frecuentes</a>
+            <a href="/comprar" class="btn btn-lime">Comprar entrada</a>
+          </div>
+        </details>
+      </div>
     </div>
   </nav>
 
-<!-- HERO -->
-<header class="hero sec sec-A" id="inicio">
- <div class="container hero-grid">
-  <div class="hero-copy">
-   <span class="tag">ENCUENTRO PRESENCIAL · MATURÍN</span>
-   <h1>Marketing<br><span class="serif">digital.</span><br><span class="hl">Impacto real.</span></h1>
-   <p class="lead">Ideas que te mueven. Personas que te inspiran. Un encuentro para aprender marketing, compartir experiencias y llevar tus próximos pasos más lejos.</p>
-   <div class="hero-cta"><a href="/comprar" class="btn btn-lime btn-lg">Asegurar mi entrada</a><a class="text-link" href="#programa">Explorar el programa <span>↘</span></a></div>
-   <div class="hero-proof"><span class="proof-dot"></span><span>Solo 250 entradas · Acceso a todo el programa</span></div>
-  </div>
-  <div class="hero-stage"><div class="brand-art art-marketing" aria-hidden="true"><div class="art-top"><span>IDEAS QUE CONECTAN</span><span>MTN. / VE</span></div><span class="art-circle"></span><div class="poster-type">HABLEMOS<br><span>DE</span><br>MARKETING<span class="poster-dot">.</span></div><svg class="poster-star" viewBox="0 0 100 100"><path d="M50 0 60 36 89 11 65 40 100 50 64 60 89 89 60 65 50 100 40 64 11 89 36 60 0 50 35 40 11 11 40 36Z" fill="currentColor"/></svg><span class="art-caption">APRENDE. CONECTA. HAZLO REAL.</span></div>
-   <div class="info-card">
-    <div class="ticket-top"><span class="tag fill">Tu próximo gran encuentro.</span><span class="ticket-arrow">↗</span></div>
-    <div class="ticket-main"><div><span class="ticket-label">ACCESO GENERAL</span><div class="price" id="chip-price">$5<small> USD</small></div></div><div class="ticket-place">Salón Ángeles Gold<span>Maturín, Venezuela</span></div></div>
-    <div class="row"><span class="k">Fecha del encuentro</span><span class="v" id="chip-date">15 de noviembre de 2026</span></div>
-    <div class="ticket-bottom"><div class="avail-row"><span class="avail-label">Entradas disponibles</span><span><span class="avail-count">--</span> / 250</span></div><div class="bar"><i class="avail-bar"></i></div></div>
-   </div>
-  </div>
- </div>
- <div class="container hero-bottom"><span>Una conversación puede cambiar tu siguiente paso.</span><a href="#nosotros">Conoce el encuentro <span>↓</span></a></div>
-</header>
-<section class="experience-strip" aria-label="Lo que vivirás"><div class="container"><div><span>01 /</span> Aprender <small>Ideas que te acompañan</small></div><div><span>02 /</span> Conectar <small>Personas con propósito</small></div><div><span>03 /</span> Compartir <small>Un encuentro para recordar</small></div></div></section>
+  <main>
+    <!-- 1. HERO NEO-EDITORIAL CON HIGHLIGHT LIMA + COLLAGE DE LIBRETA & CREDENCIAL -->
+    <header id="inicio" class="hero">
+      <div class="hero-glow g1" aria-hidden="true"></div>
+      <div class="hero-glow g2" aria-hidden="true"></div>
 
-  <!-- VIDEO -->
-  <section class="sec sec-dark" id="video">
-    <div class="container">
-      <div class="reveal">
-        <span class="tag">01 / EL ENCUENTRO</span>
-        <h2 class="h2" style="margin-top:20px">Mira de qué va el <span class="hl">evento</span></h2>
-      </div>
-      <div class="video-frame reveal d1" id="video-frame">
-        <div class="video-placeholder">
-          <div>
-            <div class="play"></div>
-            <p>Video oficial del evento</p>
-            <small>Muy pronto</small>
+      <div class="container hero-grid">
+        <div class="hero-copy">
+          <div class="hero-enter" style="--d: 0.52s">
+            <span class="tag">Encuentro Presencial · Salón Ángeles Gold · Maturín</span>
+          </div>
+
+          <h1>Hablemos de<br>marketing.<br><em class="serif">En persona.</em></h1>
+
+          <p class="lead hero-enter">Una tarde para aprender, compartir ideas y conectar en Maturín. Conferencias y un concierto para cerrar la jornada, con una sola entrada.</p>
+
+          <div class="hero-cta hero-enter" style="--d: 1.10s">
+            <a href="/comprar" class="btn btn-lime btn-lg magnetic">Ver entradas</a>
+            <a href="#nosotros" class="btn-ghost">Explorar los 4 pilares ↓</a>
+          </div>
+
+          <div class="hero-proof hero-enter" style="--d: 1.22s">
+            <div class="proof-pill">
+              <span class="proof-dot"></span>
+              <span>250 Cupos Numerados (001–250)</span>
+            </div>
+            <div class="proof-pill">
+              <span>Conferencias + Sorpresas</span>
+            </div>
+            <div class="proof-pill">
+              <span>Salón Ángeles Gold</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ESCENARIO DERECHO: HOJA DE LIBRETA ROSA CON PERFORACIÓN + STICKER + CREDENCIAL VIP -->
+        <div class="hero-stage hero-stage-enter" id="hero-stage">
+          <!-- Sticker ácido flotante inspirado en el post #3 de Instagram -->
+          <div class="hdm-sticker" aria-hidden="true">
+            <span>IDEAS · CONVERSACIONES · CONEXIONES</span>
+            <small>HABLEMOS CLARO ↗</small>
+          </div>
+
+          <!-- Póster estilo hoja de bloc rosa con borde superior troquelado (Post #2 de IG) -->
+          <div class="hdm-poster" aria-hidden="true">
+            <div class="notebook-holes">
+              <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+            </div>
+            <div class="hdm-poster-top">
+              <span>BREAKING NEWS // DAILY MARKETING</span>
+              <span>MATURÍN · 2026</span>
+            </div>
+            <div class="hdm-poster-headline">
+              Aprende a conquistar<br>las redes sociales.
+              <!-- Cursor vectorial estilo post de Instagram -->
+              <svg class="ig-cursor" viewBox="0 0 28 28" fill="none">
+                <path d="M5 3L23 12.5L14.5 15.2L11.5 24L5 3Z" fill="#110b1f" stroke="#b8f500" stroke-width="2" stroke-linejoin="round"/>
+              </svg>
+            </div>
+            <div class="hdm-poster-pill">¿Publicas por publicar? Es hora de cambiar eso.</div>
+            <div class="hdm-pillars-grid">
+              <div>Social<br>Media</div>
+              <div>Marketing<br>Digital</div>
+              <div>Crea<br>Contenido</div>
+              <div>Estrategias<br>de Marketing</div>
+            </div>
+          </div>
+
+          <!-- Credencial VIP perforada -->
+          <div class="info-card">
+            <div class="ticket-top">
+              <span class="ticket-badge">CREDENCIAL OFICIAL · 001 AL 250</span>
+              <span>QR ACTIVO ↗</span>
+            </div>
+            <div class="ticket-main">
+              <div>
+                <span class="ticket-label">CONFERENCIAS + CONCIERTO</span>
+                <div class="price" id="chip-price">$5<small> USD</small></div>
+              </div>
+              <div class="ticket-place">
+                Salón Ángeles Gold
+                <span>Maturín, Venezuela</span>
+              </div>
+            </div>
+            <div class="meta-row">
+              <span>Fecha del encuentro</span>
+              <b id="chip-date">Próximamente</b>
+            </div>
+            <div class="avail">
+              <div class="avail-head">
+                <span class="avail-label">Entradas disponibles</span>
+                <b class="avail-count">-- / 250</b>
+              </div>
+              <div class="bar"><i class="avail-bar"></i></div>
+            </div>
           </div>
         </div>
       </div>
-    </div>
-  </section>
 
-  <!-- NOSOTROS -->
-  <section class="sec sec-B" id="nosotros">
-    <div class="container">
-      <div class="about-grid">
-        <div class="reveal">
-          <span class="tag">Sobre nosotros</span>
-          <h2 class="h2" style="margin-top:20px">Hablemos de <span class="serif">marketing</span>, sin <span class="hl">complicarlo</span></h2>
+      <!-- CINTA KINETIC MARQUEE EN LIMA ÁCIDO -->
+      <div class="event-strip"><div class="container"><span>Maturín, Venezuela</span><span>Conferencias · 4:00 PM</span><span>Concierto · 7:00 PM</span></div></div>
+    </header>
+
+    <!-- 2. TEASER OFICIAL: MONITOR DE ESTUDIO CREATIVO CON SELECTOR DE ESCENAS -->
+    <section id="video" class="section video-sec">
+      <div class="container video-layout">
+        <div class="video-copy">
+          <span class="tag">El encuentro</span>
+          <h2>Ideas que salen de la pantalla.</h2>
+          <p class="lead">Contenido, estrategia y comunicación en un encuentro presencial en Maturín. Conferencias desde las 4:00 PM y concierto a partir de las 7:00 PM, incluidos con tu entrada.</p>
         </div>
-        <div class="about-copy reveal d1">
-          <p><strong>Hablemos de Marketing</strong> es una comunidad de Maturín que cree en el marketing digital con propósito.</p>
-          <p>Este evento reúne conferencias y sorpresas para que te lleves herramientas claras, ideas frescas y gente con quien conectar.</p>
+        <div id="video-frame" class="video-frame">
+          <div class="film-placeholder">
+            <span>Maturín · Conferencias y concierto</span>
+            <div><strong>Nos vemos en persona.</strong><p>Próximamente compartiremos aquí el video del encuentro.</p></div>
+            <a href="#programa">Consultar el programa ↓</a>
+          </div>
         </div>
       </div>
-      <div class="cards">
-        <div class="card reveal"><div class="n">01</div><h3>Conferencias</h3><p>Ponencias claras y directas sobre marketing digital, redes sociales y negocios.</p></div>
-        <div class="card reveal d1"><div class="n">02</div><h3>Sorpresas</h3><p>Momentos y dinámicas que no vamos a contar aquí. Tienes que estar para vivirlas.</p></div>
-        <div class="card reveal d2"><div class="n">03</div><h3>Comunidad</h3><p>Conoce a otras personas creativas y emprendedoras de Maturín y sigue la conversación.</p></div>
-      </div>
-    </div>
-  </section>
+    </section>
 
-  <!-- PROGRAMA -->
-  <section class="sec sec-dark" id="programa">
-    <div class="container">
-      <div class="reveal">
-        <span class="tag" style="color:var(--pink)">Programa</span>
-        <h2 class="h2" style="margin-top:20px">Así será el <span class="hl">día</span></h2>
-        <p class="sub">Con tu entrada accedes a todo el programa del evento.</p>
-      </div>
-      <div class="timeline" id="timeline">
-        <div class="tl-item reveal"><div class="tl-time">Ingreso</div><div><span class="tl-phase">Acreditación</span><h3>Apertura de puertas</h3></div><p>Recepción de asistentes y validación del código QR único de cada entrada.</p></div>
-        <div class="tl-item reveal"><div class="tl-time">Conferencias</div><div><span class="tl-phase">Parte 1</span><h3>Ciclo de conferencias</h3></div><p>Ponencias e invitados especiales.</p></div>
-        <div class="tl-item reveal"><div class="tl-time">Sorpresas</div><div><span class="tl-phase">Parte 2</span><h3>Lo que viene después</h3></div><p>Incluido con todas las entradas.</p></div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ENTRADAS -->
-  <section class="sec sec-A cta" id="entradas">
-    <svg class="squiggle" style="right:-70px;top:10px;width:230px" viewBox="0 0 220 90" fill="none" aria-hidden="true"><path d="M10 50 C 35 -5, 60 105, 90 45 S 150 -5, 175 45 S 205 70, 212 40" stroke="var(--hl)" stroke-width="16" stroke-linecap="round"/></svg>
-    <div class="container cta-grid">
-      <div class="reveal">
-        <span class="tag">Cupos limitados</span>
-        <h2 class="h2" style="margin-top:20px">Adquiere tu <span class="hl">entrada</span> y no te lo pierdas</h2>
-        <div class="steps">
-          <div class="step"><b>1</b> Elige tu número disponible, del 001 al 250</div>
-          <div class="step"><b>2</b> Paga por Pago Móvil o transferencia, a tasa BCV</div>
-          <div class="step"><b>3</b> Recibe tu PDF con código QR en tu correo</div>
+    <!-- 3. SOBRE NOSOTROS: BENTO GRID DE AGENCIA CREATIVA (5 CELDAS ASIMÉTRICAS) -->
+    <section id="nosotros" class="section light">
+      <div class="container">
+        <div class="section-head reveal">
+          <div>
+            <span class="tag">02 / Sobre Nosotros & Los 4 Pilares</span>
+            <h2>Hablemos de <em class="serif hl">marketing,</em> pero hablemos claro</h2>
+          </div>
+          <p>
+            <strong>Hablemos de Marketing</strong> reúne en Maturín a emprendedores, creadores de contenido, marcas y estudiantes para compartir herramientas reales durante la tarde y celebrar juntos al caer la noche.
+          </p>
         </div>
-        <a href="/comprar" class="btn btn-ink btn-lg">Ir a comprar</a>
-      </div>
-      <div class="price-card reveal d1">
-        <span class="tag fill">Por persona</span>
-        <div class="big" id="cta-price">$5</div>
-        <div class="ves" id="cta-ves">Bs. --</div>
-        <div class="note" id="cta-rate">Calculado a la tasa oficial BCV al momento del pago</div>
-        <div class="avail">
-          <div class="avail-row"><span class="avail-label">Entradas disponibles</span><span><span class="avail-count">--</span> / 250</span></div>
-          <div class="bar"><i class="avail-bar"></i></div>
+
+        <!-- Bento Grid Asimétrico inspirado en las 3 publicaciones de @hablemosdemarketing.ve -->
+        <div class="bento-grid">
+          <!-- Celda 1 (Ancha, oscura/morada con ventana estilo laptop del Post #3) -->
+          <article class="bento-card bento-wide-dark reveal" style="--d: 0.04s">
+            <div class="bw-copy">
+              <span class="bento-pill-lime">MANIFIESTO HDM · MATURÍN</span>
+              <h3>No necesitas ser un «gurú» para entender de marketing</h3>
+              <p>
+                Necesitas que te hablen claro. Dejamos atrás las fórmulas mágicas y el humo digital para enfocarnos en lo que realmente hace crecer un proyecto hoy: criterio estratégico, contenido con intención y conexión humana.
+              </p>
+            </div>
+            <div class="laptop-mockup" aria-hidden="true">
+              <div class="lap-screen">
+                <div class="lap-bar"><span></span><span></span><span></span><i>hablemosdemarketing.ve</i></div>
+                <div class="lap-body">
+                  <strong>NECESITAS QUE TE HABLEN CLARO</strong>
+                  <span>Social Media · Estrategia · Conversión</span>
+                </div>
+              </div>
+              <div class="lap-base"></div>
+              <div class="pink-sticker-tag">DESLIZA · CONECTA · CRECE</div>
+            </div>
+          </article>
+
+          <!-- Celda 2 (Rosa Editorial - Pilar 1 & 2) -->
+          <article class="bento-card bento-pink reveal" style="--d: 0.1s">
+            <div class="bento-top">
+              <span class="bento-num">PILAR 01 + 02</span>
+              <span class="bento-tag">REDES & MARCA</span>
+            </div>
+            <h3>Social Media &amp; Marketing Digital</h3>
+            <p>
+              Cómo dejar de publicar por publicar y transformar tu presencia en Instagram y TikTok en un ecosistema digital con posicionamiento real.
+            </p>
+          </article>
+
+          <!-- Celda 3 (Lima Ácido - Pilar 3) -->
+          <article class="bento-card bento-lime reveal" style="--d: 0.16s">
+            <div class="bento-top">
+              <span class="bento-num">PILAR 03</span>
+              <span class="bento-tag">RETENCIÓN</span>
+            </div>
+            <h3>Creación de Contenido con Propósito</h3>
+            <p>
+              Narrativa visual, ganchos efectivos y estructura de formato corto para que tu mensaje no se quede solo en un «hazme un videíto».
+            </p>
+          </article>
+
+          <!-- Celda 4 (Papel Editorial - Pilar 4) -->
+          <article class="bento-card bento-paper reveal" style="--d: 0.22s">
+            <div class="bento-top">
+              <span class="bento-num">PILAR 04</span>
+              <span class="bento-tag">CONVERSIÓN</span>
+            </div>
+            <h3>Estrategias que Construyen Comunidad</h3>
+            <p>
+              Casos reales y hojas de ruta accionables para negocios locales, profesionales y marcas personales en Venezuela.
+            </p>
+          </article>
+
+          <!-- Celda 5 (Doble Experiencia: Conferencias + Sorpresas) -->
+          <article class="bento-card bento-split reveal" style="--d: 0.28s">
+            <div class="bs-block">
+              <span class="bs-time">BLOQUE 1 · 4:00 PM A 7:00 PM</span>
+              <h4>Ciclo de Conferencias</h4>
+              <p>Ponencias dinámicas, casos prácticos y sesión de preguntas con especialistas invitados.</p>
+            </div>
+            <div class="bs-divider" aria-hidden="true">+</div>
+            <div class="bs-block">
+              <span class="bs-time">BLOQUE 2 · DESDE LAS 7:00 PM</span>
+              <h4>Sorpresas &amp; Concierto en Vivo</h4>
+              <p>Networking, dinámicas especiales y música en vivo incluidos con tu misma credencial.</p>
+            </div>
+          </article>
         </div>
-        <a href="/comprar" class="btn btn-ink">Ver mapa de entradas</a>
       </div>
-    </div>
-  </section>
+    </section>
 
-  <!-- FAQ -->
-  <section class="sec sec-pink" id="faq">
-    <div class="container">
-      <div class="reveal" style="text-align:center">
-        <span class="tag">Preguntas frecuentes</span>
-        <h2 class="h2" style="margin-top:20px">Resolvemos tus <span class="hl">dudas</span></h2>
-      </div>
-      <div class="faq reveal">
-        <details open>
-          <summary>¿Cómo compro mi entrada?</summary>
-          <div class="answer">Pulsa “Comprar entrada”, elige un número disponible del 001 al 250, realiza el pago y completa el formulario con tus datos, la referencia bancaria y la captura del comprobante.</div>
-        </details>
-        <details>
-          <summary>¿Cuánto cuesta y cómo se paga?</summary>
-          <div class="answer">Cada entrada vale <span class="faq-price">$5.00 USD</span>, cobrados en bolívares a la tasa oficial del BCV al momento del pago. Puedes pagar por Pago Móvil o transferencia bancaria.</div>
-        </details>
-        <details>
-          <summary>¿Dónde es el evento?</summary>
-          <div class="answer">En el Salón Ángeles Gold, en Maturín.</div>
-        </details>
-        <details>
-          <summary>¿Qué incluye la entrada?</summary>
-          <div class="answer">Acceso completo al programa del evento: las conferencias y las sorpresas que tenemos preparadas.</div>
-        </details>
-        <details>
-          <summary>¿Qué pasa cuando elijo un número?</summary>
-          <div class="answer">Se bloquea para ti durante 3 minutos para que nadie más pueda tomarlo. Si no envías el comprobante en ese tiempo, el número vuelve a quedar disponible.</div>
-        </details>
-        <details>
-          <summary>¿Cuándo recibo mi entrada?</summary>
-          <div class="answer">Tras enviar tu pago, el equipo lo verifica. Al aprobarse, recibirás en tu correo un PDF con tu código QR único.</div>
-        </details>
-        <details>
-          <summary>¿Qué debo llevar el día del evento?</summary>
-          <div class="answer">Tu entrada en PDF con el código QR y tu cédula de identidad laminada. Los datos del pago se verifican para garantizar que quien paga sea quien recibe la entrada.</div>
-        </details>
-        <details>
-          <summary>¿A qué hora debo llegar?</summary>
-          <div class="answer">Te recomendamos llegar con tiempo para tu acreditación. El horario exacto lo encuentras en la sección Programa.</div>
-        </details>
-      </div>
-    </div>
-  </section>
+    <!-- 4. AGENDA OFICIAL (#programa) -->
+    <section id="programa" class="section">
+      <div class="container">
+        <div class="section-head reveal">
+          <div>
+            <span class="tag">03 / Agenda Oficial</span>
+            <h2>Así viviremos el <span class="hl">encuentro</span></h2>
+          </div>
+          <p>Tu credencial digital QR te garantiza acceso completo tanto al ciclo de conferencias como al bloque nocturno de sorpresas y música en vivo.</p>
+        </div>
 
+        <!-- El ID #timeline se conserva intacto para landing.js -->
+        <div id="timeline" class="timeline reveal">
+          <div class="t-row">
+            <div class="t-time">3:30 PM – 4:00 PM</div>
+            <div>
+              <span class="t-badge">Check-In & Bienvenida</span>
+              <div class="t-title">Apertura de Puertas y Escaneo de QR</div>
+            </div>
+            <div class="t-desc">Recepción de asistentes en el Salón Ángeles Gold y validación instantánea del código QR único de cada entrada.</div>
+          </div>
+          <div class="t-row">
+            <div class="t-time">4:00 PM – 7:00 PM</div>
+            <div>
+              <span class="t-badge">Parte 1 · Ciclo de Conferencias</span>
+              <div class="t-title">Marketing Digital con Propósito</div>
+            </div>
+            <div class="t-desc">Bloque completo de ponencias sobre Social Media, creación de contenido y estrategia digital con invitados especiales.</div>
+          </div>
+          <div class="t-row">
+            <div class="t-time">7:00 PM en adelante</div>
+            <div>
+              <span class="t-badge">Parte 2 · Cierre en Vivo</span>
+              <div class="t-title">Sorpresas, Networking y Concierto</div>
+            </div>
+            <div class="t-desc">A partir de las 7:00 PM abrimos la segunda mitad del evento con música en vivo y sorpresas incluidas con tu entrada.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5. CREDENCIAL DE ACCESO TOTAL / COMPRA DE ENTRADAS (#entradas) -->
+    <section id="entradas" class="section cta-sec">
+      <div class="container">
+        <div class="vip-pass-showcase reveal">
+          <div class="vp-copy">
+            <span class="tag">04 / Adquiere tu Credencial</span>
+            <h2>Elige tu número antes de que se <span class="hl">agoten</span></h2>
+            <p class="vp-lead">
+              Solo existen 250 credenciales numeradas para esta edición en el Salón Ángeles Gold. Reserva tu número en el mapa interactivo y recibe tu pase PDF oficial en minutos.
+            </p>
+            <div class="vp-steps">
+              <div class="vp-step"><b>01</b><span>Haz clic en tu número disponible del 001 al 250.</span></div>
+              <div class="vp-step"><b>02</b><span>Tu puesto se bloquea 3 minutos mientras reportas tu Pago Móvil o transferencia a tasa BCV.</span></div>
+              <div class="vp-step"><b>03</b><span>Recibes en tu correo la credencial PDF con código QR único lista para el ingreso.</span></div>
+            </div>
+            <div class="vp-actions">
+              <a href="/comprar" class="btn btn-lime btn-lg magnetic">Ir al mapa de entradas</a>
+              <span class="vp-note">● Incluye Conferencias (4 PM) + Cierre en Vivo (7 PM)</span>
+            </div>
+          </div>
+
+          <div class="price-box">
+            <div class="pb-header">
+              <span class="kicker">CREDENCIAL ACCESO COMPLETO</span>
+              <span class="pb-tag">001–250</span>
+            </div>
+            <div class="big" id="cta-price">$5</div>
+            <div class="ves" id="cta-ves">≈ Bs. --</div>
+            <div class="rate" id="cta-rate">Tasa BCV: Bs. --</div>
+
+            <div class="avail">
+              <div class="avail-head">
+                <span class="avail-label">Entradas disponibles</span>
+                <b class="avail-count">-- / 250</b>
+              </div>
+              <div class="bar"><i class="avail-bar"></i></div>
+            </div>
+
+            <a href="/comprar" class="btn btn-dark btn-lg magnetic" style="width:100%">Ver mapa de entradas</a>
+            <div class="pb-barcode" aria-hidden="true"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 6. PREGUNTAS FRECUENTES (#faq) -->
+    <section id="faq" class="section light">
+      <div class="container faq-grid">
+        <div class="faq-head reveal">
+          <span class="tag">05 / Preguntas Frecuentes</span>
+          <h2>Resolvemos tus <em class="serif hl">dudas</em></h2>
+          <p>Todo lo que necesitas saber sobre tu reserva en el mapa interactivo, el cálculo a tasa BCV y el acceso el día del evento.</p>
+        </div>
+
+        <div class="faq-list reveal" style="--d: 0.1s">
+          <details class="faq-item" open>
+            <summary>¿Cómo compro mi entrada paso a paso?</summary>
+            <div class="a">Pulsa «Comprar entrada», haz clic sobre un número libre del 001 al 250 en el mapa, realiza tu Pago Móvil o transferencia en bolívares y adjunta tus datos junto con la captura del comprobante.</div>
+          </details>
+          <details class="faq-item">
+            <summary>¿Cuánto cuesta y a qué tasa se cobra?</summary>
+            <div class="a">La entrada general tiene un valor único de <strong class="faq-price">$5.00 USD</strong>, convertido automáticamente a bolívares según la tasa oficial vigente del BCV mostrada en tiempo real.</div>
+          </details>
+          <details class="faq-item">
+            <summary>¿Dónde será el evento?</summary>
+            <div class="a">En el <strong>Salón Ángeles Gold</strong>, en Maturín, Estado Monagas.</div>
+          </details>
+          <details class="faq-item">
+            <summary>¿Qué incluye exactamente mi entrada?</summary>
+            <div class="a">Te da acceso completo a las dos partes del evento: el bloque de conferencias de marketing (4:00 PM a 7:00 PM) y el cierre con concierto y sorpresas en vivo (desde las 7:00 PM).</div>
+          </details>
+          <details class="faq-item">
+            <summary>¿Qué significa que mi número se bloquee por 3 minutos?</summary>
+            <div class="a">Al elegir tu número disponible en la plataforma, el sistema lo aparta exclusivamente para ti durante 3 minutos para que nadie más pueda seleccionarlo mientras envías tu comprobante.</div>
+          </details>
+          <details class="faq-item">
+            <summary>¿Cuándo recibo mi PDF con el código QR?</summary>
+            <div class="a">Una vez verificado tu pago por el equipo organizador, recibirás automáticamente en tu correo electrónico tu credencial en PDF con un código QR único.</div>
+          </details>
+          <details class="faq-item">
+            <summary>¿Qué debo llevar el día del evento?</summary>
+            <div class="a">Solo debes presentar el código QR de tu entrada (en tu teléfono o impreso) junto con tu cédula de identidad al ingresar a partir de las 3:30 PM.</div>
+          </details>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- PIE DE PÁGINA -->
   <footer>
     <div class="container foot">
-      <a href="#inicio" class="logo"><span class="logo-badge" data-logo>HDM</span><span>Hablemos de Marketing<small>Maturín</small></span></a>
-      <div>© <span id="year"></span> Hablemos de Marketing · <a href="https://instagram.com/hablemosdemarketing.ve" target="_blank" rel="noopener" style="text-decoration:underline">@hablemosdemarketing.ve</a></div>
-      <a href="/comprar" class="btn btn-lime">Comprar entrada</a>
+      <a href="#inicio" class="logo">
+        <span class="logo-badge" data-logo>HDM</span>
+        <span>Hablemos de Marketing<small>Maturín · Venezuela</small></span>
+      </a>
+      <div>
+        © <span id="year"></span> Hablemos de Marketing ·
+        <a href="https://instagram.com/hablemosdemarketing.ve" target="_blank" rel="noopener" style="color:var(--lime);text-decoration:underline">@hablemosdemarketing.ve</a>
+      </div>
+      <a href="/comprar" class="btn btn-lime magnetic">Comprar entrada</a>
     </div>
   </footer>
 
-  <div class="sticky-buy" id="sticky-buy"><a href="/comprar" class="btn btn-lime btn-lg">Comprar entrada · <span id="sticky-price">$5</span></a></div>
+  <!-- BARRA FLOTANTE INFERIOR -->
+  <div id="sticky-buy" class="sticky-buy" role="region" aria-label="Compra rápida de entradas">
+    <div class="container sticky-inner">
+      <div class="sticky-info">
+        <b>Hablemos de Marketing · Maturín</b> — Entrada general <span id="sticky-price">$5.00 USD</span> · Quedan <strong class="avail-count">-- / 250</strong>
+      </div>
+      <a href="/comprar" class="btn btn-lime magnetic">Elegir mi número</a>
+    </div>
+  </div>
 
   <script src="/brand.js"></script>
   <script src="/landing.js"></script>

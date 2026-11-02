@@ -3,193 +3,451 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Iluminando Caminos | Una campaña social · Maturín</title>
-  <meta name="description" content="Sumemos pasos e iluminemos vidas. Una campaña social en Maturín: conferencias, comunidad y un encuentro con propósito." />
-  <meta name="theme-color" content="#650b10" />
+  <title>Iluminando Caminos | Campaña Social · Maturín</title>
+  <meta name="description" content="Sumemos pasos e iluminemos vidas. Ciclo de conferencias con propósito y concierto benéfico impulsado por estudiantes de Publicidad y Mercadeo IUTIRLA en Maturín." />
+  <meta name="theme-color" content="#210407" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Poppins:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,400;1,600&family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/styles.css" />
   <script src="/config-client.js"></script>
 </head>
-<body class="landing" data-theme="caminos">
+<body data-theme="caminos">
 
-  <!-- NAV -->
-  <nav class="nav" id="nav">
+  <!-- BARRA DE PROGRESO DE LECTURA -->
+  <div class="scroll-progress" id="scroll-progress" aria-hidden="true"></div>
+
+  <!-- NAVEGACIÓN PRINCIPAL -->
+  <nav id="nav" class="nav">
     <div class="container nav-inner">
-      <a href="#inicio" class="logo"><span class="logo-badge" data-logo>IC</span><span>Iluminando Caminos<small>Maturín</small></span></a>
+      <a href="#inicio" class="logo" aria-label="Iluminando Caminos - Inicio">
+        <span class="logo-badge" data-logo>IC</span>
+        <span>Iluminando Caminos<small>Campaña Social · Maturín</small></span>
+      </a>
       <div class="nav-links">
-        <a href="#video">Video</a>
-        <a href="#nosotros">Nosotros</a>
-        <a href="#programa">Programa</a>
-        <a href="#entradas">Entradas</a>
+        <a href="#video">Manifiesto</a>
+        <a href="#nosotros">Reflexiones</a>
+        <a href="#programa">La Velada</a>
+        <a href="#entradas">Pase Solidario</a>
         <a href="#faq">Preguntas</a>
       </div>
-<details class="mobile-menu"><summary aria-label="Abrir navegación">Menú <span>＋</span></summary><div><a href="#nosotros">Nosotros</a><a href="#programa">Programa</a><a href="#entradas">Entradas</a><a href="#faq">Preguntas frecuentes</a><a href="/comprar">Comprar entrada ↗</a></div></details>
-      <a href="/comprar" class="btn btn-lime">Comprar entrada</a>
+      <div class="nav-cta">
+        <a href="/comprar" class="btn magnetic">Adquirir entrada</a>
+        <details class="mobile-menu">
+          <summary aria-label="Abrir menú de navegación"><span></span></summary>
+          <div class="mobile-panel">
+            <a href="#video">Manifiesto</a>
+            <a href="#nosotros">Reflexiones</a>
+            <a href="#programa">La Velada</a>
+            <a href="#entradas">Pase Solidario</a>
+            <a href="#faq">Preguntas frecuentes</a>
+            <a href="/comprar" class="btn">Adquirir entrada</a>
+          </div>
+        </details>
+      </div>
     </div>
   </nav>
 
-<!-- HERO -->
-<header class="hero sec sec-A" id="inicio">
- <div class="container hero-grid">
-  <div class="hero-copy">
-   <span class="tag">UNA CAMPAÑA SOCIAL · MATURÍN</span>
-   <h1>Cada encuentro<br>puede <em>iluminar</em><br>un nuevo camino.</h1>
-   <p class="lead">Nos reunimos para aprender, conectar y sumar a una misma causa. Tu presencia es el comienzo de algo que va más allá de este encuentro.</p>
-   <div class="hero-cta"><a href="/comprar" class="btn btn-lime btn-lg">Quiero ser parte</a><a class="text-link" href="#programa">Explorar el programa <span>↘</span></a></div>
-   <div class="hero-proof"><span class="proof-dot"></span><span>Solo 250 entradas · Acceso a todo el programa</span></div>
-  </div>
-  <div class="hero-stage"><div class="brand-art art-caminos" aria-hidden="true"><div class="art-top"><span>ILUMINANDO CAMINOS</span><span>MATURÍN / VE</span></div><svg viewBox="0 0 400 330" fill="none"><g stroke="currentColor" stroke-width="1"><circle cx="200" cy="140" r="105" opacity=".35"/><circle cx="200" cy="140" r="135" opacity=".18"/><path d="M-30 340C20 160 160 370 200 145M70 360c-10-120 120-70 130-215M430 340c-50-180-190 30-230-195M330 360c10-120-120-70-130-215" stroke-width="2"/></g><path d="m200 65 15 55 55 20-55 16-15 55-18-55-53-16 53-20Z" fill="currentColor"/><path d="m94 53 5 17 17 5-17 6-5 17-6-17-17-6 17-5ZM310 204l5 17 17 5-17 6-5 17-6-17-17-6 17-5Z" fill="currentColor"/></svg><p>Hay luz en todo<br>lo que <em>compartimos.</em></p><span class="art-caption">SUMEMOS PASOS. ILUMINEMOS VIDAS.</span></div>
-   <div class="info-card">
-    <div class="ticket-top"><span class="tag fill">Una entrada. Una misma causa.</span><span class="ticket-arrow">↗</span></div>
-    <div class="ticket-main"><div><span class="ticket-label">ACCESO GENERAL</span><div class="price" id="chip-price">$5<small> USD</small></div></div><div class="ticket-place">Salón Ángeles Gold<span>Maturín, Venezuela</span></div></div>
-    <div class="row"><span class="k">Fecha del encuentro</span><span class="v" id="chip-date">15 de noviembre de 2026</span></div>
-    <div class="ticket-bottom"><div class="avail-row"><span class="avail-label">Entradas disponibles</span><span><span class="avail-count">--</span> / 250</span></div><div class="bar"><i class="avail-bar"></i></div></div>
-   </div>
-  </div>
- </div>
- <div class="container hero-bottom"><span>Pequeñas acciones. Nuevas posibilidades.</span><a href="#nosotros">Conoce la causa <span>↓</span></a></div>
-</header>
-<section class="experience-strip" aria-label="Lo que vivirás"><div class="container"><div><span>01 /</span> Aprender <small>Ideas que te acompañan</small></div><div><span>02 /</span> Conectar <small>Personas con propósito</small></div><div><span>03 /</span> Compartir <small>Un encuentro para recordar</small></div></div></section>
-
-  <!-- VIDEO -->
-  <section class="sec sec-dark" id="video">
-    <div class="container">
-      <div class="reveal">
-        <span class="tag">01 / EL ENCUENTRO</span>
-        <h2 class="h2" style="margin-top:20px">Una causa que nos <span class="serif">encuentra</span></h2>
+  <main>
+    <!-- 1. HERO EDITORIAL CON RAYOS DE SEDA Y PÓSTER DE ARCO -->
+    <header id="inicio" class="hero">
+      <div class="hero-silk" aria-hidden="true">
+        <div class="silk-beam b1"></div>
+        <div class="silk-beam b2"></div>
+        <div class="silk-beam b3"></div>
       </div>
-      <div class="video-frame reveal d1" id="video-frame">
-        <div class="video-placeholder">
-          <div>
-            <div class="play"></div>
-            <p>Video oficial del evento</p>
-            <small>Muy pronto</small>
+
+      <div class="container hero-grid">
+        <div class="hero-copy">
+          <div class="hero-enter" style="--d: 0.52s">
+            <span class="tag">Campaña Social Universitaria · IUTIRLA Maturín</span>
+          </div>
+
+          <h1 aria-label="Sumemos pasos e iluminemos nuevos caminos.">
+            <span class="line-mask"><span class="line-inner" style="--d: 0.62s">Sumemos pasos</span></span>
+            <span class="line-mask"><span class="line-inner" style="--d: 0.74s">e <em class="serif hl">iluminemos</em></span></span>
+            <span class="line-mask"><span class="line-inner" style="--d: 0.86s">nuevos caminos.</span></span>
+          </h1>
+
+          <p class="lead hero-enter" style="--d: 0.98s">
+            En nuestra ciudad hay sueños esperando ser apoyados. Una iniciativa de responsabilidad social impulsada por estudiantes de <strong>Publicidad y Mercadeo del IUTIRLA</strong> que une un ciclo de conferencias y un concierto benéfico en una misma velada.
+          </p>
+
+          <div class="hero-cta hero-enter" style="--d: 1.10s">
+            <a href="/comprar" class="btn btn-lg magnetic">Sumarme a la causa</a>
+            <a href="#video" class="btn-ghost">Conoce el encuentro ↓</a>
+          </div>
+
+          <div class="hero-metrics hero-enter" style="--d: 1.22s">
+            <div class="hm-item">
+              <span class="hm-val">250</span>
+              <span class="hm-lbl">Pases numerados<br>edición única</span>
+            </div>
+            <div class="hm-sep"></div>
+            <div class="hm-item">
+              <span class="hm-val">2 Actos</span>
+              <span class="hm-lbl">Conferencias (4 PM)<br>+ Concierto (7 PM)</span>
+            </div>
+            <div class="hm-sep"></div>
+            <div class="hm-item">
+              <span class="hm-val">100%</span>
+              <span class="hm-lbl">Con propósito social<br>en Maturín</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ESCENARIO DERECHO: DÍPTICO DE ARCO + SELLO EDITORIAL + PASE PERFORADO -->
+        <div class="hero-stage hero-stage-enter" id="hero-stage">
+          <div class="floating-seal" aria-hidden="true">
+            <span class="seal-star">✦</span>
+            <div>
+              <strong>3 Reflexiones</strong>
+              <span>sobre el poder de conectar</span>
+            </div>
+          </div>
+
+          <div class="poster-frame" aria-hidden="true">
+            <div class="poster-arch-top">
+              <span>✦ EDICIÓN MMXXVI · MATURÍN ✦</span>
+            </div>
+
+            <!-- Ilustración inspirada en el emblema oficial de @iluminando_caminoss -->
+            <svg class="poster-illustration" viewBox="0 0 400 260" fill="none">
+              <defs>
+                <radialGradient id="starGlow" cx="50%" cy="42%" r="48%">
+                  <stop offset="0%" stop-color="#c88a2e" stop-opacity="0.32" />
+                  <stop offset="100%" stop-color="#c88a2e" stop-opacity="0" />
+                </radialGradient>
+              </defs>
+              <circle cx="200" cy="112" r="105" fill="url(#starGlow)" />
+              <g class="sun-ring" stroke="currentColor" stroke-width="1" opacity="0.3">
+                <circle cx="200" cy="112" r="82" stroke-dasharray="4 6"/>
+                <circle cx="200" cy="112" r="104"/>
+                <line x1="200" y1="2" x2="200" y2="20"/>
+                <line x1="84" y1="112" x2="102" y2="112"/>
+                <line x1="298" y1="112" x2="316" y2="112"/>
+              </g>
+              <!-- Destellos radiales superiores -->
+              <g stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <line x1="200" y1="26" x2="200" y2="38" />
+                <line x1="168" y1="38" x2="176" y2="48" />
+                <line x1="232" y1="38" x2="224" y2="48" />
+                <line x1="154" y1="68" x2="166" y2="71" />
+                <line x1="246" y1="68" x2="234" y2="71" />
+              </g>
+              <!-- Estrella principal que ilumina el camino -->
+              <path d="M200 44 L208 66 L231 66 L213 80 L220 102 L200 88 L180 102 L187 80 L169 66 L192 66 Z" fill="currentColor"/>
+              <!-- Estrellas de 4 puntas laterales -->
+              <path d="M126 68 L130 80 L142 84 L130 88 L126 100 L122 88 L110 84 L122 80 Z" fill="currentColor" opacity="0.8"/>
+              <path d="M274 68 L278 80 L290 84 L278 88 L274 100 L270 88 L258 84 L270 80 Z" fill="currentColor" opacity="0.8"/>
+              <!-- Sendero luminoso ascendente y siluetas simbólicas alzando las manos hacia la estrella -->
+              <path d="M96 244 C146 196 176 164 200 124 C224 164 254 196 304 244" stroke="currentColor" stroke-width="2" opacity="0.72"/>
+              <path d="M138 244 C170 204 186 174 200 124 C214 174 230 204 262 244" stroke="currentColor" stroke-width="1.2" opacity="0.42"/>
+              <circle cx="166" cy="156" r="11" stroke="currentColor" stroke-width="2" fill="#f3e6d0"/>
+              <path d="M148 202 C152 178 166 172 182 150 L194 114" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+              <circle cx="234" cy="156" r="11" stroke="currentColor" stroke-width="2" fill="#f3e6d0"/>
+              <path d="M252 202 C248 178 234 172 218 150 L206 114" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+            </svg>
+
+            <p class="poster-quote">Una pequeña contribución<br>enciende una <em>gran esperanza.</em></p>
+            <div class="poster-sub">PUBLICIDAD Y MERCADEO · IUTIRLA MATURÍN</div>
+          </div>
+
+          <div class="info-card">
+            <div class="ticket-top">
+              <span class="ticket-badge">PASE SOLIDARIO · 001 AL 250</span>
+              <span>QR VERIFICADO ↗</span>
+            </div>
+            <div class="ticket-main">
+              <div>
+                <span class="ticket-label">APORTE ÚNICO</span>
+                <div class="price" id="chip-price">$5<small> USD</small></div>
+              </div>
+              <div class="ticket-place">
+                Salón Ángeles Gold
+                <span>Maturín, Edo. Monagas</span>
+              </div>
+            </div>
+            <div class="meta-row">
+              <span>Fecha del encuentro</span>
+              <b id="chip-date">Próximamente</b>
+            </div>
+            <div class="avail">
+              <div class="avail-head">
+                <span class="avail-label">Entradas disponibles</span>
+                <b class="avail-count">-- / 250</b>
+              </div>
+              <div class="bar"><i class="avail-bar"></i></div>
+            </div>
           </div>
         </div>
       </div>
-    </div>
-  </section>
 
-  <!-- NOSOTROS -->
-  <section class="sec sec-B" id="nosotros">
-    <div class="container">
-      <div class="about-grid">
-        <div class="reveal">
-          <span class="tag">Sobre nosotros</span>
-          <h2 class="h2" style="margin-top:20px">El poder de <span class="serif">conectar</span> y abrir <span class="hl">caminos</span></h2>
+      <!-- CINTA EDITORIAL EN MOVIMIENTO (MARQUEE) -->
+      <div class="event-strip"><div class="container"><span>Maturín, Venezuela</span><span>Conferencias · 4:00 PM</span><span>Concierto · 7:00 PM</span></div></div>
+    </header>
+
+    <!-- 2. MANIFIESTO AUDIOVISUAL CON CAPÍTULOS INTERACTIVOS -->
+    <section id="video" class="section video-sec">
+      <div class="container video-layout">
+        <div class="video-copy">
+          <span class="tag">El encuentro</span>
+          <h2>Una causa que nos reúne.</h2>
+          <p class="lead">Estudiantes de Publicidad y Mercadeo del IUTIRLA en Maturín. Una tarde para compartir ideas y una noche de música para apoyar nuestra labor social.</p>
         </div>
-        <div class="about-copy reveal d1">
-          <p><strong>Iluminando Caminos</strong> es una campaña social de estudiantes de Publicidad y Mercadeo del IUTIRLA, en Maturín.</p>
-          <p>Creemos en las pequeñas acciones que acercan a las personas. Este encuentro reúne aprendizaje, comunidad y ganas de aportar a nuestra ciudad.</p>
+        <div id="video-frame" class="video-frame">
+          <div class="film-placeholder">
+            <span>Maturín · Conferencias y concierto</span>
+            <div><strong>Nos vemos en persona.</strong><p>Próximamente compartiremos aquí el video del encuentro.</p></div>
+            <a href="https://www.instagram.com/iluminando_caminoss/">Conoce la campaña en Instagram ↗</a>
+          </div>
         </div>
       </div>
-      <div class="cards">
-        <div class="card reveal"><div class="n">01</div><h3>Conferencias</h3><p>Ponencias claras y directas sobre marketing digital, redes sociales y negocios.</p></div>
-        <div class="card reveal d1"><div class="n">02</div><h3>Sorpresas</h3><p>Momentos y dinámicas que no vamos a contar aquí. Tienes que estar para vivirlas.</p></div>
-        <div class="card reveal d2"><div class="n">03</div><h3>Comunidad</h3><p>Conoce a otras personas creativas y emprendedoras de Maturín y sigue la conversación.</p></div>
-      </div>
-    </div>
-  </section>
+    </section>
 
-  <!-- PROGRAMA -->
-  <section class="sec sec-dark" id="programa">
-    <div class="container">
-      <div class="reveal">
-        <span class="tag" style="color:var(--pink)">Programa</span>
-        <h2 class="h2" style="margin-top:20px">Así será el <span class="hl">día</span></h2>
-        <p class="sub">Con tu entrada accedes a todo el programa del evento.</p>
-      </div>
-      <div class="timeline" id="timeline">
-        <div class="tl-item reveal"><div class="tl-time">Ingreso</div><div><span class="tl-phase">Acreditación</span><h3>Apertura de puertas</h3></div><p>Recepción de asistentes y validación del código QR único de cada entrada.</p></div>
-        <div class="tl-item reveal"><div class="tl-time">Conferencias</div><div><span class="tl-phase">Parte 1</span><h3>Ciclo de conferencias</h3></div><p>Ponencias e invitados especiales.</p></div>
-        <div class="tl-item reveal"><div class="tl-time">Sorpresas</div><div><span class="tl-phase">Parte 2</span><h3>Lo que viene después</h3></div><p>Incluido con todas las entradas.</p></div>
-      </div>
-    </div>
-  </section>
+    <!-- 3. SOBRE NOSOTROS: PLIEGO EDITORIAL "3 REFLEXIONES SOBRE EL PODER DE CONECTAR" -->
+    <section id="nosotros" class="section light">
+      <div class="container">
+        <div class="editorial-spread">
+          <!-- Columna izquierda fija: Manifiesto con letra capitular -->
+          <div class="spread-manifesto reveal">
+            <span class="tag">02 / Sobre Nosotros · La Causa</span>
+            <h2>3 reflexiones sobre el poder de <em class="serif hl">conectar</em></h2>
+            <p class="dropcap-p">
+              <span class="dropcap">I</span><strong>luminando Caminos</strong> nace en las aulas de <strong>Publicidad y Mercadeo del IUTIRLA Maturín</strong> a partir de una pregunta fundamental: <em>¿qué nos motivó a impulsar esta campaña y cómo conecta este proyecto con nuestro rol y formación profesional?</em>
+            </p>
+            <p class="spread-body">
+              Entendimos que la comunicación y el mercadeo cobran su verdadero sentido cuando sirven para movilizar voluntades, dignificar historias y encender oportunidades reales dentro de nuestra propia comunidad.
+            </p>
+            <div class="manifesto-quote-box">
+              <span class="mq-mark">“</span>
+              <p>Contribuimos a mejorar las condiciones de vida de quienes encuentran un hogar en la institución y demostramos que la colaboración universitaria puede inspirar a otros sectores.</p>
+              <cite>— Primer Volanteo · Iluminando Caminos, Maturín</cite>
+            </div>
+          </div>
 
-  <!-- ENTRADAS -->
-  <section class="sec sec-A cta" id="entradas">
-    <svg class="squiggle" style="right:-70px;top:10px;width:230px" viewBox="0 0 220 90" fill="none" aria-hidden="true"><path d="M10 50 C 35 -5, 60 105, 90 45 S 150 -5, 175 45 S 205 70, 212 40" stroke="var(--hl)" stroke-width="16" stroke-linecap="round"/></svg>
-    <div class="container cta-grid">
-      <div class="reveal">
-        <span class="tag">Cupos limitados</span>
-        <h2 class="h2" style="margin-top:20px">Tu presencia también <span class="serif">ilumina.</span></h2>
-        <div class="steps">
-          <div class="step"><b>1</b> Elige tu número disponible, del 001 al 250</div>
-          <div class="step"><b>2</b> Paga por Pago Móvil o transferencia, a tasa BCV</div>
-          <div class="step"><b>3</b> Recibe tu PDF con código QR en tu correo</div>
+          <!-- Columna derecha: Las 3 reflexiones escalonadas -->
+          <div class="reflections-stack">
+            <article class="reflection-card reveal" style="--d: 0.05s">
+              <div class="ref-head">
+                <span class="ref-roman">REFLEXIÓN I · LA SEMILLA</span>
+                <span class="ref-star">✦</span>
+              </div>
+              <h3>Una pequeña contribución puede encender una <em>gran esperanza</em></h3>
+              <p>
+                Muchas veces pensamos que transformar una realidad requiere gestos inalcanzables. Cuando 250 personas suman su paso con una entrada de $5 USD, el impacto colectivo se convierte en apoyo directo, insumos y acompañamiento real en Maturín.
+              </p>
+              <div class="ref-foot">
+                <span>IMPACTO DIRECTO</span>
+                <span>UNA INICIATIVA UNIVERSITARIA</span>
+              </div>
+            </article>
+
+            <article class="reflection-card reveal" style="--d: 0.14s">
+              <div class="ref-head">
+                <span class="ref-roman">REFLEXIÓN II · EL COMPROMISO</span>
+                <span class="ref-star">✦</span>
+              </div>
+              <h3>Formación académica que <em>trasciende</em> el aula universitaria</h3>
+              <p>
+                Desde la perspectiva de la responsabilidad social universitaria en el IUTIRLA, asumimos el reto de planificar, comunicar y producir un evento de estándar profesional donde cada herramienta aprendida en carrera se pone al servicio de la gente.
+              </p>
+              <div class="ref-foot">
+                <span>PUBLICIDAD Y MERCADEO</span>
+                <span>IUTIRLA · SEDE MATURÍN</span>
+              </div>
+            </article>
+
+            <article class="reflection-card reveal" style="--d: 0.22s">
+              <div class="ref-head">
+                <span class="ref-roman">REFLEXIÓN III · EL ENCUENTRO</span>
+                <span class="ref-star">✦</span>
+              </div>
+              <h3>Dos experiencias en una misma jornada para <em>recordar</em></h3>
+              <p>
+                Tu mismo pase numerado te abre las puertas a dos momentos: una tarde de ponencias e ideas que inspiran (4:00 PM a 7:00 PM) seguida por un gran concierto benéfico en vivo (desde las 7:00 PM) en el Salón Ángeles Gold.
+              </p>
+              <div class="ref-foot">
+                <span>CONFERENCIAS + CONCIERTO</span>
+                <span>SALÓN ÁNGELES GOLD</span>
+              </div>
+            </article>
+          </div>
         </div>
-        <a href="/comprar" class="btn btn-ink btn-lg">Ir a comprar</a>
       </div>
-      <div class="price-card reveal d1">
-        <span class="tag fill">Por persona</span>
-        <div class="big" id="cta-price">$5</div>
-        <div class="ves" id="cta-ves">Bs. --</div>
-        <div class="note" id="cta-rate">Calculado a la tasa oficial BCV al momento del pago</div>
-        <div class="avail">
-          <div class="avail-row"><span class="avail-label">Entradas disponibles</span><span><span class="avail-count">--</span> / 250</span></div>
-          <div class="bar"><i class="avail-bar"></i></div>
+    </section>
+
+    <!-- 4. PROGRAMA / CRONOGRAMA DE LA JORNADA -->
+    <section id="programa" class="section">
+      <div class="container">
+        <div class="section-head reveal">
+          <div>
+            <span class="tag">03 / Programa de la Velada</span>
+            <h2>La jornada, <em class="serif hl">paso a paso</em></h2>
+          </div>
+          <p>Con tu pase digital QR tienes acceso garantizado tanto al ciclo de conferencias vespertino como al concierto benéfico nocturno.</p>
         </div>
-        <a href="/comprar" class="btn btn-ink">Ver mapa de entradas</a>
-      </div>
-    </div>
-  </section>
 
-  <!-- FAQ -->
-  <section class="sec sec-pink" id="faq">
-    <div class="container">
-      <div class="reveal" style="text-align:center">
-        <span class="tag">Preguntas frecuentes</span>
-        <h2 class="h2" style="margin-top:20px">Resolvemos tus <span class="hl">dudas</span></h2>
+        <!-- El ID #timeline se conserva intacto para landing.js -->
+        <div id="timeline" class="timeline reveal">
+          <div class="t-row">
+            <div class="t-time">3:30 PM – 4:00 PM</div>
+            <div>
+              <span class="t-badge">Recepción y Acreditación</span>
+              <div class="t-title">Apertura de Puertas y Validación de QR</div>
+            </div>
+            <div class="t-desc">Bienvenida por el equipo de Publicidad y Mercadeo IUTIRLA y escaneo de tu entrada digital numerada en puerta.</div>
+          </div>
+          <div class="t-row">
+            <div class="t-time">4:00 PM – 7:00 PM</div>
+            <div>
+              <span class="t-badge">Parte 1 · Ciclo de Conferencias</span>
+              <div class="t-title">Voces e Ideas que Iluminan Caminos</div>
+            </div>
+            <div class="t-desc">Ponencias formativas sobre comunicación, liderazgo, propósito social y emprendimiento con invitados especiales.</div>
+          </div>
+          <div class="t-row">
+            <div class="t-time">7:00 PM en adelante</div>
+            <div>
+              <span class="t-badge">Parte 2 · Cierre Musical</span>
+              <div class="t-title">Gran Concierto Benéfico en Vivo</div>
+            </div>
+            <div class="t-desc">Celebración musical en el Salón Ángeles Gold incluida con tu misma entrada para cerrar la jornada celebrando nuestra causa.</div>
+          </div>
+        </div>
       </div>
-      <div class="faq reveal">
-        <details open>
-          <summary>¿Cómo compro mi entrada?</summary>
-          <div class="answer">Pulsa “Comprar entrada”, elige un número disponible del 001 al 250, realiza el pago y completa el formulario con tus datos, la referencia bancaria y la captura del comprobante.</div>
-        </details>
-        <details>
-          <summary>¿Cuánto cuesta y cómo se paga?</summary>
-          <div class="answer">Cada entrada vale <span class="faq-price">$5.00 USD</span>, cobrados en bolívares a la tasa oficial del BCV al momento del pago. Puedes pagar por Pago Móvil o transferencia bancaria.</div>
-        </details>
-        <details>
-          <summary>¿Dónde es el evento?</summary>
-          <div class="answer">En el Salón Ángeles Gold, en Maturín.</div>
-        </details>
-        <details>
-          <summary>¿Qué incluye la entrada?</summary>
-          <div class="answer">Acceso completo al programa del evento: las conferencias y las sorpresas que tenemos preparadas.</div>
-        </details>
-        <details>
-          <summary>¿Qué pasa cuando elijo un número?</summary>
-          <div class="answer">Se bloquea para ti durante 3 minutos para que nadie más pueda tomarlo. Si no envías el comprobante en ese tiempo, el número vuelve a quedar disponible.</div>
-        </details>
-        <details>
-          <summary>¿Cuándo recibo mi entrada?</summary>
-          <div class="answer">Tras enviar tu pago, el equipo lo verifica. Al aprobarse, recibirás en tu correo un PDF con tu código QR único.</div>
-        </details>
-        <details>
-          <summary>¿Qué debo llevar el día del evento?</summary>
-          <div class="answer">Tu entrada en PDF con el código QR y tu cédula de identidad laminada. Los datos del pago se verifican para garantizar que quien paga sea quien recibe la entrada.</div>
-        </details>
-        <details>
-          <summary>¿A qué hora debo llegar?</summary>
-          <div class="answer">Te recomendamos llegar con tiempo para tu acreditación. El horario exacto lo encuentras en la sección Programa.</div>
-        </details>
-      </div>
-    </div>
-  </section>
+    </section>
 
+    <!-- 5. BOLETO DE COLECCIÓN / PROMOCIÓN DE ENTRADAS -->
+    <section id="entradas" class="section cta-sec">
+      <div class="container">
+        <div class="collector-ticket reveal">
+          <!-- Cuerpo principal del boleto de colección -->
+          <div class="ct-main">
+            <div class="ct-header">
+              <span class="tag">04 / Adquiere tu Pase Solidario</span>
+              <span class="ct-edition">EDICIÓN LIMITADA · 001 AL 250</span>
+            </div>
+            <h2>Tu presencia también <em class="serif hl">ilumina</em> vidas</h2>
+            <p class="ct-lead">
+              Elige tu número favorito en el mapa interactivo, realiza tu aporte en bolívares a tasa oficial BCV y recibe tu boleto PDF con código QR único en tu correo electrónico.
+            </p>
+            <div class="ct-steps">
+              <div class="ct-step">
+                <b>01</b>
+                <span>Elige tu número del 001 al 250 en tiempo real.</span>
+              </div>
+              <div class="ct-step">
+                <b>02</b>
+                <span>Tu puesto se reserva por 3 minutos mientras reportas tu Pago Móvil o transferencia.</span>
+              </div>
+              <div class="ct-step">
+                <b>03</b>
+                <span>Recibes tu PDF oficial con QR verificado listo para el día del evento.</span>
+              </div>
+            </div>
+            <div class="ct-actions">
+              <a href="/comprar" class="btn btn-lg magnetic">Abrir mapa de entradas</a>
+              <span class="ct-note">✦ Acceso completo: Conferencias + Concierto Benéfico</span>
+            </div>
+          </div>
+
+          <!-- Línea de corte perforada vertical -->
+          <div class="ct-perf" aria-hidden="true">
+            <span class="notch top"></span>
+            <span class="perf-line"></span>
+            <span class="notch bottom"></span>
+          </div>
+
+          <!-- Talón derecho del boleto con precio BCV en vivo -->
+          <div class="ct-stub">
+            <div class="stub-kicker">APORTE GENERAL · DOBLE ACCESO</div>
+            <div class="big" id="cta-price">$5</div>
+            <div class="ves" id="cta-ves">≈ Bs. --</div>
+            <div class="rate" id="cta-rate">Tasa BCV: Bs. --</div>
+
+            <div class="avail">
+              <div class="avail-head">
+                <span class="avail-label">Entradas disponibles</span>
+                <b class="avail-count">-- / 250</b>
+              </div>
+              <div class="bar"><i class="avail-bar"></i></div>
+            </div>
+
+            <a href="/comprar" class="btn btn-dark magnetic" style="width:100%">Seleccionar mi número</a>
+            <div class="stub-barcode" aria-hidden="true"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 6. PREGUNTAS FRECUENTES -->
+    <section id="faq" class="section light">
+      <div class="container faq-grid">
+        <div class="faq-head reveal">
+          <span class="tag">05 / Preguntas Frecuentes</span>
+          <h2>Todo claro antes de <em class="serif hl">asistir</em></h2>
+          <p>Resolvemos cada detalle sobre la reserva de tu número, el pago a tasa BCV y la acreditación en el Salón Ángeles Gold.</p>
+        </div>
+
+        <div class="faq-list reveal" style="--d: 0.1s">
+          <details class="faq-item" open>
+            <summary>¿Cómo compro mi entrada en la plataforma?</summary>
+            <div class="a">Haz clic en «Adquirir entrada», selecciona tu número disponible del 001 al 250 en el mapa interactivo, realiza el pago en bolívares (Pago Móvil o transferencia) y adjunta tus datos junto con la captura del comprobante.</div>
+          </details>
+          <details class="faq-item">
+            <summary>¿Cuánto cuesta la entrada y a qué tasa se calcula?</summary>
+            <div class="a">El aporte único es de <strong class="faq-price">$5.00 USD</strong> por entrada, calculado automáticamente en bolívares según la tasa oficial vigente del BCV mostrada en tiempo real en la plataforma.</div>
+          </details>
+          <details class="faq-item">
+            <summary>¿Dónde se realizará el encuentro?</summary>
+            <div class="a">En el <strong>Salón Ángeles Gold</strong>, en Maturín, Estado Monagas.</div>
+          </details>
+          <details class="faq-item">
+            <summary>¿Qué incluye exactamente mi entrada?</summary>
+            <div class="a">Tu entrada numerada incluye acceso completo a las dos partes de la jornada: el ciclo de conferencias (de 4:00 PM a 7:00 PM) y el concierto benéfico (a partir de las 7:00 PM).</div>
+          </details>
+          <details class="faq-item">
+            <summary>¿Por qué mi número se bloquea durante 3 minutos?</summary>
+            <div class="a">Al pulsar sobre un número disponible, el sistema lo reserva exclusivamente para ti durante 3 minutos para garantizar que ningún otro asistente pueda tomarlo mientras cargas los datos de tu pago.</div>
+          </details>
+          <details class="faq-item">
+            <summary>¿Cuándo y cómo recibo mi boleto con QR?</summary>
+            <div class="a">Una vez verificado tu comprobante por el equipo organizador, recibirás automáticamente en tu correo electrónico tu entrada en formato PDF con un código QR único e irrepetible.</div>
+          </details>
+          <details class="faq-item">
+            <summary>¿Qué debo presentar en la puerta el día del evento?</summary>
+            <div class="a">Solo debes mostrar el PDF con el código QR desde tu teléfono o impreso junto con tu cédula de identidad a partir de las 3:30 PM.</div>
+          </details>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- PIE DE PÁGINA -->
   <footer>
     <div class="container foot">
-      <a href="#inicio" class="logo"><span class="logo-badge" data-logo>IC</span><span>Iluminando Caminos<small>Maturín</small></span></a>
-      <div>© <span id="year"></span> Iluminando Caminos · <a href="https://instagram.com/iluminando_caminoss" target="_blank" rel="noopener" style="text-decoration:underline">@iluminando_caminoss</a></div>
-      <a href="/comprar" class="btn btn-lime">Comprar entrada</a>
+      <a href="#inicio" class="logo">
+        <span class="logo-badge" data-logo>IC</span>
+        <span>Iluminando Caminos<small>Campaña Social · Maturín</small></span>
+      </a>
+      <div>
+        © <span id="year"></span> Iluminando Caminos · Estudiantes de Publicidad y Mercadeo IUTIRLA ·
+        <a href="https://instagram.com/iluminando_caminoss" target="_blank" rel="noopener" style="color:var(--gold);text-decoration:underline">@iluminando_caminoss</a>
+      </div>
+      <a href="/comprar" class="btn magnetic">Adquirir entrada</a>
     </div>
   </footer>
 
-  <div class="sticky-buy" id="sticky-buy"><a href="/comprar" class="btn btn-lime btn-lg">Comprar entrada · <span id="sticky-price">$5</span></a></div>
+  <!-- BARRA FLOTANTE INFERIOR -->
+  <div id="sticky-buy" class="sticky-buy" role="region" aria-label="Compra rápida de entradas">
+    <div class="container sticky-inner">
+      <div class="sticky-info">
+        <b>Iluminando Caminos · Maturín</b> — Entrada general <span id="sticky-price">$5.00 USD</span> · Quedan <strong class="avail-count">-- / 250</strong>
+      </div>
+      <a href="/comprar" class="btn magnetic">Elegir mi número</a>
+    </div>
+  </div>
 
   <script src="/brand.js"></script>
   <script src="/landing.js"></script>

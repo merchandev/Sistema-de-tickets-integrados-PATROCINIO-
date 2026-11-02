@@ -44,7 +44,7 @@
     if (cfg.sales_enabled === false && !notice) {
       notice = document.createElement('p'); notice.id = 'sales-notice';
       notice.textContent = 'Venta de entradas proximamente. Aun no debes realizar pagos.';
-      notice.style.cssText = 'margin-top:18px;font-size:12px;line-height:1.7;color:var(--accent)';
+      notice.style.cssText = 'margin-top:18px;font-size:12px;line-height:1.7;color:inherit';
       document.querySelector('.hero-copy').appendChild(notice);
     }
     if (notice && cfg.sales_enabled !== false) notice.remove();
@@ -83,7 +83,7 @@
     const total = tickets.length;
     const free = tickets.filter((t) => t.status === 'AVAILABLE').length;
     const takenPct = Math.round(((total - free) / total) * 100);
-    $$('.avail-count').forEach((e) => { e.textContent = free; });
+    $$('.avail-count').forEach((e) => { e.textContent = `${free} / ${total}`; });
     $$('.avail-bar').forEach((e) => { e.style.width = Math.max(3, takenPct) + '%'; });
     $$('.avail-label').forEach((e) => { e.textContent = free <= 25 ? 'Últimas entradas' : 'Entradas disponibles'; });
   }
