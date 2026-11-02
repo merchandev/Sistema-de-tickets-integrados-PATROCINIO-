@@ -1,0 +1,21 @@
+{
+  "name": "sistema-central-entradas",
+  "version": "1.0.0",
+  "description": "Sistema Centralizado de Venta de Entradas (001-250), Dashboard Administrativo, Scraper BCV, SMTP, Generador PDF/QR y Sincronización en Tiempo Real",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node --no-warnings src/server.js",
+    "dev": "node --no-warnings --watch src/server.js"
+  },
+  "dependencies": {
+    "cheerio": "^1.0.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.1",
+    "multer": "^2.5.0",
+    "nodemailer": "^10.2.1",
+    "pdfkit": "^0.15.0",
+    "qrcode": "^1.5.4",
+    "socket.io": "^4.8.1"
+  }
+}

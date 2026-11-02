@@ -1,0 +1,14 @@
+{
+  "name": "pagina-web-1",
+  "version": "1.0.0",
+  "description": "Página Web 1 - Cliente Independiente conectado al Sistema Central de Venta de Entradas",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "express": "^4.21.1"
+  }
+}

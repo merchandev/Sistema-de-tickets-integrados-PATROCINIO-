@@ -1,0 +1,16 @@
+# VPS staging: accessible only from the server/SSH until domains are configured.
+services:
+  sistema-central:
+    environment:
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://127.0.0.1:4000}
+    ports: !override
+      - '127.0.0.1:4000:4000'
+  pagina-web-1:
+    ports: !override
+      - '127.0.0.1:3001:3001'
+  pagina-web-2:
+    ports: !override
+      - '127.0.0.1:3002:3002'
+  mailpit:
+    ports: !override
+      - '127.0.0.1:8025:8025'

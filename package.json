@@ -1,0 +1,16 @@
+{
+  "name": "socials-entradas-workspace",
+  "private": true,
+  "scripts": {
+    "setup": "node scripts/configurar-docker.cjs",
+    "test:integration": "node verificar-docker.cjs",
+    "test:bcv": "node --test tests/bcv-money.test.cjs && node verificar-bcv-origen.cjs",
+    "docker:up": "docker compose up -d --build --wait",
+    "docker:down": "docker compose down"
+  },
+  "devDependencies": {
+    "socket.io-client": "^4.8.3",
+    "jsqr": "^1.4.0",
+    "pngjs": "^7.0.0"
+  }
+}

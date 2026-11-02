@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Comprar entrada | Iluminando Caminos</title>
+  <meta name="theme-color" content="#650b10" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Poppins:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+  <script src="/config-client.js"></script>
+</head>
+<body data-theme="caminos">
+
+  <nav class="nav">
+    <div class="container nav-inner">
+      <a href="/" class="logo"><span class="logo-badge" data-logo>IC</span><span>Iluminando Caminos<small>Maturín</small></span></a>
+      <a href="/" class="back">← Volver al inicio</a>
+    </div>
+  </nav>
+
+  <div class="shop-band">
+    <div class="container shop-head">
+      <div>
+        <span id="site-badge" class="tag">Venta de entradas</span>
+        <h1 id="event-title">Tu entrada, <span class="serif">un nuevo camino.</span></h1>
+        <p id="event-subtitle">Elige tu número y acompáñanos en un encuentro con propósito.</p>
+      </div>
+      <div class="rate-card">
+        <div class="l">Precio entrada / Referencia BCV</div>
+        <div class="v"><span id="price-usd">$5.00 USD</span> = <span id="price-ves">Bs. --</span></div>
+        <div class="s">Tasa BCV: <strong id="bcv-rate">Bs. --</strong> <span id="sync-indicator" class="sync">● Sincronizado</span></div>
+        <div id="bcv-source" class="src"></div>
+      </div>
+    </div>
+  </div>
+
+  <main class="buy">
+    <div class="container">
+      <section class="info-strip">
+        <div class="cell">
+          <div class="k">Fecha y hora de ingreso</div>
+          <div id="event-date-time" class="v">--</div>
+          <div id="event-location" class="n">Salón Ángeles Gold, Maturín</div>
+        </div>
+        <div class="cell">
+          <div class="k">Parte 1 · Conferencias</div>
+          <div id="event-conf-hours" class="v">4:00 PM a 7:00 PM</div>
+          <div class="n">Acceso incluido con tu entrada</div>
+        </div>
+        <div class="cell">
+          <div class="k">Parte 2 · Sorpresas y más</div>
+          <div id="event-concert-hours" class="v">A partir de las 7:00 PM</div>
+          <div class="n">Acceso incluido con tu entrada</div>
+        </div>
+      </section>
+
+      <div id="alert-banner" class="alert hidden"></div>
+
+      <!-- Reserva activa (3 min) y formulario de pago -->
+      <section id="checkout-section" class="checkout hidden">
+        <div class="checkout-head">
+          <div>
+            <span class="tag-lock">Puesto bloqueado solo para ti</span>
+            <h2>Entrada seleccionada: #<span id="selected-ticket-label">001</span></h2>
+            <p>Completa tu reporte de pago antes de que finalice el contador de 3 minutos.</p>
+          </div>
+          <div class="timer">
+            <div class="l">Tiempo restante de reserva</div>
+            <div id="countdown-timer" class="t">03:00</div>
+            <button type="button" onclick="cancelCurrentSelection()" class="link-btn">Cancelar y liberar entrada</button>
+          </div>
+        </div>
+
+        <div class="checkout-grid">
+          <div class="panel">
+            <h3>1. Realiza el pago en moneda nacional</h3>
+            <div class="amount">
+              <div class="l">Monto exacto a pagar hoy (tasa BCV):</div>
+              <div id="checkout-amount-ves" class="v">Bs. 0.00</div>
+              <div id="checkout-amount-usd" class="u">Equivalente a $5.00 USD</div>
+            </div>
+            <div id="bank-details-box" style="display:grid;gap:12px"></div>
+          </div>
+
+          <form id="payment-form" onsubmit="submitPaymentForm(event)" class="form">
+            <h3 class="full">2. Carga tus datos y la captura para verificación</h3>
+
+            <div>
+              <label for="buyer_name">Nombre y apellido *</label>
+              <input id="buyer_name" name="buyer_name" type="text" required placeholder="Ej: María Pérez" />
+            </div>
+            <div>
+              <label for="buyer_cedula">Número de cédula *</label>
+              <input id="buyer_cedula" name="buyer_cedula" type="text" required placeholder="Ej: V-12345678" />
+            </div>
+            <div>
+              <label for="buyer_phone">Teléfono de contacto *</label>
+              <input id="buyer_phone" name="buyer_phone" type="tel" required placeholder="Ej: 0414-1234567" />
+            </div>
+            <div>
+              <label for="buyer_email">Correo electrónico (donde llegará tu PDF) *</label>
+              <input id="buyer_email" name="buyer_email" type="email" required placeholder="tu@correo.com" />
+            </div>
+            <div>
+              <label for="payment_phone">Teléfono que utilizó para realizar el pago *</label>
+              <input id="payment_phone" name="payment_phone" type="tel" required placeholder="Ej: 0412-9876543" />
+            </div>
+            <div>
+              <label for="payment_reference">Referencia bancaria *</label>
+              <input id="payment_reference" name="payment_reference" type="text" required placeholder="Últimos 6 u 8 dígitos / Nro completo" />
+            </div>
+            <div class="full">
+              <label for="screenshot">Captura de pantalla del pago (imagen / comprobante) *</label>
+              <input id="screenshot" name="screenshot" type="file" accept="image/*" required />
+            </div>
+            <div class="full actions">
+              <button type="submit" id="btn-submit-order" class="btn btn-lime btn-lg no-arrow">Enviar soporte de pago para verificación</button>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      <!-- Mapa de entradas -->
+      <section>
+        <div class="map-head">
+          <div>
+            <h2>Elige tu número <span class="hl">001 al 250</span></h2>
+            <p>Haz clic en una entrada disponible. Al seleccionarla se bloqueará por 3 minutos para que nadie más pueda tomarla.</p>
+          </div>
+          <div class="legend">
+            <span><i class="lg-free"></i> Disponible</span>
+            <span><i class="lg-lock"></i> Bloqueada (3 min)</span>
+            <span><i class="lg-pend"></i> En verificación</span>
+            <span><i class="lg-sold"></i> Vendida</span>
+          </div>
+        </div>
+        <div id="tickets-grid" class="tickets-grid"></div>
+      </section>
+
+      <section class="legal">
+        <div>
+          <h3>Cronograma de actividades</h3>
+          <div id="schedule-list"></div>
+        </div>
+        <div>
+          <h3>Condiciones del evento</h3>
+          <div id="conditions-box" class="pre"></div>
+        </div>
+        <div>
+          <h3>Términos y condiciones</h3>
+          <div id="terms-box" class="pre"></div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <footer>
+    <div class="container foot">
+      <a href="/" class="logo"><span class="logo-badge" data-logo>IC</span><span>Iluminando Caminos<small>Maturín</small></span></a>
+      <div>© Iluminando Caminos · <a href="https://instagram.com/iluminando_caminoss" target="_blank" rel="noopener" style="text-decoration:underline">@iluminando_caminoss</a></div>
+    </div>
+  </footer>
+
+  <script src="/brand.js"></script>
+  <script src="/widget.js"></script>
+</body>
+</html>

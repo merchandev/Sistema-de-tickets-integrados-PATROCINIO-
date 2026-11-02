@@ -1,0 +1,706 @@
+const { DatabaseSync } = require('node:sqlite');
+const path = require('node:path');
+const fs = require('node:fs');
+const crypto = require('node:crypto');
+const { calculateVes } = require('./money');
+
+const dataDir = path.join(__dirname, '..', 'data');
+if (!fs.existsSync(dataDir)) {
+  fs.mkdirSync(dataDir, { recursive: true });
+}
+
+const dbPath = path.join(dataDir, 'entradas.sqlite');
+const db = new DatabaseSync(dbPath);
+
+// Configure WAL and concurrency settings for high performance & zero race conditions
+db.exec(`
+  PRAGMA journal_mode = WAL;
+  PRAGMA synchronous = NORMAL;
+  PRAGMA foreign_keys = ON;
+  PRAGMA busy_timeout = 5000;
+`);
+
+// Create schema
+db.exec(`
+  CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS tickets (
+    ticket_number TEXT PRIMARY KEY,
+    numeric_id INTEGER UNIQUE NOT NULL,
+    status TEXT NOT NULL DEFAULT 'AVAILABLE', -- AVAILABLE, LOCKED, PENDING, SOLD
+    locked_by_session TEXT,
+    locked_by_source TEXT,
+    locked_at INTEGER,
+    locked_until INTEGER,
+    current_order_id INTEGER,
+    updated_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS orders (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ticket_number TEXT NOT NULL,
+    source_web TEXT NOT NULL,
+    session_id TEXT NOT NULL,
+    buyer_name TEXT NOT NULL,
+    buyer_cedula TEXT NOT NULL,
+    buyer_phone TEXT NOT NULL,
+    buyer_email TEXT NOT NULL,
+    payment_phone TEXT NOT NULL,
+    payment_reference TEXT NOT NULL,
+    screenshot_path TEXT NOT NULL,
+    amount_usd REAL NOT NULL,
+    bcv_rate REAL NOT NULL,
+    amount_ves REAL NOT NULL,
+    status TEXT NOT NULL DEFAULT 'PENDING', -- PENDING, APPROVED, REJECTED
+    verification_token TEXT UNIQUE,
+    pdf_path TEXT,
+    checked_in_conference INTEGER DEFAULT 0,
+    checked_in_conference_at TEXT,
+    checked_in_concert INTEGER DEFAULT 0,
+    checked_in_concert_at TEXT,
+    admin_notes TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    verified_at TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS email_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    recipient_email TEXT NOT NULL,
+    recipient_name TEXT,
+    subject TEXT NOT NULL,
+    type TEXT NOT NULL,
+    order_id INTEGER,
+    ticket_number TEXT,
+    status TEXT NOT NULL,
+    preview_url TEXT,
+    body_html TEXT,
+    attachment_path TEXT,
+    error_message TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS notification_campaigns (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    campaign_key TEXT NOT NULL,
+    triggered_by TEXT NOT NULL,
+    recipients_count INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now'))
+  );
+`);
+
+// Backward-compatible migration: freeze the quote during the reservation.
+for (const column of ['quoted_usd', 'quoted_rate', 'quoted_ves']) {
+  if (!db.prepare('PRAGMA table_info(tickets)').all().some(c => c.name === column)) db.exec('ALTER TABLE tickets ADD COLUMN ' + column + ' REAL');
+}
+// Seed default settings if not present
+const defaultSettings = {
+  event_title: 'Encuentro por una Causa: Conferencias & Concierto Benéfico',
+  event_subtitle: 'Evento especial de recaudación para Labor Social (Entradas 001 - 250)',
+  event_date: '2026-11-15',
+  event_entry_time: '15:30',
+  conference_start: '16:00',
+  conference_end: '19:00',
+  concert_start: '19:00',
+  concert_end: 'Por definir (Abierto)',
+  event_location: 'Auditorio Principal - Centro Cultural',
+  ticket_price_usd: '5.00',
+  lock_duration_seconds: '180', // 3 minutes = 180 seconds
+  bcv_mode: 'auto', // 'auto' or 'manual'
+  bcv_manual_rate: '45.50',
+  bcv_last_scraped_rate: '45.50',
+  bcv_last_updated: new Date().toISOString(),
+  bcv_source_label: 'Banco Central de Venezuela (BCV)',
+  bcv_source_url: '',
+  bcv_value_date: '',
+  bcv_fetch_status: 'unavailable',
+  bcv_last_error: '',
+  payment_methods_json: JSON.stringify({
+    pago_movil: {
+      banco: '0102 - Banco de Venezuela (BDV)',
+      telefono: '0412-0000000',
+      rif_cedula: 'J-00000000-0 / V-12345678',
+      titular: 'Fundación Labor Social'
+    },
+    transferencia: {
+      banco: 'Banco de Venezuela',
+      cuenta: '0102-0000-00-0000000000',
+      tipo: 'Corriente',
+      rif_cedula: 'J-00000000-0',
+      titular: 'Fundación Labor Social'
+    }
+  }),
+  event_schedule_json: JSON.stringify([
+    {
+      time: '3:30 PM - 4:00 PM',
+      phase: 'Ingreso y Acreditación',
+      title: 'Apertura de Puertas y Escaneo de QR',
+      description: 'Recepción de asistentes y validación del código QR único de cada entrada.'
+    },
+    {
+      time: '4:00 PM - 7:00 PM',
+      phase: 'Parte 1: Ciclo de Conferencias',
+      title: 'Conferencias con Propósito Social',
+      description: 'Bloque completo de ponencias e invitados especiales. Comienza a las 4:00 PM y culmina a las 7:00 PM.'
+    },
+    {
+      time: '7:00 PM en adelante',
+      phase: 'Parte 2: Concierto en Vivo',
+      title: 'Gran Concierto Benéfico',
+      description: 'Inicia a partir de las 7:00 PM (hora de finalización abierta). Todas las entradas incluyen acceso a ambas partes del evento.'
+    }
+  ]),
+  event_conditions: [
+    '1. La entrada tiene un valor único de $5.00 USD (calculados en Bolívares a la tasa oficial del BCV en tiempo real al momento del pago).',
+    '2. Todas las personas que adquieran su entrada tienen acceso completo a las dos partes del evento: las Conferencias (4:00 PM a 7:00 PM) y el Concierto (a partir de las 7:00 PM).',
+    '3. Es obligatorio presentar el PDF de la entrada con su código QR único y su Cédula de Identidad laminada al ingresar.',
+    '4. Los datos suministrados en el pago (Nombre, Apellido, Cédula, Teléfono y Referencia) son verificados por la administración para garantizar que quien realizó el pago sea quien reciba la entrada.'
+  ].join('\n'),
+  terms_and_conditions: [
+    '1. Reserva temporal de 3 minutos: Al seleccionar una entrada (001 al 250), el sistema bloquea automáticamente el puesto por tres (3) minutos dándole prioridad exclusiva a la primera persona que lo seleccionó.',
+    '2. Si transcurren los 3 minutos o se cierra la sesión sin enviar el soporte de pago, la entrada vuelve a estar disponible automáticamente para todas las páginas conectadas.',
+    '3. Verificación administrativa: Una vez enviado el formulario con la captura y referencia bancaria, la entrada pasa a estado "En Verificación" hasta que un administrador valide la transacción en el Dashboard.',
+    '4. Envío automático: Al aprobarse el pago, el sistema genera un PDF con un Token y Código QR criptográfico único y lo envía automáticamente al correo electrónico registrado.'
+  ].join('\n'),
+  smtp_host: process.env.SMTP_HOST || '',
+  smtp_port: process.env.SMTP_PORT || '587',
+  smtp_secure: process.env.SMTP_SECURE || 'false',
+  smtp_user: process.env.SMTP_USER || '',
+  smtp_pass: process.env.SMTP_PASS || '',
+  smtp_from: process.env.SMTP_FROM || 'Entradas Labor Social <entradas@laborsocial.org>',
+  secret_hmac_key: crypto.randomBytes(32).toString('hex')
+};
+
+const insertSettingStmt = db.prepare(`
+  INSERT OR IGNORE INTO settings (key, value, updated_at)
+  VALUES (?, ?, datetime('now'))
+`);
+
+db.exec('BEGIN IMMEDIATE TRANSACTION');
+try {
+  for (const [k, v] of Object.entries(defaultSettings)) {
+    insertSettingStmt.run(k, String(v));
+  }
+
+  // Seed tickets 001 to 250
+  const insertTicketStmt = db.prepare(`
+    INSERT OR IGNORE INTO tickets (ticket_number, numeric_id, status)
+    VALUES (?, ?, 'AVAILABLE')
+  `);
+  for (let i = 1; i <= 250; i++) {
+    const code = String(i).padStart(3, '0');
+    insertTicketStmt.run(code, i);
+  }
+  db.exec('COMMIT');
+} catch (err) {
+  db.exec('ROLLBACK');
+  throw err;
+}
+
+// Helper functions
+function getAllSettings() {
+  const rows = db.prepare('SELECT key, value FROM settings').all();
+  const map = {};
+  for (const r of rows) {
+    map[r.key] = r.value;
+  }
+  return map;
+}
+
+function getPublicConfig() {
+  const s = getAllSettings();
+  const effectiveRate = s.bcv_mode === 'manual'
+    ? parseFloat(s.bcv_manual_rate || '45.50')
+    : parseFloat(s.bcv_last_scraped_rate || s.bcv_manual_rate || '45.50');
+  const priceUsd = parseFloat(s.ticket_price_usd || '5.00');
+  const priceVes = calculateVes(priceUsd, effectiveRate);
+
+  let paymentMethods = {};
+  let schedule = [];
+  try { paymentMethods = JSON.parse(s.payment_methods_json || '{}'); } catch (_) {}
+  try { schedule = JSON.parse(s.event_schedule_json || '[]'); } catch (_) {}
+
+  return {
+    event_title: s.event_title,
+    event_subtitle: s.event_subtitle,
+    event_date: s.event_date,
+    event_entry_time: s.event_entry_time,
+    conference_start: s.conference_start,
+    conference_end: s.conference_end,
+    concert_start: s.concert_start,
+    concert_end: s.concert_end,
+    event_location: s.event_location,
+    ticket_price_usd: priceUsd,
+    bcv_rate: effectiveRate,
+    bcv_mode: s.bcv_mode,
+    bcv_last_updated: s.bcv_last_updated,
+    bcv_source_label: s.bcv_source_label,
+    bcv_source_url: s.bcv_source_url,
+    bcv_value_date: s.bcv_value_date,
+    bcv_fetch_status: s.bcv_fetch_status,
+    bcv_last_error: s.bcv_last_error,
+    bcv_is_official: s.bcv_source_url === 'https://www.bcv.org.ve/',
+    ticket_price_ves: priceVes,
+    lock_duration_seconds: parseInt(s.lock_duration_seconds || '180', 10),
+    payment_methods: paymentMethods,
+    event_schedule: schedule,
+    event_conditions: s.event_conditions,
+    terms_and_conditions: s.terms_and_conditions
+  };
+}
+
+function updateSettings(updates) {
+  const upsert = db.prepare(`
+    INSERT INTO settings (key, value, updated_at)
+    VALUES (?, ?, datetime('now'))
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime('now')
+  `);
+  db.exec('BEGIN IMMEDIATE TRANSACTION');
+  try {
+    for (const [k, v] of Object.entries(updates)) {
+      if (v !== undefined && v !== null) {
+        const valStr = typeof v === 'object' ? JSON.stringify(v) : String(v);
+        upsert.run(k, valStr);
+      }
+    }
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
+}
+
+/**
+ * Releases any LOCKED tickets whose 3-minute timer (locked_until) has expired.
+ * Returns array of released ticket_numbers so Socket.IO can broadcast if any changed.
+ */
+function releaseExpiredLocks() {
+  const now = Date.now();
+  db.exec('BEGIN IMMEDIATE TRANSACTION');
+  try {
+    const expired = db.prepare(`
+      SELECT ticket_number, locked_by_session, locked_by_source
+      FROM tickets
+      WHERE status = 'LOCKED' AND locked_until IS NOT NULL AND locked_until <= ?
+    `).all(now);
+
+    if (expired.length > 0) {
+      const releaseStmt = db.prepare(`
+        UPDATE tickets
+        SET status = 'AVAILABLE',
+            locked_by_session = NULL,
+            locked_by_source = NULL,
+            locked_at = NULL,
+            locked_until = NULL,
+            updated_at = datetime('now')
+        WHERE ticket_number = ? AND status = 'LOCKED'
+      `);
+      for (const row of expired) {
+        releaseStmt.run(row.ticket_number);
+      }
+    }
+    db.exec('COMMIT');
+    return expired;
+  } catch (err) {
+    db.exec('ROLLBACK');
+    console.error('Error releasing expired locks:', err);
+    return [];
+  }
+}
+
+/**
+ * Atomically locks a ticket (001-250) for 3 minutes (180s).
+ * Guarantees that if two users on pagina-web-1 and pagina-web-2 request the same ticket
+ * at the exact same millisecond, only the first transaction succeeds; the second receives conflict error.
+ */
+function lockTicketAtomic(ticketNumber, sessionId, sourceWeb) {
+  const now = Date.now();
+  const settings = getAllSettings();
+  const lockDurationMs = (parseInt(settings.lock_duration_seconds || '180', 10)) * 1000;
+  const lockedUntil = now + lockDurationMs;
+  const quote = getPublicConfig();
+
+  db.exec('BEGIN IMMEDIATE TRANSACTION');
+  try {
+    // First expire any stale locks right inside the atomic transaction
+    db.prepare(`
+      UPDATE tickets
+      SET status = 'AVAILABLE',
+          locked_by_session = NULL,
+          locked_by_source = NULL,
+          locked_at = NULL,
+          locked_until = NULL,
+          updated_at = datetime('now')
+      WHERE status = 'LOCKED' AND locked_until IS NOT NULL AND locked_until <= ?
+    `).run(now);
+
+    const ticket = db.prepare('SELECT * FROM tickets WHERE ticket_number = ?').get(ticketNumber);
+    if (!ticket) {
+      db.exec('ROLLBACK');
+      return { success: false, code: 'NOT_FOUND', message: `La entrada ${ticketNumber} no existe (rango válido: 001 al 250).` };
+    }
+
+    // If this same session already holds another LOCKED ticket, release the previous one so a user locks 1 at a time
+    const prevLocked = db.prepare(`
+      SELECT ticket_number FROM tickets
+      WHERE status = 'LOCKED' AND locked_by_session = ? AND ticket_number != ?
+    `).all(sessionId, ticketNumber);
+
+    for (const prev of prevLocked) {
+      db.prepare(`
+        UPDATE tickets
+        SET status = 'AVAILABLE',
+            locked_by_session = NULL,
+            locked_by_source = NULL,
+            locked_at = NULL,
+            locked_until = NULL,
+            updated_at = datetime('now')
+        WHERE ticket_number = ?
+      `).run(prev.ticket_number);
+    }
+
+    if (ticket.status === 'SOLD') {
+      db.exec('ROLLBACK');
+      return {
+        success: false,
+        code: 'ALREADY_SOLD',
+        message: `La entrada #${ticketNumber} ya fue vendida.`
+      };
+    }
+
+    if (ticket.status === 'PENDING') {
+      db.exec('ROLLBACK');
+      return {
+        success: false,
+        code: 'PENDING_VERIFICATION',
+        message: `La entrada #${ticketNumber} ya tiene un pago en proceso de verificación.`
+      };
+    }
+
+    if (ticket.status === 'LOCKED' && ticket.locked_by_session !== sessionId) {
+      const remainingSec = Math.max(1, Math.ceil((ticket.locked_until - now) / 1000));
+      db.exec('ROLLBACK');
+      return {
+        success: false,
+        code: 'LOCKED_BY_OTHER',
+        remainingSeconds: remainingSec,
+        lockedBySource: ticket.locked_by_source,
+        message: `La entrada #${ticketNumber} acaba de ser seleccionada por otro usuario (${ticket.locked_by_source}). Estará bloqueada por ${remainingSec} segundos.`
+      };
+    }
+
+    // Either AVAILABLE or already LOCKED by this exact same session
+    const effectiveLockedUntil = ticket.status === 'LOCKED' && ticket.locked_by_session === sessionId
+      ? ticket.locked_until
+      : lockedUntil;
+
+    db.prepare(`
+      UPDATE tickets
+      SET status = 'LOCKED',
+          locked_by_session = ?,
+          locked_by_source = ?,
+          locked_at = COALESCE(locked_at, ?),
+          locked_until = ?,
+          updated_at = datetime('now')
+      WHERE ticket_number = ?
+    `).run(sessionId, sourceWeb, now, effectiveLockedUntil, ticketNumber);
+
+    if (ticket.status !== 'LOCKED') db.prepare('UPDATE tickets SET quoted_usd = ?, quoted_rate = ?, quoted_ves = ? WHERE ticket_number = ?').run(quote.ticket_price_usd, quote.bcv_rate, quote.ticket_price_ves, ticketNumber);
+    const updatedTicket = db.prepare('SELECT * FROM tickets WHERE ticket_number = ?').get(ticketNumber);
+    db.exec('COMMIT');
+
+    return {
+      success: true,
+      ticket: updatedTicket,
+      releasedPrevious: prevLocked.map(p => p.ticket_number),
+      serverTime: now
+    };
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
+}
+
+/**
+ * Releases a lock voluntarily (e.g. user cancels or closes session/modal)
+ */
+function unlockTicketAtomic(ticketNumber, sessionId) {
+  db.exec('BEGIN IMMEDIATE TRANSACTION');
+  try {
+    const ticket = db.prepare('SELECT * FROM tickets WHERE ticket_number = ?').get(ticketNumber);
+    if (!ticket) {
+      db.exec('ROLLBACK');
+      return { success: false, message: 'Entrada no encontrada' };
+    }
+    if (ticket.status === 'LOCKED' && ticket.locked_by_session === sessionId) {
+      db.prepare(`
+        UPDATE tickets
+        SET status = 'AVAILABLE',
+            locked_by_session = NULL,
+            locked_by_source = NULL,
+            locked_at = NULL,
+            locked_until = NULL,
+            updated_at = datetime('now')
+        WHERE ticket_number = ?
+      `).run(ticketNumber);
+      db.exec('COMMIT');
+      return { success: true, released: true, ticketNumber };
+    }
+    db.exec('COMMIT');
+    return { success: true, released: false, ticketNumber };
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
+}
+
+/**
+ * Submits payment proof for a locked ticket.
+ * Atomically verifies the user holds the lock (or ticket is still available) and moves ticket to PENDING.
+ */
+function submitOrderAtomic(orderData) {
+  const now = Date.now();
+  db.exec('BEGIN IMMEDIATE TRANSACTION');
+  try {
+    // Expire stale locks first
+    db.prepare(`
+      UPDATE tickets
+      SET status = 'AVAILABLE',
+          locked_by_session = NULL,
+          locked_by_source = NULL,
+          locked_at = NULL,
+          locked_until = NULL,
+          updated_at = datetime('now')
+      WHERE status = 'LOCKED' AND locked_until IS NOT NULL AND locked_until <= ?
+    `).run(now);
+
+    const ticket = db.prepare('SELECT * FROM tickets WHERE ticket_number = ?').get(orderData.ticket_number);
+    if (!ticket) {
+      db.exec('ROLLBACK');
+      return { success: false, code: 'NOT_FOUND', message: 'La entrada seleccionada no existe.' };
+    }
+
+    if (ticket.status === 'SOLD' || ticket.status === 'PENDING') {
+      db.exec('ROLLBACK');
+      return {
+        success: false,
+        code: 'UNAVAILABLE',
+        message: `La entrada #${orderData.ticket_number} ya no está disponible (${ticket.status}).`
+      };
+    }
+
+    if (ticket.status !== 'LOCKED' || ticket.locked_by_session !== orderData.session_id) {
+      db.exec('ROLLBACK');
+      return {
+        success: false,
+        code: 'LOCKED_BY_OTHER',
+        message: `El tiempo de reserva expiró y otra persona tomó la entrada #${orderData.ticket_number}.`
+      };
+    }
+
+    orderData.amount_usd = ticket.quoted_usd ?? orderData.amount_usd;
+    orderData.bcv_rate = ticket.quoted_rate ?? orderData.bcv_rate;
+    orderData.amount_ves = ticket.quoted_ves ?? orderData.amount_ves;
+    // Insert order
+    const insertResult = db.prepare(`
+      INSERT INTO orders (
+        ticket_number, source_web, session_id,
+        buyer_name, buyer_cedula, buyer_phone, buyer_email,
+        payment_phone, payment_reference, screenshot_path,
+        amount_usd, bcv_rate, amount_ves, status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')
+    `).run(
+      orderData.ticket_number,
+      ticket.locked_by_source,
+      orderData.session_id,
+      orderData.buyer_name,
+      orderData.buyer_cedula,
+      orderData.buyer_phone,
+      orderData.buyer_email,
+      orderData.payment_phone,
+      orderData.payment_reference,
+      orderData.screenshot_path,
+      orderData.amount_usd,
+      orderData.bcv_rate,
+      orderData.amount_ves
+    );
+
+    const orderId = Number(insertResult.lastInsertRowid);
+
+    // Transition ticket to PENDING
+    db.prepare(`
+      UPDATE tickets
+      SET status = 'PENDING',
+          locked_by_session = ?,
+          locked_by_source = ?,
+          locked_until = NULL,
+          current_order_id = ?,
+          updated_at = datetime('now')
+      WHERE ticket_number = ?
+    `).run(orderData.session_id, ticket.locked_by_source, orderId, orderData.ticket_number);
+
+    const createdOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
+    db.exec('COMMIT');
+
+    return {
+      success: true,
+      order: createdOrder
+    };
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
+}
+
+/**
+ * Generates a unique cryptographic token for a verified ticket and marks the order APPROVED & ticket SOLD.
+ */
+function approveOrderAtomic(orderId, adminNotes = '') {
+  db.exec('BEGIN IMMEDIATE TRANSACTION');
+  try {
+    const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
+    if (!order) {
+      db.exec('ROLLBACK');
+      return { success: false, message: 'Orden no encontrada.' };
+    }
+    if (order.status !== 'PENDING' || !db.prepare("SELECT 1 FROM tickets WHERE ticket_number = ? AND status = 'PENDING' AND current_order_id = ?").get(order.ticket_number, orderId)) {
+      db.exec('ROLLBACK');
+      return { success: false, message: 'Esta orden ya fue aprobada anteriormente.' };
+    }
+
+    const secret = db.prepare("SELECT value FROM settings WHERE key = 'secret_hmac_key'").get()?.value || 'default_secret';
+    const rawUuid = crypto.randomUUID().toUpperCase();
+    const signature = crypto
+      .createHmac('sha256', secret)
+      .update(`${order.ticket_number}:${order.id}:${order.buyer_cedula}:${rawUuid}`)
+      .digest('hex')
+      .slice(0, 12)
+      .toUpperCase();
+
+    const verificationToken = `TK-${order.ticket_number}-${rawUuid.split('-')[0]}-${signature}`;
+
+    db.prepare(`
+      UPDATE orders
+      SET status = 'APPROVED',
+          verification_token = ?,
+          admin_notes = ?,
+          verified_at = datetime('now')
+      WHERE id = ?
+    `).run(verificationToken, adminNotes || 'Pago verificado correctamente', orderId);
+
+    db.prepare(`
+      UPDATE tickets
+      SET status = 'SOLD',
+          locked_until = NULL,
+          current_order_id = ?,
+          updated_at = datetime('now')
+      WHERE ticket_number = ?
+    `).run(orderId, order.ticket_number);
+
+    const updatedOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
+    db.exec('COMMIT');
+
+    return {
+      success: true,
+      order: updatedOrder
+    };
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
+}
+
+/**
+ * Rejects a payment order and releases the ticket back to AVAILABLE.
+ */
+function rejectOrderAtomic(orderId, reason = 'Pago no verificado o datos inconsistentes') {
+  db.exec('BEGIN IMMEDIATE TRANSACTION');
+  try {
+    const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
+    if (!order) {
+      db.exec('ROLLBACK');
+      return { success: false, message: 'Orden no encontrada.' };
+    }
+    if (order.status !== 'PENDING' || !db.prepare("SELECT 1 FROM tickets WHERE ticket_number = ? AND status = 'PENDING' AND current_order_id = ?").get(order.ticket_number, orderId)) {
+      db.exec('ROLLBACK');
+      return { success: false, message: 'Esta orden ya fue rechazada.' };
+    }
+
+    db.prepare(`
+      UPDATE orders
+      SET status = 'REJECTED',
+          admin_notes = ?,
+          verified_at = datetime('now')
+      WHERE id = ?
+    `).run(reason, orderId);
+
+    // Release ticket if it was pointing to this order
+    db.prepare(`
+      UPDATE tickets
+      SET status = 'AVAILABLE',
+          locked_by_session = NULL,
+          locked_by_source = NULL,
+          locked_at = NULL,
+          locked_until = NULL,
+          current_order_id = NULL,
+          updated_at = datetime('now')
+      WHERE ticket_number = ? AND (current_order_id = ? OR status != 'SOLD')
+    `).run(order.ticket_number, orderId);
+
+    const updatedOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
+    db.exec('COMMIT');
+
+    return {
+      success: true,
+      order: updatedOrder
+    };
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
+}
+
+function getAllTicketsPublic(sessionId = null) {
+  releaseExpiredLocks();
+  const now = Date.now();
+  const rows = db.prepare(`
+    SELECT ticket_number, numeric_id, status, locked_by_session, locked_by_source, locked_at, locked_until
+    FROM tickets
+    ORDER BY numeric_id ASC
+  `).all();
+
+  return {
+    serverTime: now,
+    tickets: rows.map(r => ({
+      ticket_number: r.ticket_number,
+      numeric_id: r.numeric_id,
+      status: r.status,
+      locked_by_session: r.status === 'LOCKED' && r.locked_by_session === sessionId ? sessionId : null,
+      pricing: r.status === 'LOCKED' && r.locked_by_session === sessionId
+        ? db.prepare('SELECT quoted_usd AS amount_usd, quoted_rate AS bcv_rate, quoted_ves AS amount_ves FROM tickets WHERE ticket_number = ?').get(r.ticket_number)
+        : null,
+      locked_by_source: r.locked_by_source,
+      locked_until: r.status === 'LOCKED' ? r.locked_until : null,
+      remaining_seconds: r.status === 'LOCKED' && r.locked_until
+        ? Math.max(0, Math.ceil((r.locked_until - now) / 1000))
+        : 0
+    }))
+  };
+}
+
+module.exports = {
+  db,
+  getAllSettings,
+  getPublicConfig,
+  updateSettings,
+  releaseExpiredLocks,
+  lockTicketAtomic,
+  unlockTicketAtomic,
+  submitOrderAtomic,
+  approveOrderAtomic,
+  rejectOrderAtomic,
+  getAllTicketsPublic
+};

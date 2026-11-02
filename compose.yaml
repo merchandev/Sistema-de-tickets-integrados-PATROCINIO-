@@ -1,0 +1,91 @@
+name: socials-entradas
+services:
+  sistema-central:
+    build: ./sistema-central
+    init: true
+    restart: unless-stopped
+    env_file: .env.docker
+    environment:
+      PORT: 4000
+      NODE_ENV: production
+      TZ: America/Caracas
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:4000}
+      WEB_PROXY_KEY_FILE: /run/secrets/web_proxy_key
+      SMTP_HOST: mailpit
+      SMTP_PORT: 1025
+      SMTP_SECURE: 'false'
+      SMTP_FROM: Entradas de prueba <entradas@socials.test>
+    ports:
+      - '4000:4000'
+    volumes:
+      - central-data:/app/data
+      - central-storage:/app/storage
+    secrets:
+      - web_proxy_key
+    depends_on:
+      - mailpit
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://localhost:4000/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+  pagina-web-1:
+    build: ./pagina-web-1
+    init: true
+    restart: unless-stopped
+    environment:
+      PORT: 3001
+      NODE_ENV: production
+      CENTRAL_API_URL: ''
+      CENTRAL_INTERNAL_URL: http://sistema-central:4000
+      WEB_PROXY_KEY_FILE: /run/secrets/web_proxy_key
+    secrets:
+      - web_proxy_key
+    ports:
+      - '3001:3001'
+    depends_on:
+      sistema-central:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://localhost:3001/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+  pagina-web-2:
+    build: ./pagina-web-2
+    init: true
+    restart: unless-stopped
+    environment:
+      PORT: 3002
+      NODE_ENV: production
+      CENTRAL_API_URL: ''
+      CENTRAL_INTERNAL_URL: http://sistema-central:4000
+      WEB_PROXY_KEY_FILE: /run/secrets/web_proxy_key
+    secrets:
+      - web_proxy_key
+    ports:
+      - '3002:3002'
+    depends_on:
+      sistema-central:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://localhost:3002/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+  mailpit:
+    image: axllent/mailpit:v1.27.10
+    restart: unless-stopped
+    ports:
+      - '127.0.0.1:8025:8025'
+    volumes:
+      - mail-data:/data
+    environment:
+      MP_DATABASE: /data/mailpit.db
+volumes:
+  central-data:
+  central-storage:
+  mail-data:
+secrets:
+  web_proxy_key:
+    file: ./.web-proxy-key
