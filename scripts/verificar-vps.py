@@ -33,13 +33,17 @@ def reserve(index):
     return request(webs[index], '/api/public/tickets/lock', {
         'ticket_number': number, 'session_id': sessions[index], 'source_web': 'pagina-web-' + str(index + 1)})
 results = []
+sales_closed = all(state['config'].get('sales_enabled') is False for state in states)
 try:
     with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
         results = list(pool.map(reserve, range(2)))
-    assert sorted(status for status, _ in results) == [200, 409], results
-    assert all(next(t for t in request(web, '/api/public/state')[1]['tickets'] if t['ticket_number'] == number)['status'] == 'LOCKED' for web in webs)
-    winner = next(i for i, result in enumerate(results) if result[0] == 200)
-    assert results[winner][1]['ticket']['locked_by_source'] == 'pagina-web-' + str(winner + 1)
+    if sales_closed:
+        assert all(status == 503 and body.get('code') == 'SALES_NOT_OPEN' for status, body in results), results
+    else:
+        assert sorted(status for status, _ in results) == [200, 409], results
+        assert all(next(t for t in request(web, '/api/public/state')[1]['tickets'] if t['ticket_number'] == number)['status'] == 'LOCKED' for web in webs)
+        winner = next(i for i, result in enumerate(results) if result[0] == 200)
+        assert results[winner][1]['ticket']['locked_by_source'] == 'pagina-web-' + str(winner + 1)
 finally:
     for index, result in enumerate(results):
         if result[0] == 200:
@@ -49,6 +53,6 @@ env = dict(line.split('=', 1) for line in Path('/docker/socials-entradas/.env.do
 auth = base64.b64encode((env['ADMIN_USER'] + ':' + env['ADMIN_PASSWORD']).encode()).decode()
 status, admin = request(central, '/api/admin/overview', headers={'Authorization': 'Basic ' + auth})
 assert status == 200
-output = {'ok': True, 'checks': ['health-3-services', 'admin-auth', '250-tickets', 'shared-price', 'official-bcv', 'concurrent-reservation-200-409', 'shared-state', 'source-tracking', 'reservation-released'],
+output = {'ok': True, 'checks': ['health-3-services', 'admin-auth', '250-tickets', 'shared-price', 'official-bcv', *(['sales-not-open-503'] if sales_closed else ['concurrent-reservation-200-409', 'shared-state', 'source-tracking', 'reservation-released'])],
     'counts': admin['counts'], 'bcv': {key: states[0]['config'].get(key) for key in ['bcv_rate', 'bcv_source_url', 'bcv_value_date', 'ticket_price_ves']}}
 print(json.dumps(output, ensure_ascii=False))

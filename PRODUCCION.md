@@ -41,3 +41,9 @@ Usar siempre los tres archivos al administrar el despliegue público. Mantienen 
 Los logs de cada servicio rotan a 10 MB con tres archivos como máximo. Los demás proyectos y la configuración global de Traefik permanecen fuera del alcance de este despliegue.
 
 `scripts/desplegar-vps-produccion.sh` guarda antes una copia consistente de SQLite, los archivos de almacenamiento, la configuración y el código del proyecto bajo `backups/` con acceso restringido. No elimina volúmenes ni reinicia otros proyectos.
+
+## Verificación del despliegue · 2 de noviembre de 2026
+
+Se comprobaron respuestas HTTPS 200 para ambas portadas, redirecciones HTTP a HTTPS, WebSocket seguro desde los dos dominios, las 250 entradas compartidas y acceso autenticado al dashboard. Sin credenciales, administrador, API administrativa y archivos de entradas devuelven 401. Las rutas de reserva y reporte de pago devuelven 503 con `SALES_NOT_OPEN` mientras las ventas están cerradas.
+
+Los cuatro contenedores están saludables y aplican los límites de la tabla. La comparación con el estado anterior al despliegue confirmó que los otros 21 contenedores conservaron identificadores, fechas de arranque y puertos.

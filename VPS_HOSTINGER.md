@@ -23,7 +23,7 @@ Accesos con el túnel abierto: `http://localhost:13001`, `http://localhost:13002
 
 ## Dominios y HTTPS
 
-Faltan los nombres definitivos. Crear `.env.domains` en el VPS con las variables `DOMAIN_WEB1`, `DOMAIN_WEB2` y `DOMAIN_ADMIN`; deben contener únicamente nombres de host, sin `https://` ni rutas. Apuntar sus registros A a `<IP_DEL_VPS>` y comprobar que cualquier registro AAAA también corresponda al VPS.
+Los dominios definitivos y las rutas de administración están registrados en [PRODUCCION.md](PRODUCCION.md). `.env.domains` contiene `DOMAIN_WEB1`, `DOMAIN_WEB2` y `DOMAIN_ADMIN`; deben ser nombres de host, sin `https://` ni rutas. Los registros A deben apuntar al VPS y cualquier registro AAAA debe corresponder también a este servidor.
 
 El overlay `compose.domains.yaml` integra este proyecto con el proveedor Docker de Traefik ya instalado en el VPS y con su resolver `letsencrypt`. Una vez comprobados los dominios y DNS:
 
