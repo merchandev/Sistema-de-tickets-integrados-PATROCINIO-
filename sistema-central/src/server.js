@@ -119,6 +119,11 @@ function broadcastConfigUpdate() {
 // PUBLIC API (Used by Pagina Web 1 & Pagina Web 2)
 // ============================================================================
 
+function requireSalesOpen(_req, res, next) {
+  if (process.env.SALES_ENABLED === 'false') return res.status(503).json({ok:false, code:'SALES_NOT_OPEN', message:'La venta de entradas estara disponible proximamente. Aun no debes realizar pagos.'});
+  return next();
+}
+
 app.get('/api/public/state', (req, res) => {
   const config = getPublicConfig();
   const ticketState = getAllTicketsPublic(req.headers['x-session-id']);
@@ -144,7 +149,7 @@ app.get('/api/public/bcv', async (_req, res) => {
  * Atomic 3-minute seat lock endpoint.
  * Priority is strictly given to the first request that arrives.
  */
-app.post('/api/public/tickets/lock', async (req, res) => {
+app.post('/api/public/tickets/lock', requireSalesOpen, async (req, res) => {
   try {
     const { ticket_number, session_id, source_web } = req.body;
     if (!/^\d{1,3}$/.test(String(ticket_number)) || Number(ticket_number) < 1 || Number(ticket_number) > 250 || typeof session_id !== 'string' || session_id.length < 8 || session_id.length > 254) {
@@ -223,7 +228,7 @@ app.post('/api/public/tickets/unlock', (req, res) => {
 /**
  * Submit payment verification form + screenshot
  */
-app.post('/api/public/orders', upload.single('screenshot'), async (req, res) => {
+app.post('/api/public/orders', requireSalesOpen, upload.single('screenshot'), async (req, res) => {
   try {
     if (!resolveSalesSource(req)) return res.status(403).json({ok:false, code:'INVALID_SOURCE', message:'Reporta el pago desde una de las paginas de venta.'});
     const {

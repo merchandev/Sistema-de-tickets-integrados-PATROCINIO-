@@ -224,6 +224,7 @@ function getPublicConfig() {
   try { schedule = JSON.parse(s.event_schedule_json || '[]'); } catch (_) {}
 
   return {
+    sales_enabled: process.env.SALES_ENABLED !== 'false',
     event_title: s.event_title,
     event_subtitle: s.event_subtitle,
     event_date: s.event_date,

@@ -1,16 +1,43 @@
-# VPS staging: accessible only from the server/SSH until domains are configured.
+# VPS settings: loopback ports, bounded resources and safe sales default.
 services:
   sistema-central:
+    cpus: '1.0'
+    mem_limit: 512m
+    pids_limit: 192
+    logging:
+      driver: json-file
+      options: {max-size: '10m', max-file: '3'}
     environment:
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://127.0.0.1:4000}
+      SALES_ENABLED: ${SALES_ENABLED:-false}
     ports: !override
       - '127.0.0.1:4000:4000'
   pagina-web-1:
+    cpus: '0.25'
+    mem_limit: 128m
+    pids_limit: 128
+    logging:
+      driver: json-file
+      options: {max-size: '10m', max-file: '3'}
     ports: !override
       - '127.0.0.1:3001:3001'
   pagina-web-2:
+    cpus: '0.25'
+    mem_limit: 128m
+    pids_limit: 128
+    logging:
+      driver: json-file
+      options: {max-size: '10m', max-file: '3'}
     ports: !override
       - '127.0.0.1:3002:3002'
   mailpit:
+    cpus: '0.25'
+    mem_limit: 128m
+    pids_limit: 64
+    logging:
+      driver: json-file
+      options: {max-size: '10m', max-file: '3'}
+    labels:
+      - 'traefik.enable=false'
     ports: !override
       - '127.0.0.1:8025:8025'

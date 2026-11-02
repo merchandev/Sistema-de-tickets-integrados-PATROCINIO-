@@ -40,6 +40,14 @@
   /* ---- Datos en vivo del sistema central ---- */
   function applyConfig(cfg) {
     if (!cfg) return;
+    let notice = document.getElementById('sales-notice');
+    if (cfg.sales_enabled === false && !notice) {
+      notice = document.createElement('p'); notice.id = 'sales-notice';
+      notice.textContent = 'Venta de entradas proximamente. Aun no debes realizar pagos.';
+      notice.style.cssText = 'margin-top:18px;font-size:12px;line-height:1.7;color:var(--accent)';
+      document.querySelector('.hero-copy').appendChild(notice);
+    }
+    if (notice && cfg.sales_enabled !== false) notice.remove();
     const usd = Number(cfg.ticket_price_usd || 5);
     const usdTxt = `$${Number.isInteger(usd) ? usd : usd.toFixed(2)}`;
     $('#chip-price').innerHTML = `${usdTxt}<small> USD</small>`;

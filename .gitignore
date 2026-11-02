@@ -11,6 +11,8 @@
 **/storage/
 output/
 tmp/
+backups/
+*.tar.gz
 *.log
 **/*.sqlite*
 **/*.db

@@ -83,6 +83,7 @@
   }
 
   function renderConfig() {
+    if (eventConfig.sales_enabled === false) showAlert("Venta de entradas proximamente. Puedes consultar el evento; aun no debes realizar pagos.", "info");
 
 
     const usd = Number(eventConfig.ticket_price_usd || 5).toFixed(2);

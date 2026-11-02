@@ -65,4 +65,5 @@ Las pruebas integrales crean órdenes, aprueban entradas, registran ingresos y e
 - [Entorno local](DOCKER_LOCAL.md)
 - [Despliegue en Hostinger](VPS_HOSTINGER.md)
 - [Revisión de aislamiento del VPS](AUDITORIA_VPS.md)
+- [Dominios y operación de producción](PRODUCCION.md)
 - [Alternativa de despliegue con PM2](DEPLOY_HOSTINGER_VPS.md)

@@ -1,5 +1,7 @@
 # Proyecto de entradas en Hostinger
 
+La configuración pública y el estado de apertura de ventas se describen en [PRODUCCION.md](PRODUCCION.md). El administrador puede compartir el dominio de Web 1 mediante la ruta `/admin/`; las rutas del proxy tienen prioridades explícitas para evitar que sustituyan la portada.
+
 Servidor: `<IP_DEL_VPS>`. Carpeta: `/docker/socials-entradas`.
 
 El proyecto agrupa las dos webs y un único sistema central, conectado a una sola base SQLite persistente. Cada servidor web identifica su origen mediante el secreto compartido; ambas páginas consumen la misma API y Socket.IO. Los diseños permanecen independientes.

@@ -6,7 +6,9 @@ services:
       PUBLIC_BASE_URL: https://${DOMAIN_ADMIN:?Falta DOMAIN_ADMIN}
     labels:
       - 'traefik.enable=true'
-      - 'traefik.http.routers.socials-admin.rule=Host(`${DOMAIN_ADMIN:?Falta DOMAIN_ADMIN}`)'
+      - 'traefik.http.routers.socials-admin.rule=Host(`${DOMAIN_ADMIN:?Falta DOMAIN_ADMIN}`) && (PathPrefix(`/admin`) || PathPrefix(`/api/admin`) || PathPrefix(`/storage`) || PathPrefix(`/verify`))'
+      - 'traefik.http.routers.socials-admin.priority=100'
+      - 'traefik.http.routers.socials-admin.service=socials-admin'
       - 'traefik.http.routers.socials-admin.entrypoints=websecure'
       - 'traefik.http.routers.socials-admin.tls.certresolver=letsencrypt'
       - 'traefik.http.services.socials-admin.loadbalancer.server.port=4000'
@@ -14,6 +16,8 @@ services:
     labels:
       - 'traefik.enable=true'
       - 'traefik.http.routers.socials-web1.rule=Host(`${DOMAIN_WEB1:?Falta DOMAIN_WEB1}`)'
+      - 'traefik.http.routers.socials-web1.priority=10'
+      - 'traefik.http.routers.socials-web1.service=socials-web1'
       - 'traefik.http.routers.socials-web1.entrypoints=websecure'
       - 'traefik.http.routers.socials-web1.tls.certresolver=letsencrypt'
       - 'traefik.http.services.socials-web1.loadbalancer.server.port=3001'
@@ -21,6 +25,8 @@ services:
     labels:
       - 'traefik.enable=true'
       - 'traefik.http.routers.socials-web2.rule=Host(`${DOMAIN_WEB2:?Falta DOMAIN_WEB2}`)'
+      - 'traefik.http.routers.socials-web2.priority=10'
+      - 'traefik.http.routers.socials-web2.service=socials-web2'
       - 'traefik.http.routers.socials-web2.entrypoints=websecure'
       - 'traefik.http.routers.socials-web2.tls.certresolver=letsencrypt'
       - 'traefik.http.services.socials-web2.loadbalancer.server.port=3002'
