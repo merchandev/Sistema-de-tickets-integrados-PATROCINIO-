@@ -2,6 +2,12 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "pagina-web-1",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["pagina-web-1/server.js"],
+      "port": 3001
+    },
+    {
       "name": "pagina-web-2",
       "runtimeExecutable": "node",
       "runtimeArgs": ["pagina-web-2/server.js"],
