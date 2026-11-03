@@ -2637,3 +2637,22 @@ body::before, .scroll-progress, .floating-seal, .hdm-sticker { display: none; }
 .event-strip { border-top: 1px solid var(--line); padding: 20px 0; }
 .event-strip .container { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
 @media (max-width: 600px) { .event-strip .container { font-size: 9px; gap: 12px; } }
+
+/* Official brand artwork, with its original transparent canvas preserved. */
+.logo { display: block; position: relative; width: 144px; height: 104px; overflow: hidden; flex-shrink: 0; }
+.logo > .brand-logo { position: absolute; left: 0; top: 50%; width: 144px; height: 144px; max-width: none; object-fit: contain; transform: translateY(calc(-50% + 8px)); border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.nav-inner { height: 104px; }
+.hero { isolation: isolate; }
+.hero-watermark { position: absolute; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+.hero-watermark img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: center 45%; opacity: .38; }
+footer .logo { width: 168px; height: 120px; }
+footer .logo > .brand-logo { width: 168px; height: 168px; transform: translateY(calc(-50% + 9px)); }
+@media (max-width: 600px) {
+  .nav-inner { height: 88px; }
+  .nav .logo { width: 118px; height: 88px; }
+  .nav .logo > .brand-logo { width: 118px; height: 118px; transform: translateY(calc(-50% + 6.5px)); }
+  .hero-watermark img { object-position: center; }
+}
+/* Keep comfortable space around the full official logo. */
+.nav .logo > .brand-logo { width: 120px; height: 120px; left: 12px; transform: translateY(calc(-50% + 7px)); }
+@media (max-width: 600px) { .nav .logo > .brand-logo { width: 100px; height: 100px; left: 9px; transform: translateY(calc(-50% + 5.5px)); } }
