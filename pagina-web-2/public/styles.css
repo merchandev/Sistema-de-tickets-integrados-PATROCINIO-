@@ -2632,8 +2632,10 @@ body::before, .scroll-progress, .floating-seal, .hdm-sticker { display: none; }
 .logo > .brand-logo { position: absolute; left: 0; top: 50%; width: 144px; height: 144px; max-width: none; object-fit: contain; transform: translateY(calc(-50% + 8px)); border: 0; border-radius: 0; background: transparent; box-shadow: none; }
 .nav-inner { height: 104px; }
 .hero { isolation: isolate; }
-.hero-watermark { position: absolute; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
-.hero-watermark img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: center 45%; opacity: .38; animation: hero-watermark-zoom 1.8s cubic-bezier(.16, 1, .3, 1) .1s both; }
+/* The watermark sits behind the hero copy so the full logo stays visible and never under the poster. */
+.hero-copy { position: relative; isolation: isolate; }
+.hero-watermark { position: absolute; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
+.hero-watermark img { display: block; width: 100%; height: 100%; object-fit: contain; object-position: center; opacity: .38; animation: hero-watermark-zoom 1.8s cubic-bezier(.16, 1, .3, 1) .1s both; }
 @keyframes hero-watermark-zoom {
   from { opacity: 0; transform: scale(1.35); }
   to { opacity: .38; transform: scale(1); }
@@ -2644,7 +2646,6 @@ footer .logo > .brand-logo { width: 168px; height: 168px; transform: translateY(
   .nav-inner { height: 88px; }
   .nav .logo { width: 118px; height: 88px; }
   .nav .logo > .brand-logo { width: 118px; height: 118px; transform: translateY(calc(-50% + 6.5px)); }
-  .hero-watermark img { object-position: center; }
 }
 /* Keep comfortable space around the full official logo. */
 .nav .logo > .brand-logo { width: 120px; height: 120px; left: 12px; transform: translateY(calc(-50% + 7px)); }
