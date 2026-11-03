@@ -8,6 +8,29 @@ let state = {
   campaigns: []
 };
 
+const salesSources = {
+  'pagina-web-1': { name: 'Iluminando Caminos', domain: 'iluminandocaminos.com', theme: 'caminos', short: 'IC' },
+  'pagina-web-2': { name: 'Hablemos de Marketing', domain: 'hablemosdemarketingmaturin.com', theme: 'marketing', short: 'HDM' }
+};
+function sourceBadge(source) {
+  const site = Object.hasOwn(salesSources, source) ? salesSources[source] : null;
+  return site ? `<span class="source-badge ${site.theme}"><i></i>${site.name}</span><small class="source-domain">${site.domain}</small>`
+    : '<span class="source-badge unknown">Origen no identificado</span>';
+}
+function filterBySource(source) {
+  document.getElementById('filter-order-source').value = source;
+  document.getElementById('filter-order-status').value = 'ALL';
+  document.getElementById('order-search').value = '';
+  switchTab('orders');
+  renderOrdersTable();
+  document.getElementById('tab-panel-orders').scrollIntoView({behavior:'smooth', block:'start'});
+}
+function connectionStatus(message, offline = false) {
+  const el = document.getElementById('connection-status');
+  el.textContent = message;
+  el.classList.toggle('offline', offline);
+}
+
 let cmsPopulated = false;
 let qrScannerInstance = null;
 let qrCameraRunning = false;
@@ -15,6 +38,10 @@ let qrCameraRunning = false;
 const socket = io({
   query: { source: 'admin-dashboard' }
 });
+
+socket.on('connect', () => connectionStatus('En vivo'));
+socket.on('disconnect', () => connectionStatus('Sin conexión en vivo', true));
+socket.on('connect_error', () => connectionStatus('Reconectando…', true));
 
 socket.on('tickets:updated', () => {
   fetchAdminOverview();
@@ -36,7 +63,7 @@ async function fetchAdminOverview() {
   try {
     const res = await fetch('/api/admin/overview');
     const data = await res.json();
-    if (!data.ok) return;
+    if (!res.ok || !data.ok) throw new Error('No se pudo cargar el panel');
 
     state = data;
     renderHeaderAndKpis();
@@ -49,6 +76,7 @@ async function fetchAdminOverview() {
       cmsPopulated = true;
     }
   } catch (err) {
+    connectionStatus('No se pudo actualizar', true);
     console.error('Error loading admin overview:', err);
   }
 }
@@ -62,7 +90,7 @@ function renderHeaderAndKpis() {
   document.getElementById('admin-bcv-source').textContent = `${bcvStatus} | Ultima consulta: ${cfg.bcv_last_updated || '--'}${cfg.bcv_last_error ? ' | Error: ' + cfg.bcv_last_error : ''}`;
   for (const number of [1, 2]) {
     const sales = state.salesBySource?.[`pagina-web-${number}`] || {};
-    document.getElementById(`sales-web-${number}`).textContent = `${sales.sold || 0} vendidas | ${sales.pending || 0} pagos pendientes | $${Number(sales.revenue_usd || 0).toFixed(2)} USD | Bs. ${Number(sales.revenue_ves || 0).toFixed(2)}`;
+    document.getElementById(`sales-web-${number}`).innerHTML = `<div><strong>${Number(sales.sold || 0)}</strong><span>entradas vendidas</span></div><div><strong>${Number(sales.pending || 0)}</strong><span>pagos pendientes</span></div><div class="source-revenue"><strong>$${Number(sales.revenue_usd || 0).toFixed(2)}</strong><span>Bs. ${Number(sales.revenue_ves || 0).toFixed(2)}</span></div>`;
   }
   const unknown = state.salesBySource?.unknown;
   const unknownEl = document.getElementById('sales-unknown');
@@ -74,10 +102,13 @@ function renderHeaderAndKpis() {
   document.getElementById('kpi-locked').textContent = c.locked ?? 0;
   document.getElementById('kpi-pending').textContent = c.pending ?? 0;
   document.getElementById('kpi-sold').textContent = c.sold ?? 0;
-  document.getElementById('kpi-sold-breakdown').textContent = `Web 1: ${c.sold_web_1 || 0} | Web 2: ${c.sold_web_2 || 0}`;
+  document.getElementById('kpi-sold-breakdown').textContent = `IC: ${c.sold_web_1 || 0} · HDM: ${c.sold_web_2 || 0}`;
   document.getElementById('kpi-revenue-usd').textContent = `$${Number(c.revenue_usd || 0).toFixed(2)} USD`;
   document.getElementById('kpi-revenue-ves').textContent = `Bs. ${Number(c.revenue_ves || 0).toFixed(2)}`;
   document.getElementById('badge-pending-orders').textContent = c.pending ?? 0;
+  const salesState = document.getElementById('sales-state');
+  salesState.textContent = cfg.sales_enabled === false ? 'Ventas en preparación' : 'Venta de entradas abierta';
+  salesState.classList.toggle('is-open', cfg.sales_enabled !== false);
 }
 
 function renderOrdersTable() {
@@ -86,13 +117,15 @@ function renderOrdersTable() {
   if (!tbody) return;
 
   const sourceFilter = document.getElementById('filter-order-source')?.value || 'ALL';
-  const filtered = (state.orders || []).filter(o => (filter === 'ALL' || o.status === filter) && (sourceFilter === 'ALL' || (sourceFilter === 'unknown' ? !['pagina-web-1', 'pagina-web-2'].includes(o.source_web) : o.source_web === sourceFilter)));
+  const query = (document.getElementById('order-search')?.value || '').trim().toLocaleLowerCase('es');
+  const filtered = (state.orders || []).filter(o => (filter === 'ALL' || o.status === filter) && (sourceFilter === 'ALL' || (sourceFilter === 'unknown' ? !['pagina-web-1', 'pagina-web-2'].includes(o.source_web) : o.source_web === sourceFilter)) && (!query || [o.ticket_number, o.buyer_name, o.buyer_email, o.payment_reference].some(value => String(value || '').toLocaleLowerCase('es').includes(query))));
+  document.getElementById('orders-result-count').textContent = `${filtered.length} ${filtered.length === 1 ? 'operación' : 'operaciones'} · ${sourceFilter === 'ALL' ? 'Todas las páginas' : salesSources[sourceFilter]?.name || 'Origen no identificado'}`;
 
   if (filtered.length === 0) {
     tbody.innerHTML = `
       <tr>
         <td colspan="8" class="py-8 text-center text-slate-400">
-          No hay órdenes de compra registradas para este filtro.
+          <strong class="empty-title">No hay operaciones para mostrar</strong><span class="empty-description">Las solicitudes de las dos webs aparecerán aquí. Si aplicaste filtros, prueba con otro estado o página.</span>
         </td>
       </tr>
     `;
@@ -101,16 +134,12 @@ function renderOrdersTable() {
 
   tbody.innerHTML = filtered.map(o => {
     const statusBadge = o.status === 'PENDING'
-      ? '<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800">⏳ PENDIENTE</span>'
+      ? '<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800">Pendiente</span>'
       : o.status === 'APPROVED'
-      ? '<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">✅ VERIFICADO</span>'
-      : '<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-red-100 text-red-800">❌ RECHAZADO</span>';
+      ? '<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">Aprobado</span>'
+      : '<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-red-100 text-red-800">Rechazado</span>';
 
-    const sourceBadge = o.source_web === 'pagina-web-1'
-      ? '<span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">Página Web 1</span>'
-      : o.source_web === 'pagina-web-2'
-      ? '<span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-sky-50 text-sky-700 border border-sky-200">Página Web 2</span>'
-      : '<span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-200">Origen no identificado</span>';
+    const originBadge = sourceBadge(o.source_web);
 
     const actionsHtml = o.status === 'PENDING'
       ? `
@@ -127,10 +156,10 @@ function renderOrdersTable() {
       ? `
         <div class="flex flex-col gap-1 items-end">
           <a href="${o.pdf_path || '#'}" target="_blank" class="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-white rounded text-xs font-semibold">
-            📄 Abrir PDF Entrada
+            Abrir entrada PDF
           </a>
           <button onclick="testTokenInScanner('${o.verification_token}')" class="text-[11px] text-indigo-600 hover:underline font-medium">
-            🔍 Verificar QR en Escáner
+            Comprobar QR
           </button>
         </div>
       `
@@ -138,38 +167,38 @@ function renderOrdersTable() {
 
     return `
       <tr data-source="${escapeHtml(o.source_web)}" class="hover:bg-slate-50 transition">
-        <td class="py-3 px-3">
+        <td data-label="Entrada y página" class="py-3 px-3">
           <div class="text-base font-extrabold text-slate-900">#${o.ticket_number}</div>
-          <div class="mt-0.5">${sourceBadge}</div>
-          <div class="text-[10px] text-slate-400 mt-0.5">${o.created_at}</div>
+          <div class="mt-0.5">${originBadge}</div>
+          <div class="text-[10px] text-slate-400 mt-0.5">${escapeHtml(o.created_at)}</div>
         </td>
-        <td class="py-3 px-3">
+        <td data-label="Comprador" class="py-3 px-3">
           <div class="font-bold text-slate-900">${escapeHtml(o.buyer_name)}</div>
           <div class="text-xs text-slate-600 font-mono">C.I: ${escapeHtml(o.buyer_cedula)}</div>
         </td>
-        <td class="py-3 px-3">
+        <td data-label="Contacto" class="py-3 px-3">
           <div class="text-xs font-medium text-slate-800">${escapeHtml(o.buyer_email)}</div>
           <div class="text-xs text-slate-500">Tel: ${escapeHtml(o.buyer_phone)}</div>
         </td>
-        <td class="py-3 px-3">
+        <td data-label="Pago reportado" class="py-3 px-3">
           <div class="text-xs font-bold text-slate-900">Ref: <span class="font-mono bg-slate-100 px-1.5 py-0.5 rounded">${escapeHtml(o.payment_reference)}</span></div>
           <div class="text-xs text-slate-600 mt-0.5">Tel. Pago: <strong>${escapeHtml(o.payment_phone)}</strong></div>
         </td>
-        <td class="py-3 px-3">
+        <td data-label="Importe" class="py-3 px-3">
           <div class="font-bold text-slate-900">$${Number(o.amount_usd).toFixed(2)} USD</div>
           <div class="text-xs font-semibold text-emerald-700">Bs. ${Number(o.amount_ves).toFixed(2)}</div>
           <div class="text-[10px] text-slate-400">BCV: ${Number(o.bcv_rate).toFixed(2)}</div>
         </td>
-        <td class="py-3 px-3">
+        <td data-label="Comprobante" class="py-3 px-3">
           <button onclick="viewScreenshot('${o.screenshot_path}', '${o.ticket_number}')" class="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg text-xs font-semibold border border-slate-300">
-            🖼️ Ver Captura
+            Ver comprobante
           </button>
         </td>
-        <td class="py-3 px-3">
+        <td data-label="Estado" class="py-3 px-3">
           <div>${statusBadge}</div>
           ${o.verification_token ? `<div class="text-[10px] font-mono text-slate-600 mt-1 break-all">${o.verification_token}</div>` : ''}
         </td>
-        <td class="py-3 px-3 text-right">
+        <td data-label="Acciones" class="py-3 px-3 text-right">
           ${actionsHtml}
         </td>
       </tr>
@@ -197,14 +226,14 @@ function renderSeatsMap() {
     }
 
     return `
-      <div
+      <button type="button"
         onclick="inspectSeat('${t.ticket_number}')"
         class="seat-pill cursor-pointer rounded-lg p-1.5 text-center select-none shadow-sm ${classes}"
-        title="Entrada #${t.ticket_number} (${t.status})"
+        title="Entrada #${t.ticket_number} (${t.status})" aria-label="Entrada ${t.ticket_number}: ${subtitle}"
       >
         <div class="text-xs font-extrabold leading-none">${t.ticket_number}</div>
         <div class="text-[9px] leading-tight mt-0.5 opacity-90">${subtitle}</div>
-      </div>
+      </button>
     `;
   }).join('');
 }
@@ -229,7 +258,7 @@ function inspectSeat(ticketNumber) {
     html += `
       <div class="p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs space-y-1">
         <div><strong>Bloqueo temporal activo (3 minutos):</strong> Restan <strong>${ticket.remaining_seconds} segundos</strong></div>
-        <div><strong>Página de origen:</strong> ${escapeHtml(ticket.locked_by_source || 'N/A')}</div>
+        <div><strong>Página de origen:</strong> ${sourceBadge(ticket.locked_by_source)}</div>
       </div>
     `;
   }
@@ -244,7 +273,7 @@ function inspectSeat(ticketNumber) {
         <div><strong>Teléfono Contacto:</strong> ${escapeHtml(order.buyer_phone)}</div>
         <div><strong>Teléfono Pago:</strong> ${escapeHtml(order.payment_phone)}</div>
         <div><strong>Referencia Bancaria:</strong> ${escapeHtml(order.payment_reference)}</div>
-        <div><strong>Origen:</strong> ${escapeHtml(order.source_web)}</div>
+        <div><strong>Origen:</strong> ${sourceBadge(order.source_web)}</div>
         ${order.verification_token ? `<div><strong>Token QR:</strong> <code>${order.verification_token}</code></div>` : ''}
       </div>
     `;
@@ -373,7 +402,7 @@ async function verifyQrToken(rawToken) {
           <h4 class="text-xl font-black text-slate-900 mt-2">ENTRADA #${o.ticket_number}</h4>
         </div>
         <div class="text-right text-xs text-slate-500">
-          <div>Origen: <strong>${escapeHtml(o.source_web)}</strong></div>
+          <div>Origen: <strong>${sourceBadge(o.source_web)}</strong></div>
           <div class="font-mono text-[11px] text-emerald-800">${o.verification_token}</div>
         </div>
       </div>
@@ -628,24 +657,36 @@ function previewEmailLog(index) {
 }
 
 function switchTab(tabName) {
+  const titles = {orders:'Pagos y ventas', seats:'Mapa de entradas', qr:'Control de acceso', cms:'Evento y contenido', smtp:'Correos y avisos'};
+  document.getElementById('workspace-title').textContent = titles[tabName] || titles.orders;
+  document.querySelector('.dashboard-main').classList.toggle('focused-tab', tabName !== 'orders');
   ['orders', 'seats', 'qr', 'cms', 'smtp'].forEach(t => {
     document.getElementById(`tab-panel-${t}`).classList.toggle('hidden', t !== tabName);
-    document.getElementById(`tab-btn-${t}`).classList.toggle('active', t === tabName);
+    const button = document.getElementById(`tab-btn-${t}`);
+    button.classList.toggle('active', t === tabName);
+    if (t === tabName) button.setAttribute('aria-current', 'page'); else button.removeAttribute('aria-current');
   });
+  if (tabName !== 'orders') window.scrollTo({top: 0});
 }
 
+let modalPreviousFocus;
 function openModal(title, bodyHtml) {
+  modalPreviousFocus = document.activeElement;
   document.getElementById('modal-title').textContent = title;
   document.getElementById('modal-body').innerHTML = bodyHtml;
   const m = document.getElementById('admin-modal');
   m.classList.remove('hidden');
   m.classList.add('flex');
+  document.body.style.overflow = 'hidden';
+  m.querySelector('button').focus();
 }
 
 function closeModal() {
   const m = document.getElementById('admin-modal');
   m.classList.add('hidden');
   m.classList.remove('flex');
+  document.body.style.overflow = '';
+  modalPreviousFocus?.focus();
 }
 
 function escapeHtml(str) {
@@ -653,7 +694,8 @@ function escapeHtml(str) {
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 // Local 1s countdown refresh for locked seats UI
@@ -677,5 +719,20 @@ window.addEventListener('DOMContentLoaded', async () => {
   const verifyToken = params.get('verifyToken');
   if (verifyToken) {
     testTokenInScanner(verifyToken);
+  }
+});
+
+document.getElementById('admin-modal').addEventListener('click', event => {
+  if (event.target.id === 'admin-modal') closeModal();
+});
+document.addEventListener('keydown', event => {
+  const modal = document.getElementById('admin-modal');
+  if (modal.classList.contains('hidden')) return;
+  if (event.key === 'Escape') closeModal();
+  if (event.key === 'Tab') {
+    const items = [...modal.querySelectorAll('button, a[href], input, select, textarea, [tabindex="0"]')].filter(el => !el.disabled && el.getClientRects().length);
+    const first = items[0], last = items[items.length - 1];
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
   }
 });

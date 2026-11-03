@@ -53,3 +53,13 @@ Los cuatro contenedores están saludables y aplican los límites de la tabla. La
 Se integró y revisó la nueva composición editorial de ambas páginas: vino y crema para Iluminando Caminos y hero morado con acentos lima y rosa para Marketing. Se retiraron la apertura con porcentaje ficticio, el movimiento de botones con el cursor y el reproductor simulado. El espacio del video indica que el material está pendiente y permite incorporar `/media/promo.mp4` cuando esté disponible.
 
 Se verificaron portadas y compra a 320, 768 y 1440 píxeles sin desbordamientos en el contenido, menú móvil, búsqueda por número, filtro por rango y las 250 entradas. Las ventas permanecen cerradas. El script `scripts/desplegar-webs.sh` publica únicamente los dos frontends y conserva una copia de sus archivos previos; comprueba que los demás contenedores conserven arranque y puertos.
+
+## Dashboard administrativo
+
+El dashboard utiliza navegación lateral en escritorio y navegación horizontal persistente en móvil. Identifica Iluminando Caminos por su nombre, dominio y color vino, y Hablemos de Marketing por su nombre, dominio y color morado. Cada proyecto muestra entradas aprobadas, pagos pendientes y recaudación; los botones de cada resumen filtran sus operaciones. El listado permite combinar página, estado y búsqueda por nombre, correo, número de entrada o referencia. En móvil, cada operación se presenta como una tarjeta con etiquetas. El origen también aparece en el detalle de la entrada y el resultado del verificador QR.
+
+Los estilos de utilidades se compilan localmente, sin Tailwind en CDN. Después de modificar clases en el HTML o JS del dashboard, ejecutar `npm ci` y `npm run build:admin` desde la raíz y versionar `sistema-central/public/admin/utilities.css` junto con los cambios.
+
+La validación de interfaz cubre las cinco secciones a 320, 768 y 1440 píxeles, filtros combinados con operaciones de prueba de ambas webs, búsqueda, apertura/cierre del detalle y verificación de un QR de prueba. No se registra ningún ingreso ni se aprueban pagos durante estas comprobaciones.
+
+`scripts/desplegar-dashboard.sh` respalda los archivos del dashboard y una copia consistente de SQLite, y recrea únicamente el servicio central. Comprueba que los otros contenedores conserven sus identificadores, arranque y puertos. La publicación conserva `SALES_ENABLED=false` y los volúmenes existentes.

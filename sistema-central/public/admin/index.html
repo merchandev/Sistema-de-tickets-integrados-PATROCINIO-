@@ -4,52 +4,41 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Dashboard Administrador | Sistema Central de Entradas (001-250)</title>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/admin/utilities.css" />
+  <link rel="stylesheet" href="/admin/admin.css" />
   <script src="/socket.io/socket.io.js"></script>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-  <style>
-    body { font-family: 'Inter', system-ui, -apple-system, sans-serif; background-color: #f8fafc; }
-    .tab-btn.active { background-color: #0f172a; color: #ffffff; }
-    .seat-pill { transition: all 0.15s ease; }
-    .seat-pill:hover { transform: scale(1.06); }
-  </style>
+
 </head>
 <body class="text-slate-900 min-h-screen flex flex-col">
 
-  <!-- Top Navigation Bar -->
-  <header class="bg-slate-900 text-white border-b border-slate-800 sticky top-0 z-30">
-    <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
-      <div class="flex items-center gap-3">
-        <div class="w-9 h-9 rounded-lg bg-emerald-500 flex items-center justify-center font-bold text-slate-950">
-          QR
-        </div>
-        <div>
-          <h1 class="text-base font-bold leading-tight">Sistema Central de Venta de Entradas (001–250)</h1>
-          <p class="text-xs text-slate-400">Sincronizado en tiempo real con <span class="text-emerald-400 font-medium">Página Web 1</span> y <span class="text-sky-400 font-medium">Página Web 2</span></p>
-        </div>
-      </div>
-
-      <!-- Live BCV Badge & Quick Stats -->
-      <div class="flex items-center gap-3 flex-wrap">
-        <div class="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-xs flex items-center gap-2">
-          <span class="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-          <span class="text-slate-300">Tasa BCV:</span>
-          <strong id="header-bcv-rate" class="text-emerald-400 text-sm">Bs. --</strong>
-          <span class="text-slate-400">| Entrada:</span>
-          <strong id="header-ticket-price" class="text-white">$5.00 (<span id="header-price-ves">Bs. --</span>)</strong>
-          <button onclick="forceRefreshBcv()" class="ml-1 px-2 py-0.5 bg-slate-700 hover:bg-slate-600 rounded text-[11px] text-slate-200" title="Consultar BCV en vivo">
-            ↻ BCV
-          </button>
-        </div>
-      </div>
-    </div>
+  <aside class="sidebar" aria-label="Navegación principal">
+    <a class="admin-brand" href="/admin/"><span class="brand-mark">e.</span><span>Entradas<small>Administración del evento</small></span></a>
+    <span class="nav-caption">ESPACIO DE TRABAJO</span>
+    <nav class="admin-nav" aria-label="Secciones del dashboard">
+      <button onclick="switchTab('orders')" id="tab-btn-orders" class="tab-btn active" aria-current="page"><span class="nav-icon">01</span> Pagos y ventas <span id="badge-pending-orders" class="nav-count">0</span></button>
+      <button onclick="switchTab('seats')" id="tab-btn-seats" class="tab-btn"><span class="nav-icon">02</span> Mapa de entradas</button>
+      <button onclick="switchTab('qr')" id="tab-btn-qr" class="tab-btn"><span class="nav-icon">03</span> Control de acceso</button>
+      <button onclick="switchTab('cms')" id="tab-btn-cms" class="tab-btn"><span class="nav-icon">04</span> Evento y contenido</button>
+      <button onclick="switchTab('smtp')" id="tab-btn-smtp" class="tab-btn"><span class="nav-icon">05</span> Correos y avisos</button>
+    </nav>
+    <div class="sidebar-sites"><span class="nav-caption">WEBS CONECTADAS</span><a href="https://iluminandocaminos.com" target="_blank" rel="noopener"><i class="site-dot caminos"></i>Iluminando Caminos <span>↗</span></a><a href="https://hablemosdemarketingmaturin.com" target="_blank" rel="noopener"><i class="site-dot marketing"></i>Hablemos de Marketing <span>↗</span></a></div>
+    <div class="sidebar-footer">Un inventario compartido.<br>250 entradas, dos páginas.</div>
+  </aside>
+  <header class="topbar">
+    <div><span class="topbar-label">SISTEMA CENTRAL</span><strong id="workspace-title">Pagos y ventas</strong></div>
+    <div class="topbar-status"><span id="connection-status" role="status">Conectando…</span><span class="admin-avatar" aria-label="Administrador">A</span></div>
   </header>
-
   <!-- Main Content -->
-  <main class="max-w-7xl w-full mx-auto px-4 py-6 flex-1 space-y-6">
+  <main class="dashboard-main space-y-6">
+    <section class="overview-heading"><div><span class="eyebrow">VISTA GENERAL</span><h1>Todo listo para recibirlos.</h1><p>Controla las entradas, verifica los pagos y sigue las ventas de cada proyecto.</p></div><span id="sales-state" class="sales-state">Consultando estado de venta…</span></section>
+    <section class="exchange-bar" aria-label="Precio de la entrada"><div><span>Tasa BCV</span><strong id="header-bcv-rate">Bs. —</strong></div><div><span>Entrada general</span><strong id="header-ticket-price">$5.00 (<span id="header-price-ves">Bs. —</span>)</strong></div><button onclick="forceRefreshBcv()" title="Consultar tasa oficial del BCV">↻ Actualizar tasa</button><details class="rate-detail"><summary>Fuente y actualización</summary><p id="admin-bcv-source"></p></details></section>
 
     <!-- KPI Cards -->
-    <section class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+    <section class="kpi-grid" aria-label="Resumen de entradas">
       <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
         <div class="text-xs text-slate-500 font-medium">Total Entradas</div>
         <div class="text-2xl font-bold text-slate-900 mt-1">250</div>
@@ -82,63 +71,41 @@
       </div>
     </section>
 
-    <!-- Navigation Tabs -->
-    <section class="grid grid-cols-1 sm:grid-cols-2 gap-3" aria-label="Ventas por pagina de origen">
-      <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
-        <h2 class="font-bold text-emerald-900">Página Web 1</h2>
-        <p id="sales-web-1" class="text-sm text-emerald-800">Cargando ventas...</p>
-      </div>
-      <div class="bg-sky-50 border border-sky-200 rounded-xl p-4">
-        <h2 class="font-bold text-sky-900">Página Web 2</h2>
-        <p id="sales-web-2" class="text-sm text-sky-800">Cargando ventas...</p>
-      </div>
-      <p id="sales-unknown" class="text-xs text-amber-800 hidden"></p>
+    <section class="sources-section" aria-labelledby="sources-title">
+      <div class="section-label"><div><span class="eyebrow">DOS PROYECTOS, UN EVENTO</span><h2 id="sources-title">Ventas por página</h2></div><span>Solo pagos aprobados en la recaudación</span></div>
+      <div class="source-grid">
+        <article class="source-card source-caminos"><div class="source-card-head"><span class="source-monogram">IC</span><div><h3>Iluminando Caminos</h3><p>iluminandocaminos.com</p></div><span class="source-number">01</span></div><div id="sales-web-1" class="source-stats">Cargando ventas…</div><button onclick="filterBySource('pagina-web-1')">Ver operaciones de esta web <span>↗</span></button></article>
+        <article class="source-card source-marketing"><div class="source-card-head"><span class="source-monogram">HDM</span><div><h3>Hablemos de Marketing</h3><p>hablemosdemarketingmaturin.com</p></div><span class="source-number">02</span></div><div id="sales-web-2" class="source-stats">Cargando ventas…</div><button onclick="filterBySource('pagina-web-2')">Ver operaciones de esta web <span>↗</span></button></article>
+      </div><p id="sales-unknown" class="unknown-notice hidden"></p>
     </section>
-    <p id="admin-bcv-source" class="text-xs text-slate-600"></p>
-    <nav class="flex flex-wrap gap-2 bg-white p-1.5 rounded-xl border border-slate-200 shadow-sm">
-      <button onclick="switchTab('orders')" id="tab-btn-orders" class="tab-btn active px-4 py-2 rounded-lg text-sm font-semibold transition">
-        1. Verificación de Pagos <span id="badge-pending-orders" class="ml-1 px-2 py-0.5 text-xs rounded-full bg-blue-600 text-white">0</span>
-      </button>
-      <button onclick="switchTab('seats')" id="tab-btn-seats" class="tab-btn px-4 py-2 rounded-lg text-sm font-semibold text-slate-600 hover:bg-slate-100 transition">
-        2. Mapa de Entradas (001–250)
-      </button>
-      <button onclick="switchTab('qr')" id="tab-btn-qr" class="tab-btn px-4 py-2 rounded-lg text-sm font-semibold text-slate-600 hover:bg-slate-100 transition">
-        3. Escáner y Verificador QR
-      </button>
-      <button onclick="switchTab('cms')" id="tab-btn-cms" class="tab-btn px-4 py-2 rounded-lg text-sm font-semibold text-slate-600 hover:bg-slate-100 transition">
-        4. Evento, Cronograma, Términos y BCV
-      </button>
-      <button onclick="switchTab('smtp')" id="tab-btn-smtp" class="tab-btn px-4 py-2 rounded-lg text-sm font-semibold text-slate-600 hover:bg-slate-100 transition">
-        5. Notificaciones y SMTP
-      </button>
-    </nav>
-
     <!-- TAB 1: PAYMENT VERIFICATION -->
-    <section id="tab-panel-orders" class="space-y-4">
+    <section id="tab-panel-orders" class="space-y-4 tab-panel" aria-label="Pagos y ventas">
       <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
         <div class="flex flex-wrap items-center justify-between gap-4 mb-4">
           <div>
-            <h2 class="text-lg font-bold text-slate-900">Verificación de Pagos en Moneda Nacional (Bs.)</h2>
-            <p class="text-xs text-slate-500">Revisa la captura de pantalla, referencia bancaria, teléfono de pago, cédula y nombre antes de emitir la entrada PDF con QR.</p>
+            <h2 class="text-lg font-bold text-slate-900">Operaciones y pagos</h2>
+            <p class="text-xs text-slate-500">Revisa los datos y el comprobante antes de aprobar una entrada. El origen se conserva desde la reserva.</p>
           </div>
-          <div class="flex items-center gap-2">
-            <select id="filter-order-source" aria-label="Pagina de origen" onchange="renderOrdersTable()" class="border border-slate-300 rounded-lg px-3 py-1.5 text-sm bg-white">
+          <div class="order-filters">
+            <label class="order-search"><span class="sr-only">Buscar una operación</span><input id="order-search" type="search" placeholder="Buscar nombre, entrada o referencia" oninput="renderOrdersTable()" /></label>
+            <select id="filter-order-source" aria-label="Página de origen" onchange="renderOrdersTable()" class="border border-slate-300 rounded-lg px-3 py-1.5 text-sm bg-white">
               <option value="ALL">Todas las páginas</option>
-              <option value="pagina-web-1">Página Web 1</option>
-              <option value="pagina-web-2">Página Web 2</option>
+              <option value="pagina-web-1">Iluminando Caminos</option>
+              <option value="pagina-web-2">Hablemos de Marketing</option>
               <option value="unknown">Origen no identificado</option>
             </select>
-            <select id="filter-order-status" onchange="renderOrdersTable()" class="border border-slate-300 rounded-lg px-3 py-1.5 text-sm bg-white">
+            <select id="filter-order-status" aria-label="Estado del pago" onchange="renderOrdersTable()" class="border border-slate-300 rounded-lg px-3 py-1.5 text-sm bg-white">
               <option value="ALL">Todos los estados</option>
-              <option value="PENDING">⏳ Pendientes por Verificar</option>
-              <option value="APPROVED">✅ Verificados / Aprobados</option>
-              <option value="REJECTED">❌ Rechazados</option>
+              <option value="PENDING">Pendientes de revisión</option>
+              <option value="APPROVED">Aprobados</option>
+              <option value="REJECTED">Rechazados</option>
             </select>
           </div>
         </div>
 
-        <div class="overflow-x-auto">
-          <table class="w-full text-left border-collapse text-sm">
+        <p id="orders-result-count" class="result-count" aria-live="polite"></p>
+        <div class="orders-container">
+          <table class="orders-table w-full text-left border-collapse text-sm">
             <thead>
               <tr class="border-b border-slate-200 text-xs uppercase text-slate-500 bg-slate-50">
                 <th class="py-3 px-3">Entrada / Origen</th>
@@ -166,8 +133,8 @@
       <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
         <div class="flex flex-wrap items-center justify-between gap-4 mb-4">
           <div>
-            <h2 class="text-lg font-bold text-slate-900">Sincronización en Tiempo Real: Entradas 001 al 250</h2>
-            <p class="text-xs text-slate-500">Cualquier selección en Página Web 1 o Página Web 2 bloquea el puesto por 3 minutos con prioridad estricta al primero que elija.</p>
+            <h2 class="text-lg font-bold text-slate-900">Mapa de entradas</h2>
+            <p class="text-xs text-slate-500">Un inventario compartido por Iluminando Caminos y Hablemos de Marketing. Toca una entrada para ver su estado y origen.</p>
           </div>
           <div class="flex flex-wrap items-center gap-3 text-xs">
             <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-emerald-500 inline-block"></span> Disponible</span>
@@ -191,7 +158,7 @@
 
           <div class="flex gap-2">
             <input
-              id="qr-token-input"
+              id="qr-token-input" aria-label="Token o enlace de la entrada"
               type="text"
               placeholder="Ej: TK-001-XXXX-XXXX o pega el enlace del QR..."
               class="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm font-mono"
@@ -426,11 +393,11 @@
   </main>
 
   <!-- Modal for Viewing Screenshot or Email Preview -->
-  <div id="admin-modal" class="fixed inset-0 bg-slate-950/70 hidden items-center justify-center z-50 p-4">
+  <div id="admin-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" tabindex="-1" class="fixed inset-0 bg-slate-950/70 hidden items-center justify-center z-50 p-4">
     <div class="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl p-6 space-y-4">
       <div class="flex items-center justify-between border-b pb-3">
         <h3 id="modal-title" class="text-base font-bold text-slate-900">Detalle</h3>
-        <button onclick="closeModal()" class="text-slate-400 hover:text-slate-700 text-xl font-bold">&times;</button>
+        <button aria-label="Cerrar detalle" onclick="closeModal()" class="text-slate-400 hover:text-slate-700 text-xl font-bold">&times;</button>
       </div>
       <div id="modal-body" class="text-sm text-slate-700"></div>
     </div>
