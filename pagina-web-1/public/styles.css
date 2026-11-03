@@ -2552,3 +2552,15 @@ body { background: #30080c; }
 .event-strip { border-top: 1px solid var(--line); padding: 20px 0; }
 .event-strip .container { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
 @media (max-width: 600px) { .event-strip .container { font-size: 9px; gap: 12px; } }
+
+/* Official campaign isologo, preserving its original shape and transparency. */
+.logo { display: inline-flex; justify-content: center; width: 128px; flex-shrink: 0; }
+.logo > .brand-logo { display: block; width: 100px; height: 100px; max-width: 100%; object-fit: contain; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.nav-inner { height: 112px; }
+footer .logo { width: 144px; }
+footer .logo > .brand-logo { width: 144px; height: 144px; }
+@media (max-width: 600px) {
+  .nav-inner { height: 96px; }
+  .nav .logo { width: 104px; }
+  .nav .logo > .brand-logo { width: 88px; height: 88px; }
+}
