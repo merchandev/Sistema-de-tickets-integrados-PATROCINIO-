@@ -657,15 +657,16 @@ function previewEmailLog(index) {
 }
 
 function switchTab(tabName) {
-  const titles = {orders:'Pagos y ventas', seats:'Mapa de entradas', qr:'Control de acceso', cms:'Evento y contenido', smtp:'Correos y avisos'};
+  const titles = {orders:'Pagos y ventas', seats:'Mapa de entradas', qr:'Control de acceso', cms:'Evento y contenido', smtp:'Correos y avisos', blog:'Blog · Marketing'};
   document.getElementById('workspace-title').textContent = titles[tabName] || titles.orders;
   document.querySelector('.dashboard-main').classList.toggle('focused-tab', tabName !== 'orders');
-  ['orders', 'seats', 'qr', 'cms', 'smtp'].forEach(t => {
+  ['orders', 'seats', 'qr', 'cms', 'smtp', 'blog'].forEach(t => {
     document.getElementById(`tab-panel-${t}`).classList.toggle('hidden', t !== tabName);
     const button = document.getElementById(`tab-btn-${t}`);
     button.classList.toggle('active', t === tabName);
     if (t === tabName) button.setAttribute('aria-current', 'page'); else button.removeAttribute('aria-current');
   });
+  if (tabName === 'blog') window.loadMarketingBlog();
   if (tabName !== 'orders') window.scrollTo({top: 0});
 }
 
@@ -715,6 +716,7 @@ setInterval(() => {
 // Check URL params if redirected from QR scan (/admin/?verifyToken=...)
 window.addEventListener('DOMContentLoaded', async () => {
   await fetchAdminOverview();
+  if (window.location.hash === '#blog') switchTab('blog');
   const params = new URLSearchParams(window.location.search);
   const verifyToken = params.get('verifyToken');
   if (verifyToken) {

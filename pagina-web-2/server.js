@@ -24,6 +24,7 @@ const upstream = process.env.CENTRAL_INTERNAL_URL;
 const salesKey = process.env.WEB_PROXY_KEY_FILE ? require('node:fs').readFileSync(process.env.WEB_PROXY_KEY_FILE, 'utf8').trim() : '';
 function salesHeaders(req) { return {...req.headers, 'x-sales-source':SOURCE_WEB, 'x-sales-key':salesKey}; }
 app.get('/health', (_req, res) => res.json({ok:true}));
+require('./blog-pages').registerBlogPages(app, (upstream || CENTRAL_API_URL || 'http://localhost:4000').replace(/\/$/, ''));
 if (upstream) app.use(['/api/public', '/socket.io'], (req, res) => {
   const target = new URL(upstream);
   const proxy = http.request({hostname:target.hostname, port:target.port, path:req.originalUrl, method:req.method, headers:salesHeaders(req)}, response => {

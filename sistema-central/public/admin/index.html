@@ -9,6 +9,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/admin/utilities.css" />
   <link rel="stylesheet" href="/admin/admin.css" />
+  <link rel="stylesheet" href="/admin/blog.css" />
   <script src="/socket.io/socket.io.js"></script>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 
@@ -24,6 +25,7 @@
       <button onclick="switchTab('qr')" id="tab-btn-qr" class="tab-btn"><span class="nav-icon">03</span> Control de acceso</button>
       <button onclick="switchTab('cms')" id="tab-btn-cms" class="tab-btn"><span class="nav-icon">04</span> Evento y contenido</button>
       <button onclick="switchTab('smtp')" id="tab-btn-smtp" class="tab-btn"><span class="nav-icon">05</span> Correos y avisos</button>
+      <button onclick="switchTab('blog')" id="tab-btn-blog" class="tab-btn"><span class="nav-icon">06</span> Blog · Marketing</button>
     </nav>
     <div class="sidebar-sites"><span class="nav-caption">WEBS CONECTADAS</span><a href="https://iluminandocaminos.com" target="_blank" rel="noopener"><i class="site-dot caminos"></i>Iluminando Caminos <span>↗</span></a><a href="https://hablemosdemarketingmaturin.com" target="_blank" rel="noopener"><i class="site-dot marketing"></i>Hablemos de Marketing <span>↗</span></a></div>
     <div class="sidebar-footer">Un inventario compartido.<br>250 entradas, dos páginas.</div>
@@ -390,6 +392,32 @@
         </div>
       </div>
     </section>
+
+    <section id="tab-panel-blog" class="hidden" aria-label="Blog de Hablemos de Marketing">
+      <div class="blog-section-head"><div><span class="eyebrow">HABLEMOS DE MARKETING</span><h2>Publicaciones del blog</h2><p>Ideas, novedades y artículos para tu comunidad. <a href="https://hablemosdemarketingmaturin.com/blog" target="_blank" rel="noopener">Visitar el blog ↗</a></p></div><button type="button" id="blog-new" class="blog-primary">+ Nueva publicación</button></div>
+      <div class="blog-toolbar"><div class="blog-status-tabs" role="group" aria-label="Filtrar publicaciones"><button type="button" data-blog-status="" aria-pressed="true">Todas <span id="blog-count-all">0</span></button><button type="button" data-blog-status="published" aria-pressed="false">Publicadas <span id="blog-count-published">0</span></button><button type="button" data-blog-status="draft" aria-pressed="false">Borradores <span id="blog-count-draft">0</span></button><button type="button" data-blog-status="trash" aria-pressed="false">Papelera <span id="blog-count-trash">0</span></button></div><input type="search" id="blog-search" placeholder="Buscar publicaciones…" aria-label="Buscar publicaciones" /></div>
+      <div id="blog-post-list" class="blog-post-list" aria-live="polite"></div>
+      <div class="blog-pages"><button type="button" id="blog-previous">← Anterior</button><span id="blog-pagination"></span><button type="button" id="blog-next">Siguiente →</button></div>
+      <section id="blog-editor" class="blog-editor" hidden aria-labelledby="blog-editor-title">
+        <div class="blog-editor-heading"><h3 id="blog-editor-title">Nueva publicación</h3><span id="blog-editor-state" class="blog-state">Borrador</span><button type="button" id="blog-close">Cerrar editor ×</button></div>
+        <form id="blog-form"><div class="blog-form-grid"><div>
+          <label class="blog-field">Título<input class="blog-title-input" id="blog-title" maxlength="180" required placeholder="Escribe un título" /></label>
+          <label class="blog-field">Enlace permanente<input id="blog-slug" maxlength="150" placeholder="Se genera automáticamente a partir del título" /><small>hablemosdemarketingmaturin.com/blog/tu-articulo · Usa un enlace diferente para cada publicación.</small></label>
+          <label class="blog-field">Extracto<textarea id="blog-excerpt" rows="3" maxlength="500" placeholder="Un resumen que invite a seguir leyendo"></textarea></label>
+          <label class="blog-field" for="blog-content">Contenido</label><div class="blog-editor-tools" role="group" aria-label="Formato del contenido"><button type="button" data-blog-format="heading">Subtítulo</button><button type="button" data-blog-format="bold">Negrita</button><button type="button" data-blog-format="list">Lista</button><button type="button" data-blog-format="link">Enlace</button><button type="button" data-blog-format="quote">Cita</button></div>
+          <label class="blog-field"><span class="sr-only">Texto de la publicación</span><textarea id="blog-content" class="blog-content" maxlength="200000" placeholder="Comparte una idea con tu comunidad…"></textarea><small>Usa los botones para añadir formato. La vista previa muestra cómo se verá el artículo.</small></label>
+        </div><aside class="blog-aside"><h4>Detalles de la publicación</h4>
+          <label class="blog-field">Autor<input id="blog-author" maxlength="100" /></label>
+          <label class="blog-field">Categoría<input id="blog-category" maxlength="80" list="blog-category-options" /><datalist id="blog-category-options"><option>Marketing digital</option><option>Contenido</option><option>Eventos</option><option>Comunidad</option></datalist></label>
+          <label class="blog-field">Etiquetas<input id="blog-tags" maxlength="300" placeholder="Redes sociales, estrategia" /><small>Separa las etiquetas con comas.</small></label>
+          <label class="blog-upload">Subir imagen destacada<input type="file" id="blog-upload" accept="image/png,image/jpeg,image/webp" /><span>PNG, JPG o WebP · Hasta 5 MB.</span></label>
+          <label class="blog-field">URL de la imagen<input id="blog-cover_url" maxlength="2000" placeholder="Sube una imagen o pega un enlace HTTPS" /></label>
+          <label class="blog-field">Texto alternativo<input id="blog-cover_alt" maxlength="200" placeholder="Describe brevemente la imagen" /></label>
+        </aside></div>
+        <div class="blog-editor-actions"><button type="button" id="blog-save-draft" class="blog-secondary blog-save-action">Guardar borrador</button><button type="button" id="blog-preview" class="blog-secondary">Vista previa</button><button type="button" id="blog-publish" class="blog-primary blog-save-action">Publicar</button><button type="button" id="blog-trash" class="blog-trash blog-save-action" hidden>Mover a la papelera</button></div></form>
+        <iframe id="blog-preview-frame" class="blog-preview-frame" title="Vista previa de la publicación" sandbox="" hidden></iframe>
+      </section><p id="blog-message" class="blog-message" role="status"></p>
+    </section>
   </main>
 
   <!-- Modal for Viewing Screenshot or Email Preview -->
@@ -403,6 +431,7 @@
     </div>
   </div>
 
+  <script src="/admin/blog.js"></script>
   <script src="/admin/admin.js"></script>
 </body>
 </html>

@@ -3,6 +3,7 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 COPY --chown=node:node server.js ./
+COPY --chown=node:node blog-pages.js ./
 COPY --chown=node:node public ./public
 USER node
 EXPOSE 3002
