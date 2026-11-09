@@ -67,59 +67,21 @@
           </div>
         </div>
 
-        <!-- ESCENARIO DERECHO: HOJA DE LIBRETA ROSA CON PERFORACIÓN + STICKER + CREDENCIAL VIP -->
+        <!-- ESCENARIO DERECHO: VIDEO DE PRESENTACIÓN (SUENA SOLO MIENTRAS ESTÁ EN PANTALLA) -->
         <div class="hero-stage hero-stage-enter" id="hero-stage">
-          <!-- Sticker ácido flotante inspirado en el post #3 de Instagram -->
-          <div class="hdm-sticker" aria-hidden="true">
-            <span>IDEAS · CONVERSACIONES · CONEXIONES</span>
-            <small>HABLEMOS CLARO ↗</small>
-          </div>
-
-          <!-- Póster estilo hoja de bloc rosa con borde superior troquelado (Post #2 de IG) -->
-          <div class="hdm-poster" aria-hidden="true">
-            <div class="notebook-holes">
-              <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+          <figure class="reel is-paused">
+            <video src="/media/reel-marketing.mp4" loop playsinline preload="metadata" aria-label="Video de presentación de Hablemos de Marketing"></video>
+            <div class="reel-controls">
+              <button type="button" class="reel-btn reel-playback" aria-label="Reproducir video">
+                <svg class="icon-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z" fill="currentColor"/></svg>
+                <svg class="icon-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" fill="currentColor"/></svg>
+              </button>
+              <button type="button" class="reel-btn reel-sound" aria-pressed="false" aria-label="Activar sonido">
+                <svg class="icon-sound-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5v5h3.5L12 18V6L7.5 9.5z" fill="currentColor"/><path d="M15.5 9.5l5 5m0-5l-5 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+                <svg class="icon-sound-on" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5v5h3.5L12 18V6L7.5 9.5z" fill="currentColor"/><path d="M15.5 9a4.5 4.5 0 0 1 0 6M18 6.5a8 8 0 0 1 0 11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+              </button>
             </div>
-            <div class="hdm-poster-headline">
-              Aprende a conquistar<br>las redes sociales.
-              <!-- Cursor vectorial estilo post de Instagram -->
-              <svg class="ig-cursor" viewBox="0 0 28 28" fill="none">
-                <path d="M5 3L23 12.5L14.5 15.2L11.5 24L5 3Z" fill="#110b1f" stroke="#b8f500" stroke-width="2" stroke-linejoin="round"/>
-              </svg>
-            </div>
-            <div class="hdm-poster-pill">¿Publicas por publicar? Es hora de cambiar eso.</div>
-            <div class="hdm-pillars-grid">
-              <div>Social<br>Media</div>
-              <div>Marketing<br>Digital</div>
-              <div>Crea<br>Contenido</div>
-              <div>Estrategias<br>de Marketing</div>
-            </div>
-          </div>
-
-          <!-- Credencial VIP perforada -->
-          <div class="info-card">
-            <div class="ticket-main">
-              <div>
-                <span class="ticket-label">CONFERENCIAS + CONCIERTO</span>
-                <div class="price" id="chip-price">$5<small> USD</small></div>
-              </div>
-              <div class="ticket-place">
-                Salón Ángeles Gold
-                <span>Maturín, Venezuela</span>
-              </div>
-            </div>
-            <div class="meta-row">
-              <span>Fecha del encuentro</span>
-              <b id="chip-date">Próximamente</b>
-            </div>
-            <div class="avail">
-              <div class="avail-head">
-                <span class="avail-label">Entradas disponibles</span>
-                <b class="avail-count">-- / 250</b>
-              </div>
-              <div class="bar"><i class="avail-bar"></i></div>
-            </div>
-          </div>
+          </figure>
         </div>
       </div>
     </header>

@@ -29,13 +29,58 @@
     $('#video-frame').innerHTML = '<video controls playsinline preload="metadata" poster="/media/poster.jpg"><source src="/media/promo.mp4" type="video/mp4"></video>';
   }).catch(() => {});
 
-  /* ---- Formato ---- */
-  const fmtDate = (d) => {
-    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(d || ''));
-    if (!m) return d || '';
-    return new Intl.DateTimeFormat('es-VE', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })
-      .format(new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])));
-  };
+  /* ---- Reels: se reproducen con sonido solo mientras se ven; al salir de pantalla se pausan ----
+     Los navegadores no dejan iniciar audio hasta que la persona interactúa con la página: si lo
+     bloquean, el video arranca en silencio y el sonido se activa con el primer clic, toque o tecla.
+     Si la persona pausa o silencia un video a mano (o prefiere menos movimiento), se respeta. */
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const reels = [];
+  $$('.reel').forEach((reel) => {
+    const video = $('video', reel);
+    const playback = $('.reel-playback', reel);
+    const sound = $('.reel-sound', reel);
+    let userPaused = reduceMotion;
+    let userMuted = false;
+    const play = () => {
+      if (!userMuted) video.muted = false;
+      video.play().catch(() => {
+        if (video.muted) return;
+        video.muted = true;
+        video.play().catch(() => {});
+      });
+    };
+    const sync = () => {
+      reel.classList.toggle('is-paused', video.paused);
+      reel.classList.toggle('is-unmuted', !video.muted);
+      playback.setAttribute('aria-label', video.paused ? 'Reproducir video' : 'Pausar video');
+      sound.setAttribute('aria-label', video.muted ? 'Activar sonido' : 'Silenciar');
+      sound.setAttribute('aria-pressed', String(!video.muted));
+    };
+    const toggle = () => {
+      userPaused = !video.paused;
+      if (userPaused) video.pause(); else play();
+    };
+    const unmute = () => { if (!userMuted && !video.paused) video.muted = false; };
+    ['play', 'pause', 'volumechange'].forEach((ev) => video.addEventListener(ev, sync));
+    // El primer toque sobre un video que suena bloqueado en silencio activa el audio en vez de pausarlo.
+    video.addEventListener('click', () => { if (video.muted && !userMuted && !video.paused) unmute(); else toggle(); });
+    playback.addEventListener('click', toggle);
+    sound.addEventListener('click', () => {
+      video.muted = !video.muted;
+      userMuted = video.muted;
+      if (!video.muted && video.paused) { userPaused = false; play(); }
+    });
+    new IntersectionObserver(([entry]) => {
+      if (!entry.isIntersecting) video.pause();
+      else if (!userPaused) play();
+    }, { threshold: 0.5 }).observe(video);
+    reels.push({ unmute });
+    sync();
+  });
+  // Cualquier gesto fuera de los controles del video activa el sonido del que suena en silencio
+  // (Safari puede volver a bloquearlo al reanudar, por eso no se escucha una sola vez).
+  const unlockSound = (e) => { if (!(e.target.closest && e.target.closest('.reel'))) reels.forEach(({ unmute }) => unmute()); };
+  ['pointerdown', 'keydown'].forEach((ev) => document.addEventListener(ev, unlockSound, true));
 
   /* ---- Datos en vivo del sistema central ---- */
   function applyConfig(cfg) {
@@ -50,7 +95,6 @@
     if (notice && cfg.sales_enabled !== false) notice.remove();
     const usd = Number(cfg.ticket_price_usd || 5);
     const usdTxt = `$${Number.isInteger(usd) ? usd : usd.toFixed(2)}`;
-    $('#chip-price').innerHTML = `${usdTxt}<small> USD</small>`;
     $('#cta-price').textContent = usdTxt;
     $('#sticky-price').textContent = usdTxt;
     $$('.faq-price').forEach((e) => { e.textContent = `$${usd.toFixed(2)} USD`; });
@@ -61,8 +105,6 @@
       const rate = Number(cfg.bcv_rate || 0);
       if (rate > 0) $('#cta-rate').textContent = `Tasa oficial BCV: Bs. ${rate.toFixed(4)}`;
     }
-
-    if (cfg.event_date) $('#chip-date').textContent = fmtDate(cfg.event_date);
 
     if (Array.isArray(cfg.event_schedule) && cfg.event_schedule.length) {
       $('#timeline').innerHTML = cfg.event_schedule.map((it) => `

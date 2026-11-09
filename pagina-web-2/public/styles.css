@@ -2640,7 +2640,7 @@ body::before, .scroll-progress, .floating-seal, .hdm-sticker { display: none; }
   from { opacity: 0; transform: scale(1.35); }
   to { opacity: .38; transform: scale(1); }
 }
-/* Stacked hero: size by width and pin to the top so the whole logo stays above the poster. */
+/* Stacked hero: size by width and pin to the top so the whole logo stays above the video. */
 @media (max-width: 1024px) {
   .hero-watermark { top: 24px; height: auto; width: min(calc(100% - 32px), 480px); }
 }
@@ -2654,3 +2654,14 @@ footer .logo > .brand-logo { width: 168px; height: 168px; transform: translateY(
 /* Keep comfortable space around the full official logo. */
 .nav .logo > .brand-logo { width: 120px; height: 120px; left: 12px; transform: translateY(calc(-50% + 7px)); }
 @media (max-width: 600px) { .nav .logo > .brand-logo { width: 100px; height: 100px; left: 9px; transform: translateY(calc(-50% + 5.5px)); } }
+
+/* Presentation reel hosted on the site: lime frame with an offset hairline and two quiet
+   controls. landing.js plays it with sound only while it is on screen. */
+.reel { position: relative; width: min(calc(100% - 24px), 340px); aspect-ratio: 9 / 16; margin: 12px auto; border: 2px solid var(--lime); border-radius: 24px; outline: 1px solid rgba(248, 246, 255, .28); outline-offset: 10px; background: var(--bg-main); overflow: hidden; }
+.reel video { display: block; width: 100%; height: 100%; object-fit: cover; cursor: pointer; }
+.reel-controls { position: absolute; right: 14px; bottom: 14px; display: flex; gap: 8px; }
+.reel-btn { display: grid; place-items: center; width: 40px; height: 40px; border: 1px solid rgba(184, 245, 0, .5); border-radius: 50%; background: rgba(17, 11, 31, .62); color: var(--lime); backdrop-filter: blur(8px); transition: background .2s, border-color .2s; }
+.reel-btn:hover { background: rgba(17, 11, 31, .86); border-color: var(--lime); }
+.reel-btn svg { width: 18px; height: 18px; }
+.reel .icon-play, .reel.is-paused .icon-pause, .reel .icon-sound-on, .reel.is-unmuted .icon-sound-off { display: none; }
+.reel.is-paused .icon-play, .reel.is-unmuted .icon-sound-on { display: block; }
