@@ -14,7 +14,10 @@
 <body class="text-slate-900 min-h-screen flex flex-col">
 
   <aside class="sidebar" aria-label="Navegación principal">
-    <a class="admin-brand" href="/admin/"><span class="brand-mark"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h18v3a2 2 0 0 0 0 4v3H3v-3a2 2 0 0 0 0-4z M15 7v3 M15 14v3"/></svg></span><span>Entradas<small>Administración del evento</small></span></a>
+    <a class="admin-brand" href="/admin/">
+      <img class="brand-mark" src="/admin/brands/espressivo-venezuela.png" width="48" height="48" alt="Espressivo Venezuela" />
+      <span>Entradas<small>Administración del evento</small></span>
+    </a>
     <nav class="admin-nav" aria-label="Secciones del dashboard">
       <button type="button" onclick="switchTab('orders')" id="tab-btn-orders" class="tab-btn active" aria-current="page"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18v12H3z M3 10h18 M6 15h4"/></svg> Pagos y ventas <span id="badge-pending-orders" class="nav-count">0</span></button>
       <button type="button" onclick="switchTab('seats')" id="tab-btn-seats" class="tab-btn"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h6v6H4z M14 4h6v6h-6z M4 14h6v6H4z M14 14h6v6h-6z"/></svg> Mapa de entradas</button>

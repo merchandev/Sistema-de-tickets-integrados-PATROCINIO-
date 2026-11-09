@@ -93,12 +93,13 @@ a {
   letter-spacing: -0.7px;
 }
 .brand-mark {
-  display: grid;
-  place-items: center;
-  width: 42px;
-  height: 44px;
-  background: var(--accent);
-  color: #fff;
+  display: block;
+  width: 48px;
+  height: 48px;
+  padding: 4px;
+  flex-shrink: 0;
+  object-fit: contain;
+  background: #181619;
   border-radius: 11px;
 }
 .admin-brand small {
@@ -155,7 +156,6 @@ a {
   stroke-linecap: round;
   stroke-linejoin: round;
 }
-.brand-mark .nav-icon { width: 24px; height: 24px; }
 .nav-count {
   margin-left: auto;
   font-size: 10px;
@@ -820,9 +820,8 @@ button.bg-emerald-600:hover {
     font-size: 9px;
   }
   .brand-mark {
-    width: 34px;
-    height: 36px;
-    font-size: 32px;
+    width: 42px;
+    height: 42px;
   }
   .sidebar > .nav-caption,
   .sidebar-sites,
