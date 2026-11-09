@@ -26,7 +26,6 @@ const { generateTicketPdf, generateDemoTicketPdf } = require('./pdfGenerator');
 const { parsePaymentForm, parseTicketNumber } = require('./paymentForm');
 const {
   sendPaymentSubmittedEmail,
-  sendPaymentApprovedEmail,
   sendTicketEmail,
   sendPaymentRejectedEmail,
   sendEventCampaignNotification,
@@ -436,7 +435,7 @@ app.get('/api/admin/overview', (_req, res) => {
 
 /**
  * Approve payment -> Marks ticket SOLD, generates unique Token & PDF with QR, then emails the buyer
- * "Pago aceptado" and a second message with the ticket PDF. Payment reports need `ticket_number`.
+ * one message that confirms the payment and carries the ticket PDF. Payment reports need `ticket_number`.
  */
 app.post('/api/admin/orders/:id/approve', async (req, res) => {
   try {
@@ -461,8 +460,7 @@ app.post('/api/admin/orders/:id/approve', async (req, res) => {
     db.prepare('UPDATE orders SET pdf_path = ? WHERE id = ?').run(pdfRelativeUrl, orderId);
     const finalOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
 
-    // "Pago aceptado" first, then the ticket itself with the PDF attached
-    const approvedEmail = await sendPaymentApprovedEmail(finalOrder);
+    // Payment confirmation and the ticket with the PDF attached, in a single email
     const emailResult = await sendTicketEmail(finalOrder, pdfFullPath, pdfRelativeUrl);
 
     broadcastTicketsUpdate({
@@ -472,7 +470,8 @@ app.post('/api/admin/orders/:id/approve', async (req, res) => {
 
     return res.json({
       ok: true,
-      message: `Pago aprobado y entrada #${finalOrder.ticket_number} generada. Correo de pago aceptado: ${approvedEmail.status}. Correo con la entrada PDF: ${emailResult.status}.`,
+      message: `Pago aprobado y entrada #${finalOrder.ticket_number} generada.` +
+        (emailResult.status === 'SENT_SMTP' ? ' El servidor SMTP aceptó el correo con la entrada PDF.' : ' El correo con la entrada está pendiente de envío real. Revísalo en Correos y avisos.'),
       order: finalOrder,
       pdfUrl: pdfRelativeUrl,
       qrDataUrl,

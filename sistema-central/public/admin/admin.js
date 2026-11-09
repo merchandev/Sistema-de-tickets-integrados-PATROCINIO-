@@ -854,7 +854,7 @@ function fillHostingerSettings() {
     document.getElementById(id).value = value;
   }
   // The mailbox address is the user's own; only suggest one when the field is empty
-  for (const [id, value] of [['smtp-user', 'soporte@merchan.dev'], ['smtp-from', 'Entradas del evento <soporte@merchan.dev>']]) {
+  for (const [id, value] of [['smtp-user', 'soporte@merchan.cloud'], ['smtp-from', 'Sistema de envío Espressivo Venezuela <soporte@merchan.cloud>']]) {
     const input = document.getElementById(id);
     if (!input.value.trim()) input.value = value;
   }
@@ -980,7 +980,7 @@ function renderEmailLogs() {
 
   const logs = state.emailLogs || [];
   const latest = new Set();
-  const emailStates = { PAYMENT_RECEIVED: 'PENDING', PAYMENT_APPROVED: 'APPROVED', TICKET_APPROVED: 'APPROVED', PAYMENT_REJECTED: 'REJECTED' };
+  const emailStates = { PAYMENT_RECEIVED: 'PENDING', TICKET_APPROVED: 'APPROVED', PAYMENT_REJECTED: 'REJECTED' };
   const canRetry = logs.map(log => {
     const key = `${log.order_id}:${log.type}`;
     const isLatest = !latest.has(key);

@@ -277,7 +277,7 @@ async function sendPaymentSubmittedEmail(order) {
     title: 'Tu pago está en verificación',
     paragraphs: [
       `Hola ${escapeHtml(firstName(order))}, recibimos el reporte de tu pago${ticketText}.`,
-      'Cuando se confirme te enviaremos un correo de <strong>pago aceptado</strong> y, a continuación, tu entrada en PDF con el código QR para el ingreso.'
+      'Cuando se confirme te enviaremos un correo con tu entrada en PDF y el código QR para el ingreso.'
     ],
     callout: callout(brand, `Estamos verificando la transacción con el banco. <strong>El proceso puede tardar hasta 24 horas.</strong>${order.ticket_number ? '' : ' Al aprobarse te asignaremos una entrada disponible.'}`),
     rows: paymentRows(order)
@@ -286,7 +286,7 @@ async function sendPaymentSubmittedEmail(order) {
   return sendSystemEmail({
     toEmail: order.buyer_email,
     toName: order.buyer_name,
-    subject: order.ticket_number ? `Pago en verificación · Entrada #${order.ticket_number} · ${brand.name}` : `Pago en verificación · ${brand.name}`,
+    subject: 'Estamos verificando tu pago',
     html,
     type: 'PAYMENT_RECEIVED',
     orderId: order.id,
@@ -295,42 +295,17 @@ async function sendPaymentSubmittedEmail(order) {
 }
 
 /**
- * 2. "Pago aceptado": sent as soon as the administrator approves the payment.
- */
-async function sendPaymentApprovedEmail(order) {
-  const brand = brandFor(order.source_web);
-  const html = layout(brand, {
-    preheader: `Tu entrada #${order.ticket_number} quedó confirmada.`,
-    title: 'Tu pago fue aceptado',
-    paragraphs: [
-      `Hola ${escapeHtml(firstName(order))}, verificamos tu pago y la entrada <strong>#${escapeHtml(order.ticket_number)}</strong> quedó confirmada a tu nombre.`,
-      'En un correo aparte te enviamos la entrada en PDF con tu información y el código QR que escanearemos en la puerta.'
-    ],
-    rows: paymentRows(order)
-  });
-
-  return sendSystemEmail({
-    toEmail: order.buyer_email,
-    toName: order.buyer_name,
-    subject: `Pago aceptado · Entrada #${order.ticket_number} · ${brand.name}`,
-    html,
-    type: 'PAYMENT_APPROVED',
-    orderId: order.id,
-    ticketNumber: order.ticket_number
-  });
-}
-
-/**
- * 3. The ticket itself, with the PDF (buyer data + QR) attached.
+ * 2. Sent when the administrator approves the payment: confirms it and carries the ticket PDF
+ * (buyer data + QR) in a single message.
  */
 async function sendTicketEmail(order, pdfFullPath, pdfRelativeUrl) {
   const cfg = getPublicConfig();
   const brand = brandFor(order.source_web);
   const html = layout(brand, {
-    preheader: 'Tu entrada en PDF con el código QR para el ingreso.',
-    title: `Tu entrada #${order.ticket_number}`,
+    preheader: `Tu pago fue verificado. Adjuntamos tu entrada #${order.ticket_number}.`,
+    title: 'Muchas gracias por su apoyo',
     paragraphs: [
-      `Hola ${escapeHtml(firstName(order))}, adjuntamos tu entrada en PDF para <strong>${escapeHtml(cfg.event_title)}</strong>.`,
+      `Hola ${escapeHtml(firstName(order))}, verificamos tu pago y la entrada <strong>#${escapeHtml(order.ticket_number)}</strong> quedó confirmada a tu nombre para <strong>${escapeHtml(cfg.event_title)}</strong>. Adjuntamos tu entrada en PDF.`,
       'Preséntala en tu teléfono o impresa junto con tu cédula de identidad. En la puerta escanearemos su código QR; es personal y vale para un solo ingreso a cada parte del evento.'
     ],
     callout: callout(brand, `Entrada <strong>#${escapeHtml(order.ticket_number)}</strong> · ${escapeHtml(order.buyer_name)} · C.I. ${escapeHtml(order.buyer_cedula)}`),
@@ -340,7 +315,7 @@ async function sendTicketEmail(order, pdfFullPath, pdfRelativeUrl) {
   return sendSystemEmail({
     toEmail: order.buyer_email,
     toName: order.buyer_name,
-    subject: `Tu entrada #${order.ticket_number} · ${brand.name}`,
+    subject: 'Muchas gracias por su apoyo, tu entrada está disponible',
     html,
     type: 'TICKET_APPROVED',
     orderId: order.id,
@@ -353,7 +328,7 @@ async function sendTicketEmail(order, pdfFullPath, pdfRelativeUrl) {
 }
 
 /**
- * 4. Sent when the administrator rejects a payment.
+ * 3. Sent when the administrator rejects a payment.
  */
 async function sendPaymentRejectedEmail(order, reason) {
   const brand = brandFor(order.source_web);
@@ -373,7 +348,7 @@ async function sendPaymentRejectedEmail(order, reason) {
   return sendSystemEmail({
     toEmail: order.buyer_email,
     toName: order.buyer_name,
-    subject: `No pudimos verificar tu pago · ${brand.name}`,
+    subject: 'Pago rechazado',
     html,
     type: 'PAYMENT_REJECTED',
     orderId: order.id,
@@ -512,9 +487,10 @@ async function testMailConnections(to = '') {
 
 const retryableStatuses = new Set(['ERROR', 'SIMULATED_OUTBOX']);
 const pendingRetries = new Set();
+// PAYMENT_APPROVED was a separate "pago aceptado" notice; the ticket email now covers it, so old
+// undelivered ones are not resent.
 const orderEmailStates = {
   PAYMENT_RECEIVED: 'PENDING',
-  PAYMENT_APPROVED: 'APPROVED',
   TICKET_APPROVED: 'APPROVED',
   PAYMENT_REJECTED: 'REJECTED'
 };
@@ -542,9 +518,6 @@ async function retryOrderEmail(logId) {
     switch (log.type) {
       case 'PAYMENT_RECEIVED':
         result = await sendPaymentSubmittedEmail(order);
-        break;
-      case 'PAYMENT_APPROVED':
-        result = await sendPaymentApprovedEmail(order);
         break;
       case 'PAYMENT_REJECTED':
         result = await sendPaymentRejectedEmail(order, order.admin_notes);
@@ -592,7 +565,6 @@ async function retryUndeliveredOrderEmails() {
 
 module.exports = {
   sendPaymentSubmittedEmail,
-  sendPaymentApprovedEmail,
   sendTicketEmail,
   sendPaymentRejectedEmail,
   sendEventCampaignNotification,

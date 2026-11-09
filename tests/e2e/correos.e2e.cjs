@@ -78,7 +78,7 @@ function parseMail(file) {
   const pdf = /Content-Type: application\/pdf[\s\S]*?\r\n\r\n([A-Za-z0-9+/=\r\n]+)/.exec(raw);
   return {
     file, raw, subject,
-    from: header('From'), replyTo: header('Reply-To'), messageId: header('Message-ID'),
+    from: libmime ? libmime.decodeWords(header('From')) : header('From'), replyTo: header('Reply-To'), messageId: header('Message-ID'),
     alternative: /multipart\/alternative/.test(raw) && /Content-Type: text\/plain/.test(raw) && /Content-Type: text\/html/.test(raw),
     pdfHeader: pdf ? Buffer.from(pdf[1].replace(/\r\n/g, ''), 'base64').subarray(0, 5).toString() : null
   };
@@ -107,7 +107,7 @@ function parseMail(file) {
     // --- Configuration: manual rate + real SMTP (local) ---
     const cfg = await api('PUT', '/api/admin/settings', { admin: true, json: {
       bcv_mode: 'manual', bcv_manual_rate: '891.1054', lock_duration_seconds: '600',
-      smtp_host: '127.0.0.1', smtp_port: String(SMTP_PORT), smtp_user: '', smtp_from: 'Entradas Iluminando Caminos <soporte@merchan.dev>'
+      smtp_host: '127.0.0.1', smtp_port: String(SMTP_PORT), smtp_user: '', smtp_from: 'Sistema de envío Espressivo Venezuela <soporte@merchan.dev>'
     } });
     check('Guardar configuración de correo', cfg.status === 200 && cfg.data.settings.smtp_delivery_mode === 'smtp' && !('smtp_pass' in cfg.data.settings));
     const state = await api('GET', '/api/public/state');
@@ -128,8 +128,8 @@ function parseMail(file) {
     await waitMails(2);
 
     const approve = await api('POST', `/api/admin/orders/${order.data.order.id}/approve`, { admin: true, json: {} });
-    check('Aprobar pago y generar entrada', approve.status === 200 && /SENT_SMTP.*SENT_SMTP/.test(approve.data.message), approve.data.message);
-    await waitMails(4);
+    check('Aprobar pago y generar entrada', approve.status === 200 && /aceptó el correo con la entrada PDF/.test(approve.data.message), approve.data.message);
+    await waitMails(3);
     const token = approve.data.order?.verification_token;
 
     // --- QR at the door ---
@@ -144,20 +144,20 @@ function parseMail(file) {
     // --- 2. Payment report from Hablemos de Marketing, approved with an assigned ticket ---
     const report = await api('POST', '/api/public/payment-reports', { form: buyerForm({ source_web: 'pagina-web-2', buyer_first_name: 'Luis', buyer_last_name: 'Martínez', buyer_email: 'luis@prueba.test', requested_ticket: '210', buyer_comment: 'Mi reserva expiró' }) });
     check('Enviar reporte de pago', report.status === 201, `respuesta en ${report.ms} ms`);
-    await waitMails(5);
+    await waitMails(4);
     check('Aprobar reporte exige entrada', (await api('POST', `/api/admin/orders/${report.data.order.id}/approve`, { admin: true, json: {} })).status === 400);
     check('No asigna una entrada vendida', (await api('POST', `/api/admin/orders/${report.data.order.id}/approve`, { admin: true, json: { ticket_number: '210' } })).status === 400);
     const approveReport = await api('POST', `/api/admin/orders/${report.data.order.id}/approve`, { admin: true, json: { ticket_number: '211' } });
     check('Aprobar reporte asignando #211', approveReport.status === 200 && approveReport.data.order.ticket_number === '211');
-    await waitMails(7);
+    await waitMails(5);
 
     // --- 3. Rejection ---
     await api('POST', '/api/public/tickets/lock', { json: { ticket_number: '212', session_id: 'sess_e2e_checkout_3', source_web: 'pagina-web-1' } });
     const toReject = await api('POST', '/api/public/orders', { form: buyerForm({ ticket_number: '212', session_id: 'sess_e2e_checkout_3', buyer_email: 'rechazo@prueba.test' }) });
-    await waitMails(8);
+    await waitMails(6);
     const reject = await api('POST', `/api/admin/orders/${toReject.data.order.id}/reject`, { admin: true, json: { reason: '<b>Referencia</b> no encontrada' } });
     check('Rechazar pago', reject.status === 200 && /aceptó el aviso/.test(reject.data.message), reject.data.message);
-    await waitMails(9);
+    await waitMails(7);
     const afterReject = await api('GET', '/api/public/state');
     check('La entrada rechazada vuelve a estar libre', afterReject.data.tickets.find(t => t.ticket_number === '212').status === 'AVAILABLE');
 
@@ -175,7 +175,7 @@ function parseMail(file) {
     await api('PUT', '/api/admin/settings', { admin: true, json: { smtp_port: String(SMTP_PORT) } });
     const retry = failedLog ? await api('POST', `/api/admin/mail/${failedLog.id}/retry`, { admin: true, json: {} }) : { status: 0, data: {} };
     check('Reenviar el aviso desde el panel', retry.status === 200, retry.data.message);
-    await waitMails(10);
+    await waitMails(8);
     if (failedLog) check('No se reenvía dos veces el mismo aviso', (await api('POST', `/api/admin/mail/${failedLog.id}/retry`, { admin: true, json: {} })).status === 409);
 
     // --- 5. Ticket design preview ---
@@ -186,29 +186,29 @@ function parseMail(file) {
 
     // --- Emails received by the SMTP server ---
     const mails = mailFiles().map(parseMail);
-    check('Correos entregados al servidor SMTP', mails.length === 10, `${mails.length} de 10`);
+    check('Correos entregados al servidor SMTP', mails.length === 8, `${mails.length} de 8`);
     const expected = [
       ['Correo de prueba', /Correo de prueba/],
-      ['Pago en verificación (#210)', /Pago en verificación · Entrada #210/],
-      ['Pago aceptado (#210)', /Pago aceptado · Entrada #210/],
-      ['Entrada con PDF (#210)', /Tu entrada #210/],
-      ['Pago en verificación (reporte)', /Pago en verificación · Hablemos de Marketing/],
-      ['Pago aceptado (#211)', /Pago aceptado · Entrada #211/],
-      ['Entrada con PDF (#211)', /Tu entrada #211/],
-      ['Pago en verificación (#212)', /Pago en verificación · Entrada #212/],
-      ['Pago rechazado', /No pudimos verificar tu pago/],
-      ['Reenvío tras fallo', /Pago en verificación/]
+      ['En verificación (#210)', /^Estamos verificando tu pago$/],
+      ['Entrada con PDF (#210)', /^Muchas gracias por su apoyo, tu entrada está disponible$/],
+      ['En verificación (reporte)', /^Estamos verificando tu pago$/],
+      ['Entrada con PDF (#211)', /^Muchas gracias por su apoyo, tu entrada está disponible$/],
+      ['En verificación (#212)', /^Estamos verificando tu pago$/],
+      ['Pago rechazado', /^Pago rechazado$/],
+      ['Reenvío tras fallo', /^Estamos verificando tu pago$/]
     ];
     expected.forEach(([label, pattern], i) => check(`Correo: ${label}`, mails[i] && pattern.test(mails[i].subject), mails[i]?.subject));
     check('Todos con versión HTML y texto', mails.every(m => m.alternative));
+    check('Remitente «Sistema de envío Espressivo Venezuela»', mails.every(m => /^"?Sistema de envío Espressivo Venezuela"? <soporte@merchan\.dev>$/.test(m.from)), mails[0]?.from);
+    check('Correo de la entrada nombra el número', /#210/.test(mails[2]?.raw.replace(/=\r\n/g, '') || ''));
     check('Remitente, Reply-To y Message-ID del dominio', mails.every(m => /soporte@merchan\.dev/.test(m.from) && /soporte@merchan\.dev/.test(m.replyTo) && /@merchan\.dev>$/.test(m.messageId)));
-    check('Las entradas llevan el PDF adjunto', [mails[3], mails[6]].every(m => m?.pdfHeader === '%PDF-'));
+    check('Las entradas llevan el PDF adjunto', [mails[2], mails[4]].every(m => m?.pdfHeader === '%PDF-'));
     // The HTML part must escape the reason; the plain-text part shows it literally, as plain text should.
-    const htmlPart = (mails[8]?.raw.split(/\r\n--[^\r\n]+\r\n/).find(p => /Content-Type: text\/html/.test(p)) || '')
+    const htmlPart = (mails[6]?.raw.split(/\r\n--[^\r\n]+\r\n/).find(p => /Content-Type: text\/html/.test(p)) || '')
       .replace(/=\r\n/g, '').replace(/=([0-9A-F]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
     check('Motivo del rechazo escapado en el HTML', /&lt;b&gt;Referencia&lt;\/b&gt;/.test(htmlPart) && !/<b>Referencia<\/b>/.test(htmlPart));
     const statuses = (await api('GET', '/api/admin/overview', { admin: true })).data.emailLogs;
-    check('Registro de correos: aceptados por SMTP', statuses.filter(l => l.status === 'SENT_SMTP').length === 10, `${statuses.filter(l => l.status === 'SENT_SMTP').length} SENT_SMTP, ${statuses.filter(l => l.status === 'ERROR').length} ERROR`);
+    check('Registro de correos: aceptados por SMTP', statuses.filter(l => l.status === 'SENT_SMTP').length === 8, `${statuses.filter(l => l.status === 'SENT_SMTP').length} SENT_SMTP, ${statuses.filter(l => l.status === 'ERROR').length} ERROR`);
     // --- 6. Mail server left on Mailpit (test mailbox): notices wait, then go out with "Reenviar ahora" ---
     await api('PUT', '/api/admin/settings', { admin: true, json: { smtp_host: 'mailpit', smtp_port: '1025' } });
     const waiting = await api('POST', '/api/public/payment-reports', { form: buyerForm({ buyer_email: 'espera@prueba.test' }) });
@@ -225,7 +225,7 @@ function parseMail(file) {
     await api('PUT', '/api/admin/settings', { admin: true, json: { smtp_host: '127.0.0.1', smtp_port: String(SMTP_PORT) } });
     const bulk = await api('POST', '/api/admin/mail/retry-pending', { admin: true, json: {} });
     check('«Reenviar ahora» entrega los avisos pendientes', bulk.status === 200 && bulk.data.sent === 1, bulk.data.message);
-    check('El aviso reenviado llega al buzón', (await waitMails(11)) === 11 && /Pago en verificación/.test(parseMail(mailFiles()[10]).subject));
+    check('El aviso reenviado llega al buzón', (await waitMails(9)) === 9 && /^Estamos verificando tu pago$/.test(parseMail(mailFiles()[8]).subject));
     check('Ya no quedan avisos pendientes', (await api('GET', '/api/admin/overview', { admin: true })).data.undeliveredEmails === 0);
 
     check('Log del servidor sin errores inesperados', !/Error (approving|rejecting|submitting)|Unhandled|TypeError/.test(serverLog));
