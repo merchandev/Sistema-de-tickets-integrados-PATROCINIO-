@@ -308,6 +308,37 @@ function parseMail(file) {
     check('Nadie se elimina a sí mismo', (await api('DELETE', `/api/admin/users/${created[0].data.user.id}`, { cookie: adm.cookie })).status === 400);
     check('El panel muestra la sección Usuarios', /id="tab-panel-users"/.test((await api('GET', '/admin/', { cookie: sup.cookie })).data.toString()));
 
+    // --- 8. Sponsors carousel: shared list managed from the panel ---
+    const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+    const logos = (names, type = 'image/png', data = png) => {
+      const form = new FormData();
+      for (const name of names) form.append('images', new Blob([data], { type }), name);
+      return form;
+    };
+    check('Patrocinadores vacíos al inicio', (await api('GET', '/api/public/sponsors')).data.sponsors.length === 0);
+    check('Subir patrocinadores exige sesión', (await api('POST', '/api/admin/sponsors', { form: logos(['a.png']) })).status === 401);
+    check('Rechaza archivos que no son imágenes', (await api('POST', '/api/admin/sponsors', { admin: true, form: logos(['falso.png'], 'image/png', Buffer.from('<svg></svg>')) })).status === 400);
+    const up = await api('POST', '/api/admin/sponsors', { admin: true, form: logos(['Marca_Uno.png', 'Marca Dos.png']) });
+    check('Subir dos logos', up.status === 201 && up.data.sponsors.length === 2 && up.data.sponsors[0].name === 'Marca Uno', up.data.message);
+    const [one, two] = up.data.sponsors;
+    const media = await fetch(BASE + one.image_url);
+    check('Imagen pública del logo', media.ok && media.headers.get('content-type') === 'image/png');
+    const linkTo = (id, link_url, name = 'Marca') => api('PUT', '/api/admin/sponsors/' + id, { admin: true, json: { name, link_url } });
+    check('Enlace sin https se completa', (await linkTo(one.id, 'instagram.com/marca.uno', 'Marca Uno')).data.sponsors[0].link_url === 'https://instagram.com/marca.uno');
+    check('Enlace de WhatsApp', (await linkTo(two.id, 'wa.me/584121234567', 'Marca Dos')).data.sponsors[1].link_url === 'https://wa.me/584121234567');
+    check('Rechaza enlaces javascript:', (await linkTo(two.id, 'javascript:alert(1)')).status === 400);
+    check('Rechaza enlaces con espacios', (await linkTo(two.id, 'mi marca.com')).status === 400);
+    check('Rechaza cambios desde otro origen', (await fetch(BASE + '/api/admin/sponsors/' + two.id, { method: 'DELETE', headers: { authorization: basic, origin: 'https://otro.test' } })).status === 403);
+    const reordered = await api('PUT', '/api/admin/sponsors/order', { admin: true, json: { ids: [two.id, one.id] } });
+    check('Reordenar logos', reordered.status === 200 && reordered.data.sponsors[0].id === two.id);
+    const shared = (await api('GET', '/api/public/sponsors')).data.sponsors;
+    check('La lista pública trae orden, nombre y enlace', shared.length === 2 && shared[0].name === 'Marca Dos' && shared[1].link_url === 'https://instagram.com/marca.uno');
+    const fill = await api('POST', '/api/admin/sponsors', { admin: true, form: logos(Array.from({ length: 28 }, (_, i) => 'logo-' + i + '.png')) });
+    check('Hasta 30 logos', fill.status === 201 && fill.data.sponsors.length === 30);
+    check('No pasa de 30 logos', (await api('POST', '/api/admin/sponsors', { admin: true, form: logos(['extra.png']) })).status === 409);
+    const removed = await api('DELETE', '/api/admin/sponsors/' + one.id, { admin: true });
+    check('Eliminar un logo borra también su imagen', removed.status === 200 && removed.data.sponsors.length === 29 && (await fetch(BASE + one.image_url)).status === 404);
+
     check('Log del servidor sin errores inesperados', !/Error (approving|rejecting|submitting)|Unhandled|TypeError/.test(serverLog));
   } catch (err) {
     check('Prueba completa sin excepciones', false, err.stack);

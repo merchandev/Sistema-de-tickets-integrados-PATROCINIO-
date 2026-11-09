@@ -27,6 +27,7 @@
       <button type="button" onclick="switchTab('cms')" id="tab-btn-cms" class="tab-btn"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v14H4z M8 3v6 M16 3v6 M4 11h16"/></svg> Evento y contenido</button>
       <button type="button" onclick="switchTab('smtp')" id="tab-btn-smtp" class="tab-btn"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18v14H3z M3 6l9 7 9-7"/></svg> Correos y avisos</button>
       <button type="button" onclick="switchTab('blog')" id="tab-btn-blog" class="tab-btn"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v16H5z M8 8h8 M8 12h8 M8 16h5"/></svg> Blog · Marketing</button>
+      <button type="button" onclick="switchTab('sponsors')" id="tab-btn-sponsors" class="tab-btn"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7.5-4.6-9.5-9.3C1.1 8.4 3.2 5 6.6 5c2 0 3.4 1.1 4.2 2.4h2.4C14 6.1 15.4 5 17.4 5c3.4 0 5.5 3.4 4.1 6.7C19.5 16.4 12 21 12 21z"/></svg> Patrocinadores</button>
       <button type="button" onclick="switchTab('users')" id="tab-btn-users" class="tab-btn"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z M2 21v-1a6 6 0 0 1 6-6h2a6 6 0 0 1 6 6v1 M16 3.5a4 4 0 0 1 0 7 M19 14.5a6 6 0 0 1 3 5.2V21"/></svg> Usuarios</button>
     </nav>
     <div class="mobile-nav"><label for="admin-section">Sección</label><select id="admin-section" onchange="switchTab(this.value)">
@@ -37,6 +38,7 @@
       <option value="cms">Evento y contenido</option>
       <option value="smtp">Correos y avisos</option>
       <option value="blog">Blog · Marketing</option>
+      <option value="sponsors">Patrocinadores</option>
       <option value="users">Usuarios</option>
     </select></div>
     <div class="sidebar-sites"><span class="nav-caption">WEBS CONECTADAS</span><a href="https://iluminandocaminos.com" target="_blank" rel="noopener"><i class="site-dot caminos"></i>Iluminando Caminos <span>↗</span></a><a href="https://hablemosdemarketingmaturin.com" target="_blank" rel="noopener"><i class="site-dot marketing"></i>Hablemos de Marketing <span>↗</span></a></div>
@@ -539,6 +541,25 @@
         <iframe id="blog-preview-frame" class="blog-preview-frame" title="Vista previa de la publicación" sandbox="allow-scripts allow-presentation" hidden></iframe>
       </section><p id="blog-message" class="blog-message" role="status"></p>
     </section>
+    <section id="tab-panel-sponsors" class="hidden" aria-labelledby="sponsors-title">
+      <header class="demo-heading">
+        <h1 id="sponsors-title">Patrocinadores</h1>
+        <p>Logos del carrusel «Juntos lo hacemos posible», el mismo en Iluminando Caminos y en Hablemos de Marketing. Hasta 30 imágenes, cada una con un enlace opcional que se abre en otra pestaña.</p>
+      </header>
+      <div class="sponsors-upload users-card">
+        <div>
+          <h2>Subir logos</h2>
+          <p>PNG, JPG o WebP de hasta 5 MB. Puedes elegir varias a la vez. Se ven mejor con fondo transparente o blanco.</p>
+        </div>
+        <label class="admin-primary sponsors-pick" for="sponsors-file">Elegir imágenes
+          <input id="sponsors-file" type="file" accept="image/png,image/jpeg,image/webp" multiple />
+        </label>
+        <span id="sponsors-count" class="sponsors-count">0 de 30</span>
+      </div>
+      <p id="sponsors-message" class="users-message" role="status"></p>
+      <ol id="sponsors-list" class="sponsors-list"></ol>
+      <p id="sponsors-empty" class="users-card users-note" hidden>Todavía no hay logos. Mientras no haya ninguno, la sección no aparece en las webs.</p>
+    </section>
     <section id="tab-panel-users" class="hidden" aria-labelledby="users-title">
       <header class="demo-heading">
         <h1 id="users-title">Usuarios del panel</h1>
@@ -619,5 +640,6 @@
   <script src="/admin/blog-turndown.js"></script>
   <script src="/admin/blog.js?v=seo-1"></script>
   <script src="/admin/admin.js"></script>
+  <script src="/admin/sponsors.js"></script>
 </body>
 </html>

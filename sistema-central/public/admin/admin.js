@@ -1056,6 +1056,7 @@ const sectionTitles = {
   cms: 'Evento y contenido',
   smtp: 'Correos y avisos',
   blog: 'Blog · Marketing',
+  sponsors: 'Patrocinadores',
   users: 'Usuarios'
 };
 
@@ -1114,6 +1115,7 @@ function switchTab(tabName) {
   if (tabName === 'blog') window.loadMarketingBlog();
   if (tabName === 'pdf') updateTicketDemo();
   if (tabName === 'users') loadUsers();
+  if (tabName === 'sponsors') window.loadSponsors?.();
   if (tabName !== 'orders') window.scrollTo({top: 0});
 }
 
