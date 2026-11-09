@@ -96,7 +96,7 @@ function createTicketDocument(order, config, qrBuffer, demo) {
     fit: [64, 62], align: 'center', valign: 'center'
   });
   doc.moveTo(134, 66).lineTo(134, 107).lineWidth(0.7).stroke('#b488ae');
-  doc.image(path.join(brandAssets, 'hablemos-de-marketing.png'), 147, 57, {
+  doc.image(path.join(brandAssets, 'hablemos-de-marketing-blanco.png'), 147, 57, {
     fit: [72, 58], align: 'center', valign: 'center'
   });
 
