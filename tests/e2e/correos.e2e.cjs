@@ -228,6 +228,50 @@ function parseMail(file) {
     check('El aviso reenviado llega al buzón', (await waitMails(9)) === 9 && /^Estamos verificando tu pago$/.test(parseMail(mailFiles()[8]).subject));
     check('Ya no quedan avisos pendientes', (await api('GET', '/api/admin/overview', { admin: true })).data.undeliveredEmails === 0);
 
+    // --- 7. Users: superadmin from the console, admins from the panel ---
+    const cli = (args, input) => new Promise(resolve => {
+      const child = spawn(process.execPath, ['--no-warnings', 'src/usuarios.js', ...args], { cwd: central, env: { ...process.env, DATA_DIR: dataDir }, stdio: ['pipe', 'pipe', 'pipe'] });
+      let out = '';
+      child.stdout.on('data', d => { out += d; });
+      child.stderr.on('data', d => { out += d; });
+      child.on('close', code => resolve({ code, out }));
+      child.stdin.end(input || '');
+    });
+    const signIn = async (username, pass) => {
+      const r = await api('POST', '/admin/login', { json: { username, password: pass } });
+      return { status: r.status, cookie: (r.headers.get('set-cookie') || '').split(';')[0] };
+    };
+    const superPass = crypto.randomBytes(9).toString('hex');
+    const adminPass = crypto.randomBytes(9).toString('hex');
+    const made = await cli(['crear', 'soporte@prueba.test', 'superadmin'], superPass);
+    check('Consola: crear superadministrador', made.code === 0 && /Superadministrador/.test(made.out), made.out.trim());
+    check('Consola: no permite un segundo superadministrador', (await cli(['crear', 'otro@prueba.test', 'superadmin'], adminPass)).code === 1);
+    check('Consola: no elimina al superadministrador', /no se puede eliminar/.test((await cli(['eliminar', 'soporte@prueba.test'])).out));
+    check('La cuenta inicial ya no entra por el login', (await signIn('admin', password)).status === 401);
+    check('La sesión de la cuenta inicial se cerró', (await api('GET', '/api/admin/session', { cookie })).status === 401);
+    check('Los scripts siguen entrando con HTTP Basic', (await api('GET', '/api/admin/session', { admin: true })).data.role === 'service');
+    const sup = await signIn('Soporte@Prueba.test', superPass);
+    const supSession = await api('GET', '/api/admin/session', { cookie: sup.cookie });
+    check('Login del superadministrador', sup.status === 200 && supSession.data.role === 'superadmin' && supSession.data.named === true);
+    const created = [];
+    for (const email of ['admin@marketing.test', 'admin@caminos.test']) {
+      created.push(await api('POST', '/api/admin/users', { cookie: sup.cookie, json: { email, password: adminPass } }));
+    }
+    check('Crear los dos administradores desde el panel', created.every(r => r.status === 201 && r.data.user.role === 'admin'));
+    check('No repite un correo', (await api('POST', '/api/admin/users', { cookie: sup.cookie, json: { email: 'ADMIN@marketing.test', password: adminPass } })).status === 409);
+    const adm = await signIn('admin@marketing.test', adminPass);
+    check('Login de un administrador', adm.status === 200);
+    check('El administrador ve las operaciones', (await api('GET', '/api/admin/overview', { cookie: adm.cookie })).status === 200);
+    const list = await api('GET', '/api/admin/users', { cookie: adm.cookie });
+    check('Lista de usuarios', list.data.users.map(u => u.email).join(',') === 'soporte@prueba.test,admin@caminos.test,admin@marketing.test', list.data.users.map(u => u.email).join(','));
+    const superId = list.data.users.find(u => u.role === 'superadmin').id;
+    check('Nadie elimina al superadministrador', (await api('DELETE', `/api/admin/users/${superId}`, { cookie: adm.cookie })).status === 403);
+    check('Nadie cambia su contraseña desde otra cuenta', (await api('PUT', `/api/admin/users/${superId}/password`, { cookie: adm.cookie, json: { password: 'x'.repeat(12) } })).status === 403);
+    const other = created[1].data.user.id;
+    check('Un administrador elimina a otro', (await api('DELETE', `/api/admin/users/${other}`, { cookie: adm.cookie })).status === 200 && (await signIn('admin@caminos.test', adminPass)).status === 401);
+    check('Nadie se elimina a sí mismo', (await api('DELETE', `/api/admin/users/${created[0].data.user.id}`, { cookie: adm.cookie })).status === 400);
+    check('El panel muestra la sección Usuarios', /id="tab-panel-users"/.test((await api('GET', '/admin/', { cookie: sup.cookie })).data.toString()));
+
     check('Log del servidor sin errores inesperados', !/Error (approving|rejecting|submitting)|Unhandled|TypeError/.test(serverLog));
   } catch (err) {
     check('Prueba completa sin excepciones', false, err.stack);

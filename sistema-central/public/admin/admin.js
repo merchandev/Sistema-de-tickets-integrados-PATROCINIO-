@@ -1059,7 +1059,8 @@ const sectionTitles = {
   qr: 'Control de acceso',
   cms: 'Evento y contenido',
   smtp: 'Correos y avisos',
-  blog: 'Blog · Marketing'
+  blog: 'Blog · Marketing',
+  users: 'Usuarios'
 };
 
 let ticketPreviewRequest = 0;
@@ -1116,6 +1117,7 @@ function switchTab(tabName) {
   });
   if (tabName === 'blog') window.loadMarketingBlog();
   if (tabName === 'pdf') updateTicketDemo();
+  if (tabName === 'users') loadUsers();
   if (tabName !== 'orders') window.scrollTo({top: 0});
 }
 
@@ -1193,16 +1195,24 @@ document.addEventListener('keydown', event => {
 });
 
 // ============================================================================
-// ACCOUNT: signed-in user, change of user and password, sign-out
+// ACCOUNT: signed-in user, change of own password, sign-out
 // ============================================================================
+
+const roleNames = { superadmin: 'Superadministrador', admin: 'Administrador', initial: 'Cuenta inicial', service: 'Cuenta de scripts' };
+let adminSession = null;
+let panelUsers = new Map();
 
 async function loadSession() {
   try {
     const res = await fetch('/api/admin/session');
     const data = await res.json();
     if (!data.ok) return;
+    adminSession = data;
     document.getElementById('account-user').textContent = data.user;
+    document.getElementById('account-role').textContent = roleNames[data.role] || '';
     document.getElementById('account-btn').textContent = (data.user || 'A').charAt(0).toUpperCase();
+    // The initial account can still change its user name as well; named users change their password
+    document.getElementById('account-change').textContent = data.named ? 'Cambiar contraseña' : 'Cambiar usuario y contraseña';
   } catch (_) {}
 }
 
@@ -1213,15 +1223,16 @@ function closeAccountMenu() {
 
 function openAccountForm() {
   closeAccountMenu();
-  openModal('Cambiar usuario y contraseña', `
+  const named = Boolean(adminSession?.named);
+  openModal(named ? 'Cambiar contraseña' : 'Cambiar usuario y contraseña', `
     <form id="account-form" class="account-form" onsubmit="saveAccount(event)">
-      <p class="od-muted">El panel es el mismo para Iluminando Caminos y Hablemos de Marketing. Al guardar se cierran las demás sesiones abiertas.</p>
+      <p class="od-muted">El panel es el mismo para Iluminando Caminos y Hablemos de Marketing. Al guardar se cierran tus demás sesiones abiertas.</p>
       <label for="account-current">Contraseña actual
         <input id="account-current" name="current_password" type="password" autocomplete="current-password" required />
       </label>
-      <label for="account-new-user">Nuevo usuario o correo
+      ${named ? '' : `<label for="account-new-user">Nuevo usuario o correo
         <input id="account-new-user" name="new_user" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required value="${escapeHtml(document.getElementById('account-user').textContent)}" />
-      </label>
+      </label>`}
       <label for="account-new-password">Nueva contraseña <small>mínimo 8 caracteres</small>
         <input id="account-new-password" name="new_password" type="password" autocomplete="new-password" minlength="8" required />
       </label>
@@ -1256,7 +1267,7 @@ async function saveAccount(event) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         current_password: form.elements.current_password.value,
-        new_user: form.elements.new_user.value,
+        new_user: form.elements.new_user?.value,
         new_password: form.elements.new_password.value
       })
     });
@@ -1269,6 +1280,151 @@ async function saveAccount(event) {
     show('No se pudo guardar. Revisa tu conexión e inténtalo de nuevo.');
   } finally {
     button.disabled = false;
+  }
+}
+
+// ============================================================================
+// USERS: one superadmin (cannot be deleted) and admins, all with full access
+// ============================================================================
+
+function formatAccess(value) {
+  if (!value) return 'Nunca ha iniciado sesión';
+  const date = new Date(`${value.replace(' ', 'T')}Z`);
+  return `Último acceso: ${date.toLocaleString('es-VE', { dateStyle: 'medium', timeStyle: 'short' })}`;
+}
+
+async function loadUsers() {
+  const list = document.getElementById('users-list');
+  try {
+    const res = await fetch('/api/admin/users');
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.message);
+    const named = Boolean(data.me?.id);
+    panelUsers = new Map(data.users.map(user => [user.id, user]));
+    document.getElementById('user-create-form').hidden = !named;
+    document.getElementById('users-initial-note').hidden = named || data.users.length > 0;
+    if (!data.users.length) {
+      list.innerHTML = '<li class="users-empty">Todavía no hay usuarios.</li>';
+      return;
+    }
+    list.innerHTML = data.users.map(user => {
+      const isMe = user.id === data.me?.id;
+      const canManage = named && user.role !== 'superadmin' && !isMe;
+      return `
+        <li class="users-row">
+          <div class="users-who">
+            <strong>${escapeHtml(user.email)}</strong>
+            <span class="users-role ${user.role}">${roleNames[user.role]}</span>${isMe ? '<span class="users-you">Tú</span>' : ''}
+            <small>${formatAccess(user.last_login_at)}${user.created_by ? ` · Creado por ${escapeHtml(user.created_by)}` : ''}</small>
+          </div>
+          <div class="users-actions">
+            ${canManage ? `<button type="button" class="od-cancel" onclick="openUserPasswordForm(${Number(user.id)})">Nueva contraseña</button>
+            <button type="button" class="od-reject" onclick="removeAdminUser(${Number(user.id)})">Eliminar</button>` : ''}
+            ${user.role === 'superadmin' ? '<small>No se puede eliminar</small>' : ''}
+          </div>
+        </li>`;
+    }).join('');
+  } catch (err) {
+    list.innerHTML = `<li class="users-empty">No se pudieron cargar los usuarios. ${escapeHtml(err.message || '')}</li>`;
+  }
+}
+
+function showUsersMessage(message) {
+  const el = document.getElementById('users-message');
+  el.textContent = message;
+  showToast(message);
+}
+
+async function createAdminUser(event) {
+  event.preventDefault();
+  const form = event.target;
+  const error = document.getElementById('user-create-error');
+  const show = (message, field) => {
+    error.textContent = message;
+    error.hidden = false;
+    if (field && form.elements[field]) form.elements[field].focus();
+  };
+  error.hidden = true;
+  const email = form.elements.email.value.trim();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return show('Escribe un correo válido.', 'email');
+  if (form.elements.password.value.length < 8) return show('La contraseña debe tener al menos 8 caracteres.', 'password');
+  if (form.elements.password.value !== form.elements.confirm.value) return show('Las contraseñas no coinciden.', 'confirm');
+  const button = document.getElementById('user-create-save');
+  button.disabled = true;
+  try {
+    const res = await fetch('/api/admin/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password: form.elements.password.value })
+    });
+    const data = await res.json();
+    if (!data.ok) return show(data.message, data.field);
+    form.reset();
+    showUsersMessage(data.message);
+    await loadUsers();
+  } catch (_) {
+    show('No se pudo crear el usuario. Revisa tu conexión e inténtalo de nuevo.');
+  } finally {
+    button.disabled = false;
+  }
+}
+
+function openUserPasswordForm(id) {
+  const email = panelUsers.get(id)?.email || '';
+  openModal('Nueva contraseña', `
+    <form class="account-form" onsubmit="saveUserPassword(event, ${Number(id)})">
+      <p class="od-muted">Para <strong>${escapeHtml(email)}</strong>. Sus sesiones abiertas se cerrarán.</p>
+      <label for="user-password-new">Nueva contraseña <small>mínimo 8 caracteres</small>
+        <input id="user-password-new" name="password" type="password" autocomplete="new-password" minlength="8" required />
+      </label>
+      <label for="user-password-confirm">Repite la contraseña
+        <input id="user-password-confirm" name="confirm" type="password" autocomplete="new-password" minlength="8" required />
+      </label>
+      <p id="user-password-error" class="od-warning" role="alert" hidden></p>
+      <div class="od-actions">
+        <button type="submit" class="od-approve" id="user-password-save">Guardar</button>
+        <button type="button" class="od-cancel" onclick="closeModal()">Cancelar</button>
+      </div>
+    </form>
+  `);
+  document.getElementById('user-password-new').focus();
+}
+
+async function saveUserPassword(event, id) {
+  event.preventDefault();
+  const form = event.target;
+  const error = document.getElementById('user-password-error');
+  const show = (message) => { error.textContent = message; error.hidden = false; };
+  if (form.elements.password.value !== form.elements.confirm.value) return show('Las contraseñas no coinciden.');
+  const button = document.getElementById('user-password-save');
+  button.disabled = true;
+  try {
+    const res = await fetch(`/api/admin/users/${id}/password`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: form.elements.password.value })
+    });
+    const data = await res.json();
+    if (!data.ok) return show(data.message);
+    closeModal();
+    showUsersMessage(data.message);
+  } catch (_) {
+    show('No se pudo guardar. Revisa tu conexión e inténtalo de nuevo.');
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function removeAdminUser(id) {
+  const email = panelUsers.get(id)?.email || '';
+  if (!confirm(`¿Eliminar el usuario ${email}? Perderá el acceso al panel de inmediato.`)) return;
+  try {
+    const res = await fetch(`/api/admin/users/${id}`, { method: 'DELETE' });
+    const data = await res.json();
+    showUsersMessage(data.message);
+    if (data.ok) await loadUsers();
+  } catch (_) {
+    showUsersMessage('No se pudo eliminar. Revisa tu conexión e inténtalo de nuevo.');
   }
 }
 

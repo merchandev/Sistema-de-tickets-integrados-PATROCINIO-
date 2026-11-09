@@ -34,7 +34,22 @@ El correo «Estamos verificando tu pago» sale en segundo plano, así que el com
 
 El panel es uno solo para las dos webs: `https://hablemosdemarketingmaturin.com/admin/`. Sin sesión, cualquier ruta del panel (incluidos los enlaces de los QR) lleva a `/admin/login` y, tras iniciar sesión, vuelve a donde iba. La sesión dura 12 horas, se guarda en SQLite y sobrevive a reinicios; ocho intentos fallidos desde la misma IP bloquean el acceso 15 minutos.
 
-La primera vez se entra con `ADMIN_USER` / `ADMIN_PASSWORD` de `.env.docker`. Desde el menú de la cuenta (avatar arriba a la derecha) se cambian usuario y contraseña: la contraseña se guarda con scrypt, la cuenta guardada reemplaza a la de `.env.docker` y se cierran las demás sesiones. Los scripts de verificación pueden seguir usando credenciales HTTP Basic.
+### Usuarios
+
+El panel tiene un **superadministrador**, que no se puede eliminar ni perder su rol, y los **administradores** que se quieran. Todos tienen acceso completo a las dos webs. En la sección «Usuarios» cualquier usuario crea administradores, les pone una contraseña nueva o los elimina; nadie se elimina a sí mismo y la contraseña del superadministrador solo se cambia desde su propia cuenta («Cambiar contraseña» en el menú del avatar, pidiendo la actual). Las contraseñas se guardan con scrypt y cambiarlas cierra las demás sesiones de ese usuario.
+
+Desde la consola del VPS (las contraseñas se escriben en un aviso oculto o llegan por la entrada estándar, nunca como argumento):
+
+```bash
+docker exec -it socials-entradas-sistema-central-1 node --no-warnings src/usuarios.js crear <correo> superadmin
+docker exec -it socials-entradas-sistema-central-1 node --no-warnings src/usuarios.js contrasena <correo>
+docker exec socials-entradas-sistema-central-1 node --no-warnings src/usuarios.js lista
+docker exec socials-entradas-sistema-central-1 node --no-warnings src/usuarios.js eliminar <correo>
+```
+
+`contrasena` sirve también para recuperar el acceso del superadministrador si olvida su contraseña.
+
+Mientras no exista ningún usuario se entra con la cuenta inicial: `ADMIN_USER` / `ADMIN_PASSWORD` de `.env.docker`, o la que se haya guardado desde el menú de la cuenta. Al crear el primer usuario, la cuenta inicial deja de funcionar en el login y sus sesiones se cierran. `ADMIN_USER` / `ADMIN_PASSWORD` siguen valiendo solo por HTTP Basic, para los scripts de verificación.
 
 ## Configuración del VPS
 

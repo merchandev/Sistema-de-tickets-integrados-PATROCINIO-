@@ -642,10 +642,15 @@ app.put('/api/admin/settings', (req, res) => {
 });
 
 /**
- * Signed-in administrator, and the change of user and password from the panel.
+ * Signed-in user, the change of their own password, and the users of the panel.
+ * `role` is superadmin or admin for named users; initial (no user exists yet) or service (scripts).
  */
-app.get('/api/admin/session', (req, res) => res.json({ ok: true, user: req.adminUser }));
+app.get('/api/admin/session', (req, res) => res.json({ ok: true, user: req.adminUser, role: req.admin.role, named: Boolean(req.admin.id) }));
 app.put('/api/admin/account', adminAuth.changeAccount);
+app.get('/api/admin/users', adminAuth.listUsersRoute);
+app.post('/api/admin/users', adminAuth.createUserRoute);
+app.put('/api/admin/users/:id/password', adminAuth.resetPasswordRoute);
+app.delete('/api/admin/users/:id', adminAuth.deleteUserRoute);
 
 app.get('/api/admin/tickets/demo.pdf', async (req, res) => {
   const source = req.query.source || 'pagina-web-1';

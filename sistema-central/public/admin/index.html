@@ -23,6 +23,7 @@
       <button type="button" onclick="switchTab('cms')" id="tab-btn-cms" class="tab-btn"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v14H4z M8 3v6 M16 3v6 M4 11h16"/></svg> Evento y contenido</button>
       <button type="button" onclick="switchTab('smtp')" id="tab-btn-smtp" class="tab-btn"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18v14H3z M3 6l9 7 9-7"/></svg> Correos y avisos</button>
       <button type="button" onclick="switchTab('blog')" id="tab-btn-blog" class="tab-btn"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v16H5z M8 8h8 M8 12h8 M8 16h5"/></svg> Blog · Marketing</button>
+      <button type="button" onclick="switchTab('users')" id="tab-btn-users" class="tab-btn"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z M2 21v-1a6 6 0 0 1 6-6h2a6 6 0 0 1 6 6v1 M16 3.5a4 4 0 0 1 0 7 M19 14.5a6 6 0 0 1 3 5.2V21"/></svg> Usuarios</button>
     </nav>
     <div class="mobile-nav"><label for="admin-section">Sección</label><select id="admin-section" onchange="switchTab(this.value)">
       <option value="orders">Pagos y ventas</option>
@@ -32,6 +33,7 @@
       <option value="cms">Evento y contenido</option>
       <option value="smtp">Correos y avisos</option>
       <option value="blog">Blog · Marketing</option>
+      <option value="users">Usuarios</option>
     </select></div>
     <div class="sidebar-sites"><span class="nav-caption">WEBS CONECTADAS</span><a href="https://iluminandocaminos.com" target="_blank" rel="noopener"><i class="site-dot caminos"></i>Iluminando Caminos <span>↗</span></a><a href="https://hablemosdemarketingmaturin.com" target="_blank" rel="noopener"><i class="site-dot marketing"></i>Hablemos de Marketing <span>↗</span></a></div>
   </aside>
@@ -52,8 +54,8 @@
       <div class="account">
         <button type="button" id="account-btn" class="admin-avatar" aria-expanded="false" aria-controls="account-menu" aria-label="Cuenta del administrador">A</button>
         <div id="account-menu" class="account-menu" hidden>
-          <p class="account-user"><span>Sesión iniciada como</span><strong id="account-user">—</strong></p>
-          <button type="button" onclick="openAccountForm()">Cambiar usuario y contraseña</button>
+          <p class="account-user"><span>Sesión iniciada como</span><strong id="account-user">—</strong><em id="account-role"></em></p>
+          <button type="button" id="account-change" onclick="openAccountForm()">Cambiar contraseña</button>
           <button type="button" onclick="logout()">Cerrar sesión</button>
         </div>
       </div></div>
@@ -501,6 +503,34 @@
         <div class="blog-editor-actions"><button type="button" id="blog-save-draft" class="blog-secondary blog-save-action">Guardar borrador</button><button type="button" id="blog-preview" class="blog-secondary">Vista previa</button><button type="button" id="blog-publish" class="blog-primary blog-save-action">Publicar</button><button type="button" id="blog-trash" class="blog-trash blog-save-action" hidden>Mover a la papelera</button></div></form>
         <iframe id="blog-preview-frame" class="blog-preview-frame" title="Vista previa de la publicación" sandbox="" hidden></iframe>
       </section><p id="blog-message" class="blog-message" role="status"></p>
+    </section>
+    <section id="tab-panel-users" class="hidden" aria-labelledby="users-title">
+      <header class="demo-heading">
+        <h1 id="users-title">Usuarios del panel</h1>
+        <p>Todos los usuarios tienen acceso completo al panel de las dos webs. El superadministrador no se puede eliminar.</p>
+      </header>
+      <div class="users-grid">
+        <div class="users-card">
+          <h2>Usuarios</h2>
+          <ul id="users-list" class="users-list"><li class="users-empty">Cargando…</li></ul>
+          <p id="users-message" class="users-message" role="status"></p>
+        </div>
+        <form id="user-create-form" class="users-card account-form" onsubmit="createAdminUser(event)" novalidate>
+          <h2>Agregar administrador</h2>
+          <label for="user-create-email">Correo
+            <input id="user-create-email" name="email" type="email" autocomplete="off" autocapitalize="none" spellcheck="false" required />
+          </label>
+          <label for="user-create-password">Contraseña <small>mínimo 8 caracteres</small>
+            <input id="user-create-password" name="password" type="password" autocomplete="new-password" minlength="8" required />
+          </label>
+          <label for="user-create-confirm">Repite la contraseña
+            <input id="user-create-confirm" name="confirm" type="password" autocomplete="new-password" minlength="8" required />
+          </label>
+          <p id="user-create-error" class="od-warning" role="alert" hidden></p>
+          <button type="submit" id="user-create-save" class="admin-primary">Crear administrador</button>
+        </form>
+        <p id="users-initial-note" class="users-card users-note" hidden>Estás usando la cuenta inicial porque todavía no hay usuarios. Crea el superadministrador desde la consola del servidor; al hacerlo, la cuenta inicial deja de funcionar en el login.</p>
+      </div>
     </section>
     <section id="tab-panel-pdf" class="hidden ticket-demo" aria-labelledby="ticket-demo-title">
       <header class="demo-heading">
