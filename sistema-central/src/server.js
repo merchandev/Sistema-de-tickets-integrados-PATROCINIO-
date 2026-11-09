@@ -24,6 +24,7 @@ const {
 const { scrapeBcvRate } = require('./bcvScraper');
 const { generateTicketPdf, generateDemoTicketPdf } = require('./pdfGenerator');
 const { parsePaymentForm, parseTicketNumber } = require('./paymentForm');
+const { resetTickets } = require('./ticketReset');
 const {
   sendPaymentSubmittedEmail,
   sendTicketEmail,
@@ -78,10 +79,31 @@ const io = new Server(server, {
 });
 
 // Ensure storage directories exist
-const uploadsDir = path.join(__dirname, '..', 'storage', 'uploads');
-const ticketsDir = path.join(__dirname, '..', 'storage', 'tickets');
+const storageDir = path.join(__dirname, '..', 'storage');
+const uploadsDir = path.join(storageDir, 'uploads');
+const ticketsDir = path.join(storageDir, 'tickets');
 fs.mkdirSync(uploadsDir, { recursive: true });
 fs.mkdirSync(ticketsDir, { recursive: true });
+
+let activeTicketOperations = 0;
+
+async function runTicketOperation(work) {
+  activeTicketOperations++;
+  try {
+    return await work();
+  } finally {
+    activeTicketOperations--;
+  }
+}
+
+function ticketRoute(handler, before) {
+  return (req, res, next) => runTicketOperation(async () => {
+    if (before) {
+      await new Promise((resolve, reject) => before(req, res, err => err ? reject(err) : resolve()));
+    }
+    return handler(req, res);
+  }).catch(next);
+}
 
 // Configure Multer for payment screenshot uploads
 const storage = multer.diskStorage({
@@ -176,7 +198,7 @@ app.get('/api/public/bcv', async (_req, res) => {
  * Atomic 3-minute seat lock endpoint.
  * Priority is strictly given to the first request that arrives.
  */
-app.post('/api/public/tickets/lock', requireSalesOpen, async (req, res) => {
+app.post('/api/public/tickets/lock', requireSalesOpen, ticketRoute(async (req, res) => {
   try {
     const { ticket_number, session_id, source_web } = req.body;
     if (!/^\d{1,3}$/.test(String(ticket_number)) || Number(ticket_number) < 1 || Number(ticket_number) > 250 || typeof session_id !== 'string' || session_id.length < 8 || session_id.length > 254) {
@@ -230,7 +252,7 @@ app.post('/api/public/tickets/lock', requireSalesOpen, async (req, res) => {
     console.error('Error locking ticket:', err);
     return res.status(500).json({ ok: false, message: 'Error interno al bloquear la entrada.' });
   }
-});
+}));
 
 /**
  * Voluntary unlock endpoint (if buyer explicitly clicks "Cambiar de entrada / Cancelar")
@@ -253,8 +275,8 @@ app.post('/api/public/tickets/unlock', (req, res) => {
 });
 
 // Emails that must not delay the HTTP response; failures are already recorded in email_logs.
-function sendInBackground(promise) {
-  promise.then((result) => {
+function sendInBackground(send) {
+  runTicketOperation(send).then((result) => {
     if (result.status === 'ERROR') console.error('[Mail] No se pudo enviar el correo:', result.errorMessage);
   }).catch((err) => console.error('[Mail] Error inesperado al enviar el correo:', err.message));
 }
@@ -272,7 +294,7 @@ const validScreenshot = (req) => !req.body.screenshot_base64 || /^data:image\/pn
 /**
  * Payment form of the checkout popup: buyer data + Pago Móvil reference for the ticket locked by this session.
  */
-app.post('/api/public/orders', requireSalesOpen, upload.single('screenshot'), async (req, res) => {
+app.post('/api/public/orders', requireSalesOpen, ticketRoute(async (req, res) => {
   try {
     if (!resolveSalesSource(req)) return res.status(403).json({ok:false, code:'INVALID_SOURCE', message:'Reporta el pago desde una de las paginas de venta.'});
     const ticketNumber = parseTicketNumber(req.body.ticket_number);
@@ -309,7 +331,7 @@ app.post('/api/public/orders', requireSalesOpen, upload.single('screenshot'), as
       name: 'admin:order_created',
       payload: submitResult.order
     });
-    sendInBackground(sendPaymentSubmittedEmail(submitResult.order));
+    sendInBackground(() => sendPaymentSubmittedEmail(submitResult.order));
 
     const { id, buyer_email: email, status } = submitResult.order;
     return res.status(201).json({
@@ -321,13 +343,13 @@ app.post('/api/public/orders', requireSalesOpen, upload.single('screenshot'), as
     console.error('Error submitting order:', err);
     return res.status(500).json({ ok: false, message: 'Error interno al procesar la compra.' });
   }
-});
+}, upload.single('screenshot')));
 
 /**
  * Standalone payment report ("Reporte de pago"), for buyers who paid but could not finish the popup.
  * No ticket is held: the administrator assigns an available one when approving it.
  */
-app.post('/api/public/payment-reports', requireSalesOpen, upload.single('screenshot'), async (req, res) => {
+app.post('/api/public/payment-reports', requireSalesOpen, ticketRoute(async (req, res) => {
   try {
     const source = resolveSalesSource(req);
     if (!source) return res.status(403).json({ok:false, code:'INVALID_SOURCE', message:'Reporta el pago desde una de las paginas de venta.'});
@@ -352,7 +374,7 @@ app.post('/api/public/payment-reports', requireSalesOpen, upload.single('screens
     });
 
     io.emit('admin:order_created', { changed: true });
-    sendInBackground(sendPaymentSubmittedEmail(order));
+    sendInBackground(() => sendPaymentSubmittedEmail(order));
 
     return res.status(201).json({
       ok: true,
@@ -363,7 +385,7 @@ app.post('/api/public/payment-reports', requireSalesOpen, upload.single('screens
     console.error('Error submitting payment report:', err);
     return res.status(500).json({ ok: false, message: 'Error interno al registrar el reporte de pago.' });
   }
-});
+}, upload.single('screenshot')));
 
 // ============================================================================
 // ADMIN DASHBOARD API
@@ -445,7 +467,7 @@ app.get('/api/admin/overview', (_req, res) => {
  * Approve payment -> Marks ticket SOLD, generates unique Token & PDF with QR, then emails the buyer
  * one message that confirms the payment and carries the ticket PDF. Payment reports need `ticket_number`.
  */
-app.post('/api/admin/orders/:id/approve', async (req, res) => {
+app.post('/api/admin/orders/:id/approve', ticketRoute(async (req, res) => {
   try {
     const orderId = parseInt(req.params.id, 10);
     const { admin_notes, ticket_number } = req.body || {};
@@ -490,12 +512,12 @@ app.post('/api/admin/orders/:id/approve', async (req, res) => {
     console.error('Error approving order:', err);
     return res.status(500).json({ ok: false, message: err.message });
   }
-});
+}));
 
 /**
  * Reject payment -> Releases ticket back to AVAILABLE and notifies buyer
  */
-app.post('/api/admin/orders/:id/reject', async (req, res) => {
+app.post('/api/admin/orders/:id/reject', ticketRoute(async (req, res) => {
   try {
     const orderId = parseInt(req.params.id, 10);
     const { reason } = req.body || {};
@@ -522,7 +544,7 @@ app.post('/api/admin/orders/:id/reject', async (req, res) => {
     console.error('Error rejecting order:', err);
     return res.status(500).json({ ok: false, message: err.message });
   }
-});
+}));
 
 /**
  * Verify QR Code / Token authenticity in Admin Dashboard
@@ -638,7 +660,34 @@ app.put('/api/admin/settings', (req, res) => {
  * Signed-in user, the change of their own password, and the users of the panel.
  * `role` is superadmin or admin for named users; initial (no user exists yet) or service (scripts).
  */
-app.get('/api/admin/session', (req, res) => res.json({ ok: true, user: req.adminUser, role: req.admin.role, named: Boolean(req.admin.id) }));
+function canResetTickets(req) {
+  const account = adminAuth.sessionFrom(req)?.admin;
+  return account?.role === 'superadmin' && account.email === 'soporte@merchan.dev';
+}
+
+app.get('/api/admin/session', (req, res) => res.json({
+  ok: true, user: req.adminUser, role: req.admin.role, named: Boolean(req.admin.id),
+  canResetTickets: canResetTickets(req)
+}));
+
+app.post('/api/admin/tickets/reset', (req, res) => {
+  if (!canResetTickets(req)) return res.status(403).json({ ok: false, message: 'Tu cuenta no puede reiniciar las entradas.' });
+  if (!req.is('application/json') || req.body?.confirmation !== 'REINICIAR ENTRADAS') {
+    return res.status(400).json({ ok: false, message: 'Escribe REINICIAR ENTRADAS para confirmar.' });
+  }
+  if (activeTicketOperations) {
+    return res.status(409).json({ ok: false, message: 'Hay operaciones de entradas o correos en curso. Vuelve a intentarlo en unos segundos.' });
+  }
+  try {
+    const result = resetTickets(db, storageDir);
+    console.log(`[Entradas] Reinicio por ${req.adminUser}. Respaldo: ${result.backup}`);
+    broadcastTicketsUpdate({ name: 'admin:tickets_reset', payload: { changed: true } });
+    return res.json({ ok: true, message: 'Entradas reiniciadas. Las 250 están disponibles.', ...result });
+  } catch (err) {
+    console.error('Error resetting tickets:', err);
+    return res.status(500).json({ ok: false, message: 'No se pudo completar el reinicio. Revisa el registro del servidor.' });
+  }
+});
 app.put('/api/admin/account', adminAuth.changeAccount);
 app.get('/api/admin/users', adminAuth.listUsersRoute);
 app.post('/api/admin/users', adminAuth.createUserRoute);
@@ -668,7 +717,7 @@ app.get('/api/admin/tickets/demo.pdf', async (req, res) => {
 /**
  * Checks the saved SMTP and IMAP accounts and, with `to`, sends a test message.
  */
-app.post('/api/admin/mail/test', async (req, res) => {
+app.post('/api/admin/mail/test', ticketRoute(async (req, res) => {
   try {
     const to = typeof req.body?.to === 'string' ? req.body.to.trim() : '';
     if (to && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) return res.status(400).json({ ok: false, message: 'Correo de prueba invalido' });
@@ -677,10 +726,10 @@ app.post('/api/admin/mail/test', async (req, res) => {
   } catch (err) {
     return res.status(500).json({ ok: false, message: err.message });
   }
-});
+}));
 
 // Resends every buyer notice that never left (saved while the mail server was Mailpit or failing).
-app.post('/api/admin/mail/retry-pending', async (req, res) => {
+app.post('/api/admin/mail/retry-pending', ticketRoute(async (req, res) => {
   if (!req.is('application/json')) return res.status(415).json({ ok: false, message: 'Se requiere una solicitud JSON.' });
   if (mailDeliveryMode() !== 'smtp') return res.status(409).json({ ok: false, message: 'Configura y prueba un servidor SMTP real antes de reenviar.' });
   try {
@@ -697,9 +746,9 @@ app.post('/api/admin/mail/retry-pending', async (req, res) => {
     console.error('Error retrying pending emails:', err.message);
     return res.status(500).json({ ok: false, message: 'No se pudieron reenviar los avisos.' });
   }
-});
+}));
 
-app.post('/api/admin/mail/:id/retry', async (req, res) => {
+app.post('/api/admin/mail/:id/retry', ticketRoute(async (req, res) => {
   if (!req.is('application/json')) return res.status(415).json({ ok: false, message: 'Se requiere una solicitud JSON.' });
   const id = Number(req.params.id);
   if (!Number.isSafeInteger(id) || id < 1) return res.status(400).json({ ok: false, message: 'Correo inválido.' });
@@ -710,7 +759,7 @@ app.post('/api/admin/mail/:id/retry', async (req, res) => {
     console.error('Error retrying order email:', err.message);
     return res.status(500).json({ ok: false, message: 'No se pudo reenviar el correo.' });
   }
-});
+}));
 
 /**
  * Force refresh BCV rate
@@ -733,7 +782,7 @@ app.post('/api/admin/bcv/refresh', async (_req, res) => {
 /**
  * Send Mass Event Notification ("Faltan 2 días", "Falta 1 día", "Falta hoy", "Ya comenzamos el evento")
  */
-app.post('/api/admin/notifications/send', async (req, res) => {
+app.post('/api/admin/notifications/send', ticketRoute(async (req, res) => {
   try {
     const { campaign_key } = req.body;
     const result = await sendEventCampaignNotification(campaign_key, 'MANUAL_ADMIN');
@@ -745,7 +794,7 @@ app.post('/api/admin/notifications/send', async (req, res) => {
   } catch (err) {
     return res.status(500).json({ ok: false, message: err.message });
   }
-});
+}));
 
 // ============================================================================
 // REAL-TIME SOCKET.IO & BACKGROUND TIMERS
@@ -791,7 +840,7 @@ setInterval(async () => {
       if (!alreadySent) {
         const approvedCount = db.prepare("SELECT COUNT(*) as c FROM orders WHERE status = 'APPROVED'").get().c;
         if (approvedCount > 0) {
-          await sendEventCampaignNotification(targetCampaign, 'AUTO_CRON');
+          await runTicketOperation(() => sendEventCampaignNotification(targetCampaign, 'AUTO_CRON'));
         }
       }
     }

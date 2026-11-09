@@ -69,6 +69,11 @@ socket.on('admin:order_updated', () => {
   fetchAdminOverview();
 });
 
+socket.on('admin:tickets_reset', () => {
+  document.getElementById('qr-token-input').value = '';
+  document.getElementById('qr-verification-result').textContent = 'Escanea una entrada o escribe su código para verificarla.';
+});
+
 async function fetchAdminOverview() {
   try {
     const res = await fetch('/api/admin/overview');
@@ -1199,6 +1204,7 @@ async function loadSession() {
     const data = await res.json();
     if (!data.ok) return;
     adminSession = data;
+    document.getElementById('ticket-reset-panel').hidden = !data.canResetTickets;
     document.getElementById('account-user').textContent = data.user;
     document.getElementById('account-role').textContent = roleNames[data.role] || '';
     document.getElementById('account-btn').textContent = (data.user || 'A').charAt(0).toUpperCase();
@@ -1210,6 +1216,48 @@ async function loadSession() {
 function closeAccountMenu() {
   document.getElementById('account-menu').hidden = true;
   document.getElementById('account-btn').setAttribute('aria-expanded', 'false');
+}
+
+function openTicketReset() {
+  if (!adminSession?.canResetTickets) return;
+  openModal('Reiniciar las 250 entradas', `
+    <form class="account-form" onsubmit="submitTicketReset(event)">
+      <p class="od-muted">Se borrarán las compras, las reservas, las asistencias y el historial de correos de ambas webs. Los QR emitidos perderán su validez. El servidor guardará una copia de seguridad antes de aplicar el cambio.</p>
+      <label for="ticket-reset-confirmation">Escribe REINICIAR ENTRADAS para confirmar
+        <input id="ticket-reset-confirmation" name="confirmation" type="text" pattern="REINICIAR ENTRADAS" autocomplete="off" spellcheck="false" required />
+      </label>
+      <p id="ticket-reset-status" role="status" class="text-sm text-red-700"></p>
+      <div class="flex justify-end gap-2">
+        <button type="button" onclick="closeModal()" class="border border-slate-300 rounded-lg px-4 py-2 text-sm">Cancelar</button>
+        <button type="submit" class="bg-red-600 hover:bg-red-700 text-white font-bold px-4 py-2 rounded-lg text-sm">Confirmar reinicio</button>
+      </div>
+    </form>
+  `);
+}
+
+async function submitTicketReset(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const button = form.querySelector('[type="submit"]');
+  const status = form.querySelector('#ticket-reset-status');
+  button.disabled = true;
+  status.textContent = 'Guardando el respaldo y reiniciando las entradas…';
+  try {
+    const res = await fetch('/api/admin/tickets/reset', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ confirmation: form.elements.confirmation.value })
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.message || 'No se pudo reiniciar las entradas.');
+    closeModal();
+    showToast(data.message);
+    await fetchAdminOverview();
+  } catch (err) {
+    status.textContent = err.message;
+  } finally {
+    button.disabled = false;
+  }
 }
 
 function openAccountForm() {
