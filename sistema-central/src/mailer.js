@@ -21,7 +21,7 @@ function htmlToText(html) {
     .replace(/<span style="display:none[^>]*>[\s\S]*?<\/span>/i, '')
     .replace(/<\/td>\s*<td[^>]*>/gi, ': ')
     .replace(/<a [^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi, '$2 ($1)')
-    .replace(/<br\s*\/?>|<\/(p|h1|div|tr)>/gi, '\n')
+    .replace(/<br\s*\/?>|<\/(p|h[12]|div|tr)>/gi, '\n')
     .replace(/<[^>]+>/g, '')
     .replace(/&nbsp;/g, ' ').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&')
     .replace(/[ \t]+/g, ' ')
@@ -212,6 +212,7 @@ function formatTime(value) {
 }
 const firstName = (order) => order.buyer_first_name || String(order.buyer_name || '').split(' ')[0];
 const ticketLabel = (order) => order.ticket_number ? `#${order.ticket_number}` : 'Por asignar';
+const fullEventAccess = 'Tu entrada incluye acceso a todo el evento, desde las conferencias hasta el concierto.';
 
 function paymentRows(order) {
   return [
@@ -228,15 +229,15 @@ function eventRows(cfg) {
   const concert = /^\d{1,2}:\d{2}$/.test(cfg.concert_end || '') ? `${formatTime(cfg.concert_start)} a ${formatTime(cfg.concert_end)}` : `Desde las ${formatTime(cfg.concert_start || '19:00')}`;
   return [
     ['Fecha', formatDate(cfg.event_date)],
-    ['Ingreso', formatTime(cfg.event_entry_time || '15:30')],
+    ['Apertura de puertas', formatTime(cfg.event_entry_time || '15:30')],
     ['Lugar', cfg.event_location],
-    ['Conferencia', `${formatTime(cfg.conference_start || '16:00')} a ${formatTime(cfg.conference_end || '19:00')}`],
+    ['Conferencias', `${formatTime(cfg.conference_start || '16:00')} a ${formatTime(cfg.conference_end || '19:00')}`],
     ['Concierto', concert]
   ];
 }
 
 // `paragraphs` are trusted HTML built here; every value from the buyer goes through escapeHtml.
-function layout(brand, { preheader, title, paragraphs, rows = [], callout = '' }) {
+function layout(brand, { preheader, title, paragraphs, rows = [], rowsTitle = '', callout = '' }) {
   const rowsHtml = rows.map(([label, value]) => `
           <tr>
             <td style="padding:7px 12px 7px 0;color:#6b7280;font-size:13px;vertical-align:top;width:38%">${escapeHtml(label)}</td>
@@ -255,7 +256,8 @@ function layout(brand, { preheader, title, paragraphs, rows = [], callout = '' }
           <h1 style="margin:0 0 14px;font-size:22px;line-height:1.3;color:${brand.ink}">${escapeHtml(title)}</h1>
           ${paragraphs.map(p => `<p style="margin:0 0 12px;font-size:15px;line-height:1.6;color:#374151">${p}</p>`).join('')}
           ${callout}
-          ${rows.length ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:18px 0 20px;border-top:1px solid #e5e7eb;border-bottom:1px solid #e5e7eb">${rowsHtml}</table>` : ''}
+          ${rowsTitle ? `<h2 style="margin:18px 0 8px;font-size:16px;line-height:1.4;color:${brand.ink}">${escapeHtml(rowsTitle)}</h2>` : ''}
+          ${rows.length ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;border-top:1px solid #e5e7eb;border-bottom:1px solid #e5e7eb">${rowsHtml}</table>` : ''}
         </td></tr>
         <tr><td style="padding:16px 28px 22px;background:#f9fafb;color:#6b7280;font-size:12px;line-height:1.6">
           Sistema de entradas de ${brandLink(BRANDS['pagina-web-2'])} e ${brandLink(BRANDS['pagina-web-1'])}. Si no hiciste esta compra, puedes ignorar este mensaje.
@@ -275,13 +277,14 @@ async function sendPaymentSubmittedEmail(order) {
   const brand = brandFor(order.source_web);
   const ticketText = order.ticket_number ? ` de la entrada <strong>#${escapeHtml(order.ticket_number)}</strong>` : '';
   const html = layout(brand, {
-    preheader: 'Recibimos tu pago. La verificación puede tardar hasta 24 horas.',
+    preheader: 'Recibimos tu reporte de pago y estamos revisando la transacción.',
     title: 'Tu pago está en verificación',
     paragraphs: [
-      `Hola ${escapeHtml(firstName(order))}, recibimos el reporte de tu pago${ticketText}.`,
-      'Cuando se confirme te enviaremos una sola entrada en PDF con un código QR para acceder a todo el evento, incluidas las conferencias y el concierto.'
+      `Hola ${escapeHtml(firstName(order))}, recibimos el reporte de tu pago${ticketText}. Revisaremos la referencia y el monto para confirmar la transacción con el banco.`,
+      'Te avisaremos por este mismo correo cuando termine la revisión. Si aprobamos el pago, recibirás tu entrada en PDF con el QR para acceder a todo el evento, incluidas las conferencias y el concierto.'
     ],
-    callout: callout(brand, `Estamos verificando la transacción con el banco. <strong>El proceso puede tardar hasta 24 horas.</strong>${order.ticket_number ? '' : ' Al aprobarse te asignaremos una entrada disponible.'}`),
+    callout: callout(brand, `<strong>La verificación puede tardar hasta 24 horas.</strong>${order.ticket_number ? ' Guarda el comprobante y la referencia mientras revisamos tu reporte.' : ' Si aprobamos el pago, te asignaremos una entrada disponible.'}`),
+    rowsTitle: 'Datos del pago reportado',
     rows: paymentRows(order)
   });
 
@@ -304,14 +307,15 @@ async function sendTicketEmail(order, pdfFullPath, pdfRelativeUrl) {
   const cfg = getPublicConfig();
   const brand = brandFor(order.source_web);
   const html = layout(brand, {
-    preheader: `Tu pago fue verificado. Adjuntamos tu entrada #${order.ticket_number}.`,
-    title: 'Muchas gracias por su apoyo',
+    preheader: `Pago confirmado. Descarga tu entrada #${order.ticket_number} y ten el QR a mano para el ingreso.`,
+    title: 'Tu pago fue aprobado y tu entrada está lista',
     paragraphs: [
-      `Hola ${escapeHtml(firstName(order))}, verificamos tu pago y la entrada <strong>#${escapeHtml(order.ticket_number)}</strong> quedó confirmada a tu nombre para <strong>${escapeHtml(cfg.event_title)}</strong>. Adjuntamos tu entrada en PDF.`,
-      'Tu entrada incluye acceso a todo el evento, desde las conferencias hasta el concierto.',
-      'Presenta el código QR de tu entrada en el teléfono o impreso, junto con tu cédula de identidad.'
+      `Hola ${escapeHtml(firstName(order))}, gracias por apoyar <strong>${escapeHtml(cfg.event_title)}</strong>. Confirmamos tu pago y adjuntamos la entrada en PDF a nombre de <strong>${escapeHtml(order.buyer_name)}</strong>.`,
+      fullEventAccess,
+      'Descarga el PDF antes de salir para tenerlo a mano aunque no tengas conexión. En la puerta puedes mostrar el QR en tu teléfono o llevarlo impreso. Ten también a mano tu cédula de identidad.'
     ],
-    callout: callout(brand, `Entrada <strong>#${escapeHtml(order.ticket_number)}</strong> · ${escapeHtml(order.buyer_name)} · C.I. ${escapeHtml(order.buyer_cedula)}`),
+    callout: callout(brand, `<strong>Entrada #${escapeHtml(order.ticket_number)}</strong> · Pago confirmado con la referencia ${escapeHtml(order.payment_reference)}.`),
+    rowsTitle: 'Fecha, lugar y horarios del evento',
     rows: eventRows(cfg)
   });
 
@@ -336,15 +340,15 @@ async function sendTicketEmail(order, pdfFullPath, pdfRelativeUrl) {
 async function sendPaymentRejectedEmail(order, reason) {
   const brand = brandFor(order.source_web);
   const html = layout(brand, {
-    preheader: 'No pudimos verificar tu pago.',
+    preheader: 'Consulta el motivo de la decisión y cómo corregir tu reporte.',
     title: 'No pudimos verificar tu pago',
     paragraphs: [
       `Hola ${escapeHtml(firstName(order))}, revisamos el pago con referencia <strong>${escapeHtml(order.payment_reference)}</strong> y no pudimos confirmarlo.`,
-      order.ticket_number
-        ? `La entrada #${escapeHtml(order.ticket_number)} quedó libre nuevamente. Si se trata de un error en los datos, vuelve a la página y reporta el pago con la información correcta.`
-        : 'Si se trata de un error en los datos, vuelve a la página y reporta el pago con la información correcta.'
+      ...(order.ticket_number ? [`La entrada #${escapeHtml(order.ticket_number)} volvió a estar disponible.`] : []),
+      `Si detectas un error, compara la referencia, el monto y el banco con tu comprobante. Luego usa <a href="${brand.site}/comprar.html#reportar-pago" style="color:${brand.accent}">Reportar un pago</a> para enviarnos los datos corregidos y una captura legible de la transacción.`
     ],
     callout: callout(brand, `<strong>Motivo:</strong> ${escapeHtml(reason || 'La referencia o el monto no coinciden con una transacción recibida.')}`),
+    rowsTitle: 'Datos que revisamos',
     rows: paymentRows(order)
   });
 
@@ -376,22 +380,22 @@ async function sendEventCampaignNotification(campaignKey, triggeredBy = 'MANUAL_
     REMINDER_2_DAYS: {
       subjectPrefix: 'Faltan 2 días',
       headline: 'Faltan solo 2 días para el encuentro',
-      intro: 'Tu entrada incluye acceso a todo el evento, desde las conferencias hasta el concierto.'
+      intro: 'Revisa la hora de apertura y el lugar para planificar tu llegada. Puedes descargar desde ahora el PDF que recibiste al aprobarse tu pago.'
     },
     REMINDER_1_DAY: {
       subjectPrefix: 'Mañana nos vemos',
       headline: 'Mañana es el gran día',
-      intro: 'Ten a mano tu entrada en PDF y tu cédula de identidad.'
+      intro: 'Antes de salir, guarda el PDF de tu entrada en el teléfono o imprímelo. Lleva también tu cédula de identidad para mostrarla en el acceso.'
     },
     REMINDER_TODAY: {
       subjectPrefix: 'Es hoy',
       headline: 'Hoy es el evento',
-      intro: `Te esperamos en ${escapeHtml(cfg.event_location)}. Presenta tu código QR en la puerta.`
+      intro: `Te esperamos en <strong>${escapeHtml(cfg.event_location)}</strong>. Las puertas abren a las ${escapeHtml(formatTime(cfg.event_entry_time || '15:30'))}. Al llegar, muestra el QR de tu entrada y tu cédula.`
     },
     EVENT_STARTED: {
       subjectPrefix: 'Ya comenzamos',
       headline: 'Ya comenzamos el evento',
-      intro: 'Las puertas están abiertas. Presenta tu código QR en la entrada para registrar tu ingreso.'
+      intro: 'Las puertas están abiertas. Si vienes en camino, consulta los horarios de las actividades a continuación. Al llegar, muestra el QR de tu entrada y tu cédula.'
     }
   };
 
@@ -404,9 +408,14 @@ async function sendEventCampaignNotification(campaignKey, triggeredBy = 'MANUAL_
   for (const order of approvedOrders) {
     const brand = brandFor(order.source_web);
     const html = layout(brand, {
-      preheader: tpl.headline,
+      preheader: 'Consulta el lugar, la apertura de puertas y los horarios de las actividades.',
       title: tpl.headline,
-      paragraphs: [`Hola ${escapeHtml(firstName(order))} (entrada <strong>#${escapeHtml(order.ticket_number)}</strong>).`, tpl.intro],
+      paragraphs: [
+        `Hola ${escapeHtml(firstName(order))}, tienes confirmada la entrada <strong>#${escapeHtml(order.ticket_number)}</strong> para <strong>${escapeHtml(cfg.event_title)}</strong>.`,
+        tpl.intro,
+        fullEventAccess
+      ],
+      rowsTitle: 'Fecha, lugar y horarios del evento',
       rows: eventRows(cfg)
     });
 
