@@ -75,8 +75,9 @@ function createTicketDocument(order, config, qrBuffer, demo) {
     fitText(doc, text, x, y, width, height, size);
   };
 
-  doc.rect(0, 0, 540, 960).fill(ink);
-  doc.roundedRect(30, 39, 480, 882, 19).fill(night);
+  // White page; the pass keeps its colours and casts a soft shadow
+  doc.rect(0, 0, 540, 960).fill(light);
+  doc.save().fillOpacity(0.14).roundedRect(30, 39, 480, 882, 19).fill(ink).restore();
   doc.save().roundedRect(30, 34, 480, 882, 19).clip();
 
   const background = doc.linearGradient(30, perforation, 510, 916)
@@ -95,8 +96,9 @@ function createTicketDocument(order, config, qrBuffer, demo) {
 
   doc.save().lineWidth(1.2).dash(3, { space: 5 })
     .moveTo(45, perforation - 1).lineTo(495, perforation - 1).stroke(wine).restore();
-  doc.circle(30, perforation, 12).fill(ink);
-  doc.circle(510, perforation, 12).fill(ink);
+  // Ticket notches take the page colour
+  doc.circle(30, perforation, 12).fill(light);
+  doc.circle(510, perforation, 12).fill(light);
 
   doc.roundedRect(qrX - 3, qrY - 3, qrSize + 6, qrSize + 6, 9).fill('#fff');
   doc.image(qrBuffer, qrX, qrY, { width: qrSize, height: qrSize });
@@ -151,7 +153,7 @@ function createTicketDocument(order, config, qrBuffer, demo) {
   if (sourceName) value(`Página de origen: ${sourceName}`, 60, 892, 420, 16, 11, light);
 
   const credit = 'Desarrollado por Espressivo Venezuela';
-  doc.font('Helvetica').fontSize(10).fillColor(gold);
+  doc.font('Helvetica').fontSize(10).fillColor(wine);
   doc.text(credit, 510 - doc.widthOfString(credit), 934, { lineBreak: false });
   return doc;
 }
