@@ -29,15 +29,26 @@
     $('#video-frame').innerHTML = '<video controls playsinline preload="metadata" poster="/media/poster.jpg"><source src="/media/promo.mp4" type="video/mp4"></video>';
   }).catch(() => {});
 
-  /* ---- Reels: se reproducen en silencio solo mientras se ven; al salir de pantalla se pausan ----
-     Si la persona los pausa a mano (o prefiere menos movimiento) no se reanudan solos. */
+  /* ---- Reels: se reproducen con sonido solo mientras se ven; al salir de pantalla se pausan ----
+     Los navegadores no dejan iniciar audio hasta que la persona interactúa con la página: si lo
+     bloquean, el video arranca en silencio y el sonido se activa con el primer clic, toque o tecla.
+     Si la persona pausa o silencia un video a mano (o prefiere menos movimiento), se respeta. */
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const reels = [];
   $$('.reel').forEach((reel) => {
     const video = $('video', reel);
     const playback = $('.reel-playback', reel);
     const sound = $('.reel-sound', reel);
     let userPaused = reduceMotion;
-    const play = () => video.play().catch(() => {});
+    let userMuted = false;
+    const play = () => {
+      if (!userMuted) video.muted = false;
+      video.play().catch(() => {
+        if (video.muted) return;
+        video.muted = true;
+        video.play().catch(() => {});
+      });
+    };
     const sync = () => {
       reel.classList.toggle('is-paused', video.paused);
       reel.classList.toggle('is-unmuted', !video.muted);
@@ -49,19 +60,27 @@
       userPaused = !video.paused;
       if (userPaused) video.pause(); else play();
     };
+    const unmute = () => { if (!userMuted && !video.paused) video.muted = false; };
     ['play', 'pause', 'volumechange'].forEach((ev) => video.addEventListener(ev, sync));
-    video.addEventListener('click', toggle);
+    // El primer toque sobre un video que suena bloqueado en silencio activa el audio en vez de pausarlo.
+    video.addEventListener('click', () => { if (video.muted && !userMuted && !video.paused) unmute(); else toggle(); });
     playback.addEventListener('click', toggle);
     sound.addEventListener('click', () => {
       video.muted = !video.muted;
+      userMuted = video.muted;
       if (!video.muted && video.paused) { userPaused = false; play(); }
     });
     new IntersectionObserver(([entry]) => {
       if (!entry.isIntersecting) video.pause();
       else if (!userPaused) play();
     }, { threshold: 0.5 }).observe(video);
+    reels.push({ unmute });
     sync();
   });
+  // Cualquier gesto fuera de los controles del video activa el sonido del que suena en silencio
+  // (Safari puede volver a bloquearlo al reanudar, por eso no se escucha una sola vez).
+  const unlockSound = (e) => { if (!(e.target.closest && e.target.closest('.reel'))) reels.forEach(({ unmute }) => unmute()); };
+  ['pointerdown', 'keydown'].forEach((ev) => document.addEventListener(ev, unlockSound, true));
 
   /* ---- Formato ---- */
   const fmtDate = (d) => {
