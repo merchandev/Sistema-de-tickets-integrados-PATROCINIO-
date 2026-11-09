@@ -24,6 +24,8 @@ La cuenta de correo se configura en «Correos y avisos»: SMTP para el envío e 
 
 El correo de «Pago en verificación» sale en segundo plano, así que el comprador ve la confirmación sin esperar al servidor de correo. Cada mensaje lleva versión HTML y texto plano, Message-ID y Reply-To del dominio del remitente, y deja una línea `[Mail] TIPO -> ESTADO (@dominio)` en el registro del contenedor (`docker logs socials-entradas-sistema-central-1`). `SIMULATED_OUTBOX` significa que no hay servidor SMTP guardado y el correo no salió.
 
+`npm run test:e2e` comprueba todo el circuito contra un servidor SMTP local real y una base de datos nueva: login, compra, reporte, aprobación con PDF, rechazo, fallo y reenvío de correos, QR e ingreso, y el contenido de los diez correos. Junto con `npm run test:payments` y `npm run test:auth`, conviene ejecutarlo antes de cada despliegue.
+
 `scripts/desplegar-compras.sh` publica juntos el sistema central y las dos webs desde `release-compras.tar.gz`, con copia previa de SQLite, almacenamiento y código.
 
 ## Acceso al panel
