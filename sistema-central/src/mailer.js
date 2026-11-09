@@ -567,6 +567,29 @@ async function retryOrderEmail(logId) {
   }
 }
 
+// Latest notice of each order and type that never reached the buyer and still matches the order's state
+// (for example, "en verificación" is not resent once the payment was approved).
+function undeliveredOrderEmails() {
+  return db.prepare(`
+    SELECT l.id, l.type, l.status, o.status AS order_status
+    FROM email_logs l JOIN orders o ON o.id = l.order_id
+    WHERE l.id IN (SELECT MAX(id) FROM email_logs WHERE order_id IS NOT NULL GROUP BY order_id, type)
+    ORDER BY l.id
+  `).all().filter(row => retryableStatuses.has(row.status) && orderEmailStates[row.type] === row.order_status);
+}
+
+// Resends every undelivered notice in the order it was first produced.
+async function retryUndeliveredOrderEmails() {
+  let sent = 0;
+  const failed = [];
+  for (const row of undeliveredOrderEmails()) {
+    const result = await retryOrderEmail(row.id);
+    if (result.ok) sent++;
+    else failed.push({ id: row.id, type: row.type, message: result.message });
+  }
+  return { sent, failed };
+}
+
 module.exports = {
   sendPaymentSubmittedEmail,
   sendPaymentApprovedEmail,
@@ -576,5 +599,7 @@ module.exports = {
   testMailConnections,
   htmlToText,
   mailDeliveryMode,
-  retryOrderEmail
+  retryOrderEmail,
+  undeliveredOrderEmails,
+  retryUndeliveredOrderEmails
 };

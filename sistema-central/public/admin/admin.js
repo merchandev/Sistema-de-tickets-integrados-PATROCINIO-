@@ -81,6 +81,7 @@ async function fetchAdminOverview() {
     renderSeatsMap();
     renderEmailLogs();
     renderNotifications();
+    renderMailAlert();
 
     if (!cmsPopulated) {
       populateCmsAndSmtpForms();
@@ -821,15 +822,41 @@ function populateMailForm(s) {
   }
 }
 
+// Visible on every section while buyer emails are not leaving the system.
+function renderMailAlert() {
+  const box = document.getElementById('mail-alert');
+  const mode = state.settings?.smtp_delivery_mode;
+  const pending = Number(state.undeliveredEmails || 0);
+  const waiting = pending ? ` ${pending} aviso${pending === 1 ? ' espera' : 's esperan'} envío.` : '';
+  if (mode !== 'smtp') {
+    box.innerHTML = `<div><strong>Los correos no están llegando a los compradores.</strong><span>${mode === 'mailpit' ? 'El servidor de correo guardado es Mailpit, un buzón de pruebas.' : 'No hay un servidor de correo configurado.'}${waiting}</span></div><button type="button" onclick="switchTab('smtp')">Configurar correo</button>`;
+  } else if (pending) {
+    box.innerHTML = `<div><strong>${pending} aviso${pending === 1 ? '' : 's'} sin entregar.</strong><span>El servidor de correo ya está configurado: reenvíalos para que lleguen a los compradores.</span></div><button type="button" onclick="retryPendingEmails(this)">Reenviar ahora</button>`;
+  }
+  box.hidden = mode === 'smtp' && !pending;
+}
+
+async function retryPendingEmails(button) {
+  button.disabled = true;
+  button.textContent = 'Reenviando…';
+  try {
+    const res = await fetch('/api/admin/mail/retry-pending', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    const data = await res.json();
+    showToast(data.message);
+  } catch (_) {
+    showToast('No se pudieron reenviar los avisos. Revisa Correos y avisos.');
+  }
+  await fetchAdminOverview();
+}
+
 function fillHostingerSettings() {
-  const fields = {
-    'smtp-host': 'smtp.hostinger.com',
-    'smtp-port': '465',
-    'smtp-user': 'soporte@merchan.dev',
-    'smtp-from': 'Entradas del evento <soporte@merchan.dev>'
-  };
-  for (const [id, value] of Object.entries(fields)) {
+  for (const [id, value] of [['smtp-host', 'smtp.hostinger.com'], ['smtp-port', '465'], ['imap-host', 'imap.hostinger.com'], ['imap-port', '993']]) {
     document.getElementById(id).value = value;
+  }
+  // The mailbox address is the user's own; only suggest one when the field is empty
+  for (const [id, value] of [['smtp-user', 'soporte@merchan.dev'], ['smtp-from', 'Entradas del evento <soporte@merchan.dev>']]) {
+    const input = document.getElementById(id);
+    if (!input.value.trim()) input.value = value;
   }
   const password = document.getElementById('smtp-pass');
   password.value = '';

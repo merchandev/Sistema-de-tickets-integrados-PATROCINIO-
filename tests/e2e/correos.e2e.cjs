@@ -209,6 +209,25 @@ function parseMail(file) {
     check('Motivo del rechazo escapado en el HTML', /&lt;b&gt;Referencia&lt;\/b&gt;/.test(htmlPart) && !/<b>Referencia<\/b>/.test(htmlPart));
     const statuses = (await api('GET', '/api/admin/overview', { admin: true })).data.emailLogs;
     check('Registro de correos: aceptados por SMTP', statuses.filter(l => l.status === 'SENT_SMTP').length === 10, `${statuses.filter(l => l.status === 'SENT_SMTP').length} SENT_SMTP, ${statuses.filter(l => l.status === 'ERROR').length} ERROR`);
+    // --- 6. Mail server left on Mailpit (test mailbox): notices wait, then go out with "Reenviar ahora" ---
+    await api('PUT', '/api/admin/settings', { admin: true, json: { smtp_host: 'mailpit', smtp_port: '1025' } });
+    const waiting = await api('POST', '/api/public/payment-reports', { form: buyerForm({ buyer_email: 'espera@prueba.test' }) });
+    let overview;
+    for (let i = 0; i < 40; i++) {
+      await sleep(150);
+      overview = (await api('GET', '/api/admin/overview', { admin: true })).data;
+      if (overview.emailLogs.some(l => l.order_id === waiting.data.order.id)) break;
+    }
+    // In production Mailpit captures it (SIMULATED_OUTBOX); here no "mailpit" host exists (ERROR). Neither reaches the buyer.
+    check('Con Mailpit el aviso no se entrega', overview.settings.smtp_delivery_mode === 'mailpit' && ['SIMULATED_OUTBOX', 'ERROR'].includes(overview.emailLogs.find(l => l.order_id === waiting.data.order.id)?.status));
+    check('El panel cuenta los avisos sin entregar', overview.undeliveredEmails === 1, `${overview.undeliveredEmails}`);
+    check('No reenvía mientras siga Mailpit', (await api('POST', '/api/admin/mail/retry-pending', { admin: true, json: {} })).status === 409);
+    await api('PUT', '/api/admin/settings', { admin: true, json: { smtp_host: '127.0.0.1', smtp_port: String(SMTP_PORT) } });
+    const bulk = await api('POST', '/api/admin/mail/retry-pending', { admin: true, json: {} });
+    check('«Reenviar ahora» entrega los avisos pendientes', bulk.status === 200 && bulk.data.sent === 1, bulk.data.message);
+    check('El aviso reenviado llega al buzón', (await waitMails(11)) === 11 && /Pago en verificación/.test(parseMail(mailFiles()[10]).subject));
+    check('Ya no quedan avisos pendientes', (await api('GET', '/api/admin/overview', { admin: true })).data.undeliveredEmails === 0);
+
     check('Log del servidor sin errores inesperados', !/Error (approving|rejecting|submitting)|Unhandled|TypeError/.test(serverLog));
   } catch (err) {
     check('Prueba completa sin excepciones', false, err.stack);

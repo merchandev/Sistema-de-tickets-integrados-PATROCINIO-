@@ -32,7 +32,9 @@ const {
   sendEventCampaignNotification,
   testMailConnections,
   mailDeliveryMode,
-  retryOrderEmail
+  retryOrderEmail,
+  undeliveredOrderEmails,
+  retryUndeliveredOrderEmails
 } = require('./mailer');
 
 const PORT = parseInt(process.env.PORT || '4000', 10);
@@ -427,7 +429,8 @@ app.get('/api/admin/overview', (_req, res) => {
     tickets: ticketsState.tickets,
     orders,
     emailLogs,
-    campaigns
+    campaigns,
+    undeliveredEmails: undeliveredOrderEmails().length
   });
 });
 
@@ -676,6 +679,26 @@ app.post('/api/admin/mail/test', async (req, res) => {
     return res.json({ ok: result.smtp.ok && result.imap.ok !== false && (!result.sent || result.sent.ok), ...result });
   } catch (err) {
     return res.status(500).json({ ok: false, message: err.message });
+  }
+});
+
+// Resends every buyer notice that never left (saved while the mail server was Mailpit or failing).
+app.post('/api/admin/mail/retry-pending', async (req, res) => {
+  if (!req.is('application/json')) return res.status(415).json({ ok: false, message: 'Se requiere una solicitud JSON.' });
+  if (mailDeliveryMode() !== 'smtp') return res.status(409).json({ ok: false, message: 'Configura y prueba un servidor SMTP real antes de reenviar.' });
+  try {
+    const { sent, failed } = await retryUndeliveredOrderEmails();
+    return res.json({
+      ok: failed.length === 0,
+      sent,
+      failed: failed.length,
+      message: failed.length
+        ? `Se reenviaron ${sent} aviso(s); ${failed.length} no se pudieron enviar. Revisa el registro de correos.`
+        : `Se reenviaron ${sent} aviso(s) a los compradores.`
+    });
+  } catch (err) {
+    console.error('Error retrying pending emails:', err.message);
+    return res.status(500).json({ ok: false, message: 'No se pudieron reenviar los avisos.' });
   }
 });
 
