@@ -43,111 +43,113 @@ function createTicketDocument(order, config, qrBuffer, demo) {
   const sourceName = salesSources[order.source_web];
   const eventTitle = config.event_title || 'Encuentro por una causa';
   const doc = new PDFDocument({
-    // PDF coordinates are points. At 96 dpi this page renders to 1920 × 1080 px.
-    size: [1440, 810], margin: 0,
+    // PDF coordinates are points. At 96 dpi this page renders to 1080 × 1920 px.
+    size: [810, 1440], margin: 0,
     info: {
       Title: demo ? 'Entrada de demostración' : `Entrada #${order.ticket_number} - ${eventTitle}`,
       Author: 'Iluminando Caminos y Hablemos de Marketing'
     }
   });
-  // Draw on a 960 × 540 grid so the layout and typography share one scale.
+  // Draw on a 540 × 960 grid so the layout and typography share one scale.
   doc.scale(1.5);
   const paper = '#eeebf0';
   const cream = '#faf7f1';
   const light = '#fff9f3';
   const lavender = '#e4d5eb';
   const lime = '#def45b';
-  const perforation = 673;
-  const stubX = 699;
-  const stubWidth = 204;
+  const perforation = 302;
+  const stubX = 255;
+  const stubWidth = 225;
+  const qrX = 54;
+  const qrY = 59;
+  const qrSize = 178;
 
   const label = (text, x, y, color = muted) => {
-    doc.font('Helvetica-Bold').fontSize(10).fillColor(color)
+    doc.font('Helvetica-Bold').fontSize(11).fillColor(color)
       .text(text, x, y, { lineBreak: false, characterSpacing: 0.7 });
   };
-  const value = (text, x, y, width, height, size = 13, color = ink) => {
+  const value = (text, x, y, width, height, size = 14, color = ink) => {
     doc.font('Helvetica').fillColor(color);
     fitText(doc, text, x, y, width, height, size);
   };
 
-  doc.rect(0, 0, 960, 540).fill(paper);
-  doc.roundedRect(30, 39, 900, 466, 19).fill('#dbd4df');
-  doc.save().roundedRect(30, 34, 900, 466, 19).clip();
+  doc.rect(0, 0, 540, 960).fill(paper);
+  doc.roundedRect(30, 39, 480, 882, 19).fill('#dbd4df');
+  doc.save().roundedRect(30, 34, 480, 882, 19).clip();
 
-  const background = doc.linearGradient(30, 34, 673, 480)
+  const background = doc.linearGradient(30, perforation, 510, 916)
     .stop(0, '#5c1830')
     .stop(0.56, '#45194f')
     .stop(1, '#29225e');
-  doc.rect(30, 34, 900, 466).fill(background);
+  doc.rect(30, perforation, 480, 916 - perforation).fill(background);
   doc.save().strokeOpacity(0.24).lineWidth(1.1);
-  doc.moveTo(370, 34).bezierCurveTo(462, 131, 576, 44, 674, 122).stroke('#e094cb');
-  doc.moveTo(404, 34).bezierCurveTo(505, 108, 576, 19, 674, 102).stroke('#e094cb');
-  doc.moveTo(457, 34).bezierCurveTo(530, 77, 609, 8, 674, 74).stroke('#e094cb');
+  doc.moveTo(290, perforation).bezierCurveTo(364, 391, 448, 319, 510, 404).stroke('#e094cb');
+  doc.moveTo(325, perforation).bezierCurveTo(388, 372, 464, 304, 510, 379).stroke('#e094cb');
+  doc.moveTo(364, perforation).bezierCurveTo(426, 351, 476, 295, 510, 354).stroke('#e094cb');
   doc.restore();
-  doc.rect(perforation, 34, 257, 466).fill(cream);
+  doc.rect(30, 34, 480, perforation - 34).fill(cream);
   doc.restore();
 
   doc.save().lineWidth(1.2).dash(3, { space: 5 })
-    .moveTo(perforation + 1, 49).lineTo(perforation + 1, 485).stroke('#a490a6').restore();
-  doc.circle(perforation, 34, 12).fill(paper);
-  doc.circle(perforation, 500, 12).fill(paper);
+    .moveTo(45, perforation - 1).lineTo(495, perforation - 1).stroke('#a490a6').restore();
+  doc.circle(30, perforation, 12).fill(paper);
+  doc.circle(510, perforation, 12).fill(paper);
 
-  doc.image(path.join(brandAssets, 'iluminando-caminos.png'), 58, 55, {
-    fit: [64, 62], align: 'center', valign: 'center'
-  });
-  doc.moveTo(134, 66).lineTo(134, 107).lineWidth(0.7).stroke('#b488ae');
-  doc.image(path.join(brandAssets, 'hablemos-de-marketing-blanco.png'), 147, 57, {
-    fit: [72, 58], align: 'center', valign: 'center'
-  });
-
-  label('CONFERENCIAS + CONCIERTO', 60, 136, lime);
-  doc.font('Helvetica-Bold').fillColor(light);
-  fitText(doc, eventTitle, 57, 157, 584, 107, 44, 25);
-
-  doc.moveTo(60, 270).lineTo(641, 270).lineWidth(0.8).stroke('#896887');
-  label('FECHA E INGRESO', 60, 281, lavender);
-  value(`${formatDate(config.event_date)} · ${formatTime(config.event_entry_time || '15:30')}`, 60, 297, 300, 23, 14, light);
-  value(config.event_location || 'Lugar por definir', 60, 321, 300, 26, 12, light);
-  label('HORARIOS', 376, 281, lavender);
-  value(`Conferencias · ${formatTime(config.conference_start || '16:00')} a ${formatTime(config.conference_end || '19:00')}`, 376, 297, 265, 20, 13, light);
-  value(`Concierto · ${formatTime(config.concert_start || '19:00')}`, 376, 321, 265, 20, 13, light);
-
-  doc.save().fillOpacity(0.14).roundedRect(59, 354, 582, 115, 11).fill('#fff').restore();
-  label('TITULAR', 74, 365, lavender);
-  doc.font('Helvetica-Bold').fillColor(light);
-  fitText(doc, order.buyer_name, 74, 381, 549, 37, 22, 11);
-  label('IDENTIDAD', 74, 421, lavender);
-  label('TELÉFONO', 206, 421, lavender);
-  label('CORREO', 342, 421, lavender);
-  value(order.buyer_cedula, 74, 437, 120, 24, 13, light);
-  value(order.buyer_phone, 206, 437, 124, 24, 13, light);
-  value(order.buyer_email, 342, 437, 281, 26, 12, light);
-  if (sourceName) value(`Página de origen: ${sourceName}`, 60, 480, 581, 15, 10, lavender);
-
-  label('ACCESO GENERAL', stubX, 63);
-  doc.font('Helvetica-Bold').fillColor('#45194f');
-  fitText(doc, `#${order.ticket_number}`, stubX - 2, 83, stubWidth, 65, 55, 34);
-  doc.moveTo(stubX, 152).lineTo(stubX + stubWidth, 152).lineWidth(0.8).stroke('#d7ccd6');
-
-  const qrSize = 174;
-  const qrX = stubX + (stubWidth - qrSize) / 2;
-  doc.roundedRect(qrX - 3, 163, qrSize + 6, qrSize + 6, 8).fill('#fff');
-  doc.image(qrBuffer, qrX, 166, { width: qrSize, height: qrSize });
-  doc.font('Helvetica-Bold').fontSize(13).fillColor('#45194f')
-    .text(demo ? 'DEMO / SIN VALIDEZ' : 'Escanea para ingresar', stubX, 355, { width: stubWidth, align: 'center' });
+  doc.roundedRect(qrX - 3, qrY - 3, qrSize + 6, qrSize + 6, 9).fill('#fff');
+  doc.image(qrBuffer, qrX, qrY, { width: qrSize, height: qrSize });
+  doc.font('Helvetica-Bold').fontSize(12).fillColor('#45194f')
+    .text(demo ? 'DEMO / SIN VALIDEZ' : 'Escanea para ingresar', qrX, 252, { width: qrSize, align: 'center' });
   doc.font('Helvetica').fontSize(10).fillColor(muted)
-    .text(demo ? 'QR de muestra' : 'Presenta también tu cédula.', stubX, 375, { width: stubWidth, align: 'center' });
-  doc.font('Courier').fillColor(ink);
-  fitText(doc, order.verification_token, stubX, 394, stubWidth, 25, 8, 7);
+    .text(demo ? 'QR de muestra' : 'Presenta también tu cédula.', qrX, 270, { width: qrSize, align: 'center' });
 
-  doc.moveTo(stubX, 426).lineTo(stubX + stubWidth, 426).lineWidth(0.8).stroke('#d7ccd6');
-  label(demo ? 'PAGO DE MUESTRA' : 'PAGO VERIFICADO', stubX, 440);
-  value(`Ref. ${demo ? '000000' : order.payment_reference}`, stubX, 454, stubWidth, 16, 11);
-  if (order.payment_bank) value(order.payment_bank, stubX, 471, stubWidth, 23, 10);
+  label('ACCESO GENERAL', stubX, 61);
+  doc.font('Helvetica-Bold').fillColor('#45194f');
+  fitText(doc, `#${order.ticket_number}`, stubX - 2, 84, stubWidth, 83, 67, 39);
+  doc.moveTo(stubX, 169).lineTo(stubX + stubWidth, 169).lineWidth(0.8).stroke('#d7ccd6');
+  label('CÓDIGO DE ENTRADA', stubX, 183);
+  doc.font('Courier').fillColor(ink);
+  fitText(doc, order.verification_token, stubX, 200, stubWidth, 26, 9, 7);
+
+  label(demo ? 'PAGO DE MUESTRA' : 'PAGO VERIFICADO', stubX, 231);
+  value(`Ref. ${demo ? '000000' : order.payment_reference}`, stubX, 248, stubWidth, 17, 11);
+  if (order.payment_bank) value(order.payment_bank, stubX, 267, stubWidth, 26, 10);
+
+  doc.image(path.join(brandAssets, 'iluminando-caminos.png'), 59, 325, {
+    fit: [67, 65], align: 'center', valign: 'center'
+  });
+  doc.moveTo(139, 335).lineTo(139, 380).lineWidth(0.7).stroke('#b488ae');
+  doc.image(path.join(brandAssets, 'hablemos-de-marketing-blanco.png'), 153, 327, {
+    fit: [76, 61], align: 'center', valign: 'center'
+  });
+
+  label('CONFERENCIAS + CONCIERTO', 60, 407, lime);
+  doc.font('Helvetica-Bold').fillColor(light);
+  fitText(doc, eventTitle, 58, 431, 422, 112, 36, 23);
+
+  doc.moveTo(60, 553).lineTo(480, 553).lineWidth(0.8).stroke('#896887');
+  label('FECHA E INGRESO', 60, 569, lavender);
+  value(`${formatDate(config.event_date)} · ${formatTime(config.event_entry_time || '15:30')}`, 60, 586, 420, 22, 15, light);
+  value(config.event_location || 'Lugar por definir', 60, 609, 420, 30, 14, light);
+
+  label('HORARIOS', 60, 645, lavender);
+  value(`Conferencias · ${formatTime(config.conference_start || '16:00')} a ${formatTime(config.conference_end || '19:00')}`, 60, 662, 248, 35, 13, light);
+  value(`Concierto · ${formatTime(config.concert_start || '19:00')}`, 320, 662, 160, 35, 13, light);
+
+  doc.save().fillOpacity(0.14).roundedRect(59, 704, 422, 175, 11).fill('#fff').restore();
+  label('TITULAR', 75, 720, lavender);
+  doc.font('Helvetica-Bold').fillColor(light);
+  fitText(doc, order.buyer_name, 75, 737, 390, 42, 24, 12);
+  label('IDENTIDAD', 75, 787, lavender);
+  label('TELÉFONO', 270, 787, lavender);
+  value(order.buyer_cedula, 75, 804, 175, 20, 14, light);
+  value(order.buyer_phone, 270, 804, 195, 20, 14, light);
+  label('CORREO', 75, 833, lavender);
+  value(order.buyer_email, 75, 850, 390, 24, 13, light);
+  if (sourceName) value(`Página de origen: ${sourceName}`, 60, 892, 420, 16, 11, lavender);
 
   const credit = 'Desarrollado por Espressivo Venezuela';
-  doc.font('Helvetica').fontSize(9).fillColor(muted);
-  doc.text(credit, 930 - doc.widthOfString(credit), 518, { lineBreak: false });
+  doc.font('Helvetica').fontSize(10).fillColor(muted);
+  doc.text(credit, 510 - doc.widthOfString(credit), 934, { lineBreak: false });
   return doc;
 }
 

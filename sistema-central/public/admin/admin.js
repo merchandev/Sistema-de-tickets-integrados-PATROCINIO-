@@ -1054,8 +1054,8 @@ async function updateTicketDemo() {
     loadingTask = pdfjs.getDocument({ url, standardFontDataUrl: '/admin/pdfjs/fonts/' });
     const pdf = await loadingTask.promise;
     const page = await pdf.getPage(1);
-    const pageWidth = page.getViewport({ scale: 1 }).width;
-    const viewport = page.getViewport({ scale: 1920 / pageWidth });
+    const pageSize = page.getViewport({ scale: 1 });
+    const viewport = page.getViewport({ scale: 1920 / Math.max(pageSize.width, pageSize.height) });
     const canvas = document.createElement('canvas');
     canvas.width = Math.ceil(viewport.width);
     canvas.height = Math.ceil(viewport.height);
