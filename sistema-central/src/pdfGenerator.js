@@ -107,7 +107,7 @@ function createTicketDocument(order, config, qrBuffer, demo) {
   doc.font('Helvetica').fontSize(10).fillColor(ink)
     .text(demo ? 'QR de muestra' : 'Presenta también tu cédula.', qrX, 270, { width: qrSize, align: 'center' });
 
-  label('ACCESO GENERAL', stubX, 61);
+  label('ACCESO A TODO EL EVENTO', stubX, 61);
   doc.font('Helvetica-Bold').fillColor(deepWine);
   fitText(doc, `#${order.ticket_number}`, stubX - 2, 84, stubWidth, 83, 67, 39);
   doc.save().strokeOpacity(0.5).moveTo(stubX, 169).lineTo(stubX + stubWidth, 169).lineWidth(0.8).stroke(wine).restore();

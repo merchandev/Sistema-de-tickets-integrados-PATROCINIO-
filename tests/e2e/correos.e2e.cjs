@@ -201,6 +201,9 @@ function parseMail(file) {
     check('Todos con versión HTML y texto', mails.every(m => m.alternative));
     check('Remitente «Sistema de envío Espressivo Venezuela»', mails.every(m => /^"?Sistema de envío Espressivo Venezuela"? <soporte@merchan\.dev>$/.test(m.from)), mails[0]?.from);
     check('Correo de la entrada nombra el número', /#210/.test(mails[2]?.raw.replace(/=\r\n/g, '') || ''));
+    check('Los correos de pago y confirmación explican el acceso a todo el evento', [1, 2, 3, 4].every(i =>
+      /acceso a todo el evento|acceder a todo el evento/.test(mails[i]?.raw.replace(/=\r\n/g, '') || '')
+    ));
     check('Remitente, Reply-To y Message-ID del dominio', mails.every(m => /soporte@merchan\.dev/.test(m.from) && /soporte@merchan\.dev/.test(m.replyTo) && /@merchan\.dev>$/.test(m.messageId)));
     check('Las entradas llevan el PDF adjunto', [mails[2], mails[4]].every(m => m?.pdfHeader === '%PDF-'));
     // The HTML part must escape the reason; the plain-text part shows it literally, as plain text should.

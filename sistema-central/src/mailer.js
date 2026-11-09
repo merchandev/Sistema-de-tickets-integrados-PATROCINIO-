@@ -277,7 +277,7 @@ async function sendPaymentSubmittedEmail(order) {
     title: 'Tu pago está en verificación',
     paragraphs: [
       `Hola ${escapeHtml(firstName(order))}, recibimos el reporte de tu pago${ticketText}.`,
-      'Cuando se confirme te enviaremos un correo con tu entrada en PDF y el código QR para el ingreso.'
+      'Cuando se confirme te enviaremos una sola entrada en PDF con un código QR para acceder a todo el evento, incluidas las conferencias y el concierto.'
     ],
     callout: callout(brand, `Estamos verificando la transacción con el banco. <strong>El proceso puede tardar hasta 24 horas.</strong>${order.ticket_number ? '' : ' Al aprobarse te asignaremos una entrada disponible.'}`),
     rows: paymentRows(order)
@@ -306,7 +306,8 @@ async function sendTicketEmail(order, pdfFullPath, pdfRelativeUrl) {
     title: 'Muchas gracias por su apoyo',
     paragraphs: [
       `Hola ${escapeHtml(firstName(order))}, verificamos tu pago y la entrada <strong>#${escapeHtml(order.ticket_number)}</strong> quedó confirmada a tu nombre para <strong>${escapeHtml(cfg.event_title)}</strong>. Adjuntamos tu entrada en PDF.`,
-      'Preséntala en tu teléfono o impresa junto con tu cédula de identidad. En la puerta escanearemos su código QR; es personal y vale para un solo ingreso a cada parte del evento.'
+      'Tu entrada incluye acceso a todo el evento, desde las conferencias hasta el concierto.',
+      'Presenta el código QR de tu entrada en el teléfono o impreso, junto con tu cédula de identidad.'
     ],
     callout: callout(brand, `Entrada <strong>#${escapeHtml(order.ticket_number)}</strong> · ${escapeHtml(order.buyer_name)} · C.I. ${escapeHtml(order.buyer_cedula)}`),
     rows: eventRows(cfg)
@@ -373,7 +374,7 @@ async function sendEventCampaignNotification(campaignKey, triggeredBy = 'MANUAL_
     REMINDER_2_DAYS: {
       subjectPrefix: 'Faltan 2 días',
       headline: 'Faltan solo 2 días para el encuentro',
-      intro: 'Tu entrada incluye acceso completo a la conferencia y al concierto.'
+      intro: 'Tu entrada incluye acceso a todo el evento, desde las conferencias hasta el concierto.'
     },
     REMINDER_1_DAY: {
       subjectPrefix: 'Mañana nos vemos',

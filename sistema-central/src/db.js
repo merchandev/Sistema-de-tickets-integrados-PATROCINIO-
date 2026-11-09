@@ -117,6 +117,8 @@ const EVENT_PAYMENT_METHODS = JSON.stringify({
     rif_cedula: '28298508'
   }
 });
+const fullEventCondition = '2. Una sola entrada da acceso a todo el evento, incluidas las conferencias (4:00 PM a 7:00 PM) y el concierto (a partir de las 7:00 PM).';
+
 // Seed default settings if not present
 const defaultSettings = {
   event_title: 'Encuentro por una Causa: Conferencias & Concierto Benéfico',
@@ -149,20 +151,20 @@ const defaultSettings = {
     },
     {
       time: '4:00 PM - 7:00 PM',
-      phase: 'Parte 1: Ciclo de Conferencias',
+      phase: 'Ciclo de Conferencias',
       title: 'Conferencias con Propósito Social',
       description: 'Bloque completo de ponencias e invitados especiales. Comienza a las 4:00 PM y culmina a las 7:00 PM.'
     },
     {
       time: '7:00 PM en adelante',
-      phase: 'Parte 2: Concierto en Vivo',
+      phase: 'Concierto en Vivo',
       title: 'Gran Concierto Benéfico',
-      description: 'Inicia a partir de las 7:00 PM (hora de finalización abierta). Todas las entradas incluyen acceso a ambas partes del evento.'
+      description: 'Inicia a partir de las 7:00 PM (hora de finalización abierta). Una sola entrada incluye las conferencias y el concierto.'
     }
   ]),
   event_conditions: [
     '1. La entrada tiene un valor único de $5.00 USD (calculados en Bolívares a la tasa oficial del BCV en tiempo real al momento del pago).',
-    '2. Todas las personas que adquieran su entrada tienen acceso completo a las dos partes del evento: las Conferencias (4:00 PM a 7:00 PM) y el Concierto (a partir de las 7:00 PM).',
+    fullEventCondition,
     '3. Es obligatorio presentar el PDF de la entrada con su código QR único y su Cédula de Identidad laminada al ingresar.',
     '4. Los datos suministrados en el pago (Nombre, Apellido, Cédula, Teléfono y Referencia) son verificados por la administración para garantizar que quien realizó el pago sea quien reciba la entrada.'
   ].join('\n'),
@@ -196,6 +198,21 @@ db.exec('BEGIN IMMEDIATE TRANSACTION');
 try {
   for (const [k, v] of Object.entries(defaultSettings)) {
     insertSettingStmt.run(k, String(v));
+  }
+
+  // Update the old default wording without replacing schedules or conditions edited in the panel.
+  const replaceSettingText = db.prepare(`
+    UPDATE settings SET value = replace(value, ?, ?), updated_at = datetime('now')
+    WHERE key = ? AND instr(value, ?) > 0
+  `);
+  const legacyCondition = '2. Todas las personas que adquieran su entrada tienen acceso completo a las dos partes del evento: las Conferencias (4:00 PM a 7:00 PM) y el Concierto (a partir de las 7:00 PM).';
+  replaceSettingText.run(legacyCondition, fullEventCondition, 'event_conditions', legacyCondition);
+  for (const [before, after] of [
+    ['Parte 1: Ciclo de Conferencias', 'Ciclo de Conferencias'],
+    ['Parte 2: Concierto en Vivo', 'Concierto en Vivo'],
+    ['Todas las entradas incluyen acceso a ambas partes del evento.', 'Una sola entrada incluye las conferencias y el concierto.']
+  ]) {
+    replaceSettingText.run(before, after, 'event_schedule_json', before);
   }
 
   // Seed tickets 001 to 250

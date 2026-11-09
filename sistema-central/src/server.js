@@ -562,7 +562,7 @@ app.get('/api/admin/verify-qr/:rawToken', (req, res) => {
 });
 
 /**
- * Check-in attendee at the door (Parte 1: Conferencias 4PM-7PM / Parte 2: Concierto 7PM+)
+ * Record attendance for an activity using the full-event ticket.
  */
 app.post('/api/admin/verify-qr/:rawToken/checkin', (req, res) => {
   try {
@@ -583,7 +583,7 @@ app.post('/api/admin/verify-qr/:rawToken/checkin', (req, res) => {
         return res.status(409).json({
           ok: false,
           alreadyCheckedIn: true,
-          message: `⚠️ Atención: Esta entrada (#${order.ticket_number}) YA fue ingresada al Concierto a las ${order.checked_in_concert_at}.`,
+          message: `La asistencia al concierto para la entrada #${order.ticket_number} ya se registró a las ${order.checked_in_concert_at}.`,
           order
         });
       }
@@ -595,7 +595,7 @@ app.post('/api/admin/verify-qr/:rawToken/checkin', (req, res) => {
         return res.status(409).json({
           ok: false,
           alreadyCheckedIn: true,
-          message: `⚠️ Atención: Esta entrada (#${order.ticket_number}) YA fue ingresada a las Conferencias a las ${order.checked_in_conference_at}.`,
+          message: `La asistencia a conferencias para la entrada #${order.ticket_number} ya se registró a las ${order.checked_in_conference_at}.`,
           order
         });
       }
@@ -609,7 +609,7 @@ app.post('/api/admin/verify-qr/:rawToken/checkin', (req, res) => {
 
     return res.json({
       ok: true,
-      message: `✅ Ingreso registrado exitosamente para ${updated.buyer_name} (Entrada #${updated.ticket_number}).`,
+      message: `Asistencia registrada para ${updated.buyer_name} (entrada #${updated.ticket_number}).`,
       order: updated
     });
   } catch (err) {
