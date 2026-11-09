@@ -435,22 +435,18 @@ a {
   align-items: center;
   gap: 11px;
 }
-.source-monogram {
-  width: 38px;
-  height: 38px;
-  display: grid;
-  place-items: center;
-  background: #681b2a;
-  color: #f6e6cd;
-  font-size: 14px;
-  font-weight: 750;
-  border-radius: 8px;
+.source-logo {
+  display: block;
+  width: 64px;
+  height: 56px;
+  padding: 6px;
+  object-fit: contain;
+  background: var(--wine);
+  border-radius: 9px;
   flex-shrink: 0;
 }
-.source-marketing .source-monogram {
-  background: #5b21d6;
-  color: #c6fc46;
-  font-size: 11px;
+.source-marketing .source-logo {
+  background: #160d27;
 }
 .source-card h3 {
   font-size: 13px;
