@@ -2,9 +2,11 @@
 
 - Iluminando Caminos: `https://iluminandocaminos.com`
 - Hablemos de Marketing: `https://hablemosdemarketingmaturin.com`
-- Administrador: `https://iluminandocaminos.com/admin/`
+- Administrador: `https://hablemosdemarketingmaturin.com/admin/`
 
-Los dominios se sirven con el Traefik existente. El dashboard, su API, los soportes/PDF y la verificación QR se dirigen al central mediante rutas con prioridad 100; la portada y compra de Iluminando Caminos se dirigen a Web 1 con prioridad 10. Esto permite compartir el primer dominio sin crear un subdominio DNS adicional.
+Los dominios se sirven con el Traefik existente. En `hablemosdemarketingmaturin.com`, el dashboard, su API, los soportes/PDF y la verificación QR se dirigen al central mediante rutas con prioridad 100; el resto del dominio (portada, compra y blog) sigue en Web 2 con prioridad 10. Así se comparte el dominio sin crear un subdominio DNS adicional.
+
+Hasta el 9 de noviembre de 2026 el dashboard estaba en `iluminandocaminos.com/admin/`. `DOMAIN_ADMIN_LEGACY` redirige las rutas `/admin`, `/api/admin`, `/storage` y `/verify` de ese dominio al nuevo, de modo que los QR de las entradas ya emitidas siguen funcionando. La portada y la compra de Iluminando Caminos no cambian.
 
 ## Estado de las compras
 
@@ -30,7 +32,7 @@ El correo «Estamos verificando tu pago» sale en segundo plano, así que el com
 
 ## Acceso al panel
 
-El panel es uno solo para las dos webs: `https://iluminandocaminos.com/admin/`. Sin sesión, cualquier ruta del panel (incluidos los enlaces de los QR) lleva a `/admin/login` y, tras iniciar sesión, vuelve a donde iba. La sesión dura 12 horas, se guarda en SQLite y sobrevive a reinicios; ocho intentos fallidos desde la misma IP bloquean el acceso 15 minutos.
+El panel es uno solo para las dos webs: `https://hablemosdemarketingmaturin.com/admin/`. Sin sesión, cualquier ruta del panel (incluidos los enlaces de los QR) lleva a `/admin/login` y, tras iniciar sesión, vuelve a donde iba. La sesión dura 12 horas, se guarda en SQLite y sobrevive a reinicios; ocho intentos fallidos desde la misma IP bloquean el acceso 15 minutos.
 
 La primera vez se entra con `ADMIN_USER` / `ADMIN_PASSWORD` de `.env.docker`. Desde el menú de la cuenta (avatar arriba a la derecha) se cambian usuario y contraseña: la contraseña se guarda con scrypt, la cuenta guardada reemplaza a la de `.env.docker` y se cierran las demás sesiones. Los scripts de verificación pueden seguir usando credenciales HTTP Basic.
 
@@ -41,7 +43,8 @@ En `/docker/socials-entradas/.env.domains`:
 ```dotenv
 DOMAIN_WEB1=iluminandocaminos.com
 DOMAIN_WEB2=hablemosdemarketingmaturin.com
-DOMAIN_ADMIN=iluminandocaminos.com
+DOMAIN_ADMIN=hablemosdemarketingmaturin.com
+DOMAIN_ADMIN_LEGACY=iluminandocaminos.com
 SALES_ENABLED=false
 ```
 

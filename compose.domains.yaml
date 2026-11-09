@@ -12,6 +12,17 @@ services:
       - 'traefik.http.routers.socials-admin.entrypoints=websecure'
       - 'traefik.http.routers.socials-admin.tls.certresolver=letsencrypt'
       - 'traefik.http.services.socials-admin.loadbalancer.server.port=4000'
+      # Previous dashboard host (optional): its /admin, /verify and /storage links, including the QR
+      # codes on tickets already issued, are redirected to DOMAIN_ADMIN. Never set it equal to DOMAIN_ADMIN.
+      - 'traefik.http.routers.socials-admin-legacy.rule=Host(`${DOMAIN_ADMIN_LEGACY:-admin-legacy.invalid}`) && (PathPrefix(`/admin`) || PathPrefix(`/api/admin`) || PathPrefix(`/storage`) || PathPrefix(`/verify`))'
+      - 'traefik.http.routers.socials-admin-legacy.priority=100'
+      - 'traefik.http.routers.socials-admin-legacy.middlewares=socials-admin-moved'
+      - 'traefik.http.routers.socials-admin-legacy.service=socials-admin'
+      - 'traefik.http.routers.socials-admin-legacy.entrypoints=websecure'
+      - 'traefik.http.routers.socials-admin-legacy.tls.certresolver=letsencrypt'
+      - 'traefik.http.middlewares.socials-admin-moved.redirectregex.regex=^https?://[^/]+/(.*)'
+      - 'traefik.http.middlewares.socials-admin-moved.redirectregex.replacement=https://${DOMAIN_ADMIN}/$${1}'
+      - 'traefik.http.middlewares.socials-admin-moved.redirectregex.permanent=false'
   pagina-web-1:
     labels:
       - 'traefik.enable=true'

@@ -1,6 +1,6 @@
 # Blog de Hablemos de Marketing
 
-En el administrador compartido (`https://iluminandocaminos.com/admin/`), abrir **Blog · Marketing**. La web pública está en `https://hablemosdemarketingmaturin.com/blog`.
+En el administrador compartido (`https://hablemosdemarketingmaturin.com/admin/`), abrir **Blog · Marketing**. La web pública está en `https://hablemosdemarketingmaturin.com/blog`.
 
 ## Publicar un artículo
 
