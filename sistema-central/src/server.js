@@ -143,6 +143,11 @@ function requireSalesOpen(_req, res, next) {
   return next();
 }
 
+// Header image of the buyer emails; public so mail clients can load it from either site
+app.get('/api/public/email/cabecera.jpg', (_req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'public', 'email', 'cabecera.jpg'), { maxAge: '30d' });
+});
+
 app.get('/api/public/state', (req, res) => {
   const config = getPublicConfig();
   const ticketState = getAllTicketsPublic(req.headers['x-session-id']);

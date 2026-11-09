@@ -194,6 +194,9 @@ const BRANDS = {
   'pagina-web-2': { name: 'Hablemos de Marketing', site: 'https://hablemosdemarketingmaturin.com', ink: '#130c24', accent: '#5b21d6', soft: '#f4f1ff', line: '#b8f500' }
 };
 const brandFor = (source) => BRANDS[source] || BRANDS['pagina-web-1'];
+// Both logos on the ticket gradient (scripts/generar-cabecera-correo.cjs), served publicly by this system
+const HEADER_IMAGE_URL = `${String(process.env.PUBLIC_BASE_URL || 'http://localhost:4000').replace(/\/$/, '')}/api/public/email/cabecera.jpg?v=1`;
+const brandLink = ({ site, accent, name }) => `<a href="${site}" style="color:${accent}">${escapeHtml(name)}</a>`;
 
 function formatDate(value) {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ''));
@@ -245,9 +248,8 @@ function layout(brand, { preheader, title, paragraphs, rows = [], callout = '' }
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${brand.soft};padding:28px 12px">
     <tr><td align="center">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden">
-        <tr><td style="background:${brand.ink};padding:20px 28px">
-          <div style="color:#ffffff;font-size:13px;font-weight:700;letter-spacing:.12em;text-transform:uppercase">${escapeHtml(brand.name)}</div>
-          <div style="width:44px;height:3px;background:${brand.line};margin-top:10px"></div>
+        <tr><td bgcolor="#220408" style="background:#220408;padding:0">
+          <img src="${HEADER_IMAGE_URL}" width="560" alt="Iluminando Caminos · Hablemos de Marketing" style="display:block;width:100%;max-width:560px;height:auto;border:0;color:#ffffff;font:700 14px Arial,Helvetica,sans-serif;text-align:center" />
         </td></tr>
         <tr><td style="padding:28px 28px 8px">
           <h1 style="margin:0 0 14px;font-size:22px;line-height:1.3;color:${brand.ink}">${escapeHtml(title)}</h1>
@@ -256,7 +258,7 @@ function layout(brand, { preheader, title, paragraphs, rows = [], callout = '' }
           ${rows.length ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:18px 0 20px;border-top:1px solid #e5e7eb;border-bottom:1px solid #e5e7eb">${rowsHtml}</table>` : ''}
         </td></tr>
         <tr><td style="padding:16px 28px 22px;background:#f9fafb;color:#6b7280;font-size:12px;line-height:1.6">
-          Sistema de entradas de <a href="${brand.site}" style="color:${brand.accent}">${escapeHtml(brand.name)}</a>. Si no hiciste esta compra, puedes ignorar este mensaje.
+          Sistema de entradas de ${brandLink(BRANDS['pagina-web-2'])} e ${brandLink(BRANDS['pagina-web-1'])}. Si no hiciste esta compra, puedes ignorar este mensaje.
         </td></tr>
       </table>
     </td></tr>

@@ -210,6 +210,13 @@ function parseMail(file) {
     const htmlPart = (mails[6]?.raw.split(/\r\n--[^\r\n]+\r\n/).find(p => /Content-Type: text\/html/.test(p)) || '')
       .replace(/=\r\n/g, '').replace(/=([0-9A-F]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
     check('Motivo del rechazo escapado en el HTML', /&lt;b&gt;Referencia&lt;\/b&gt;/.test(htmlPart) && !/<b>Referencia<\/b>/.test(htmlPart));
+    const header = await fetch(`${BASE}/api/public/email/cabecera.jpg?v=1`);
+    check('Cabecera de los correos pública', header.ok && header.headers.get('content-type') === 'image/jpeg');
+    const htmlOf = (m) => (m?.raw.split(/\r\n--[^\r\n]+\r\n/).find(p => /Content-Type: text\/html/.test(p)) || '')
+      .replace(/=\r\n/g, '').replace(/=([0-9A-F]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
+    const ticketHtml = Buffer.from(htmlOf(mails[2]), 'latin1').toString('utf8');
+    check('Correos con los dos logos en la cabecera', mails.every(m => htmlOf(m).includes(`${BASE}/api/public/email/cabecera.jpg`)));
+    check('Pie con los enlaces de las dos webs', /Sistema de entradas de <a href="https:\/\/hablemosdemarketingmaturin\.com"[^>]*>Hablemos de Marketing<\/a> e <a href="https:\/\/iluminandocaminos\.com"[^>]*>Iluminando Caminos<\/a>\./.test(ticketHtml));
     const statuses = (await api('GET', '/api/admin/overview', { admin: true })).data.emailLogs;
     check('Registro de correos: aceptados por SMTP', statuses.filter(l => l.status === 'SENT_SMTP').length === 8, `${statuses.filter(l => l.status === 'SENT_SMTP').length} SENT_SMTP, ${statuses.filter(l => l.status === 'ERROR').length} ERROR`);
     // --- 6. Mail server left on Mailpit (test mailbox): notices wait, then go out with "Reenviar ahora" ---
