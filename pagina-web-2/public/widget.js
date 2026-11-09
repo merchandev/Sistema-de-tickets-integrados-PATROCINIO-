@@ -1,8 +1,8 @@
 (function () {
   const CFG = window.ENTRADAS_CONFIG || {
     CENTRAL_API_URL: 'http://localhost:4000',
-    SOURCE_WEB: 'pagina-web-2',
-    SITE_LABEL: 'PÁGINA WEB 2'
+    SOURCE_WEB: 'pagina-web-1',
+    SITE_LABEL: 'PÁGINA WEB 1'
   };
 
   // Unique session ID per browser tab
@@ -17,6 +17,15 @@
   let myLockedTicket = null;
   let myLockRemainingSec = 0;
   let myQuote = null;
+  // Popup state: 'checkout' (ticket locked for this tab) or 'report' (standalone payment report)
+  let payMode = null;
+  let payDone = false;
+  // While the form is being sent the ticket leaves LOCKED (live update) before the response arrives.
+  let paySubmitting = false;
+
+  const $ = (id) => document.getElementById(id);
+  const dialog = $('pay-dialog');
+  const form = $('payment-form');
 
   // Dynamically load Socket.IO client from Central Server
   const script = document.createElement('script');
@@ -81,54 +90,50 @@
     if (!m) return d || '';
     return new Intl.DateTimeFormat('es-VE', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])));
   }
+  // 4455.53 -> "4.455,53", as bank apps in Venezuela show amounts
+  const fmtBs = (value) => new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(value || 0));
 
   function renderConfig() {
-    if (eventConfig.sales_enabled === false) showAlert("Venta de entradas proximamente. Puedes consultar el evento; aun no debes realizar pagos.", "info");
-
+    const salesClosed = eventConfig.sales_enabled === false;
+    if (salesClosed) showAlert("Venta de entradas proximamente. Puedes consultar el evento; aun no debes realizar pagos.", "info");
+    $('open-report').disabled = salesClosed;
 
     const usd = Number(eventConfig.ticket_price_usd || 5).toFixed(2);
-    const ves = Number(eventConfig.ticket_price_ves || 0).toFixed(2);
+    const ves = Number(eventConfig.ticket_price_ves || 0);
     const bcv = Number(eventConfig.bcv_rate || 0).toFixed(8);
 
-    document.getElementById('price-usd').textContent = `$${usd} USD`;
-    document.getElementById('price-ves').textContent = `Bs. ${ves}`;
-    document.getElementById('bcv-rate').textContent = `Bs. ${bcv}`;
-    document.getElementById('bcv-source').textContent = eventConfig.bcv_mode === 'manual' ? 'Tasa manual configurada por administracion' : `${eventConfig.bcv_source_label || 'Sin fuente'} | Fecha valor: ${eventConfig.bcv_value_date || '--'} | Estado: ${eventConfig.bcv_fetch_status || 'sin confirmar'} | Consulta: ${eventConfig.bcv_last_updated || 'Sin confirmar'}`;
+    $('price-usd').textContent = `$${usd} USD`;
+    $('price-ves').textContent = `Bs. ${ves.toFixed(2)}`;
+    $('bcv-rate').textContent = `Bs. ${bcv}`;
+    $('bcv-source').textContent = eventConfig.bcv_mode === 'manual' ? 'Tasa manual configurada por administracion' : `${eventConfig.bcv_source_label || 'Sin fuente'} | Fecha valor: ${eventConfig.bcv_value_date || '--'} | Estado: ${eventConfig.bcv_fetch_status || 'sin confirmar'} | Consulta: ${eventConfig.bcv_last_updated || 'Sin confirmar'}`;
 
-    document.getElementById('event-date-time').textContent = `${fmtDate(eventConfig.event_date)} | Ingreso: ${fmtTime(eventConfig.event_entry_time || '15:30')}`;
-    document.getElementById('event-conf-hours').textContent = `${fmtTime(eventConfig.conference_start || '16:00')} a ${fmtTime(eventConfig.conference_end || '19:00')}`;
-    document.getElementById('event-concert-hours').textContent = /^\d{1,2}:\d{2}$/.test(eventConfig.concert_end || '') ? `${fmtTime(eventConfig.concert_start)} a ${fmtTime(eventConfig.concert_end)}` : `Desde las ${fmtTime(eventConfig.concert_start || '19:00')} | Cierre abierto`;
+    $('event-date-time').textContent = `${fmtDate(eventConfig.event_date)} | Ingreso: ${fmtTime(eventConfig.event_entry_time || '15:30')}`;
+    $('event-conf-hours').textContent = `${fmtTime(eventConfig.conference_start || '16:00')} a ${fmtTime(eventConfig.conference_end || '19:00')}`;
+    $('event-concert-hours').textContent = /^\d{1,2}:\d{2}$/.test(eventConfig.concert_end || '') ? `${fmtTime(eventConfig.concert_start)} a ${fmtTime(eventConfig.concert_end)}` : `Desde las ${fmtTime(eventConfig.concert_start || '19:00')} | Cierre abierto`;
 
-    document.getElementById('checkout-amount-ves').textContent = `Bs. ${myQuote ? Number(myQuote.amount_ves).toFixed(2) : ves}`;
-    document.getElementById('checkout-amount-usd').textContent = myQuote ? `Equivalente a ${myQuote.amount_usd} USD (Tasa BCV: Bs. ${myQuote.bcv_rate})` : `Equivalente a ${usd} USD (Tasa BCV: Bs. ${bcv})`;
+    // Amount of the popup: the quote frozen when the ticket was locked, or the current price
+    const amountVes = payMode === 'checkout' && myQuote ? Number(myQuote.amount_ves) : ves;
+    const amountUsd = payMode === 'checkout' && myQuote ? Number(myQuote.amount_usd).toFixed(2) : usd;
+    const rate = payMode === 'checkout' && myQuote ? Number(myQuote.bcv_rate).toFixed(4) : Number(eventConfig.bcv_rate || 0).toFixed(4);
+    $('checkout-amount-ves').textContent = `Bs. ${fmtBs(amountVes)}`;
+    $('copy-amount').dataset.copy = fmtBs(amountVes).replace(/\./g, '');
+    $('checkout-amount-usd').textContent = `Equivale a $${amountUsd} USD · tasa BCV Bs. ${rate}`;
 
-    // Payment methods
-    const pm = eventConfig.payment_methods || {};
-    let pmHtml = '';
-    if (pm.pago_movil) {
-      pmHtml += `
-        <div class="bank">
-          <div class="t">Pago Móvil</div>
-          <div><strong>Banco:</strong> ${escapeHtml(pm.pago_movil.banco)}</div>
-          <div><strong>Teléfono:</strong> ${escapeHtml(pm.pago_movil.telefono)}</div>
-          <div><strong>RIF/C.I:</strong> ${escapeHtml(pm.pago_movil.rif_cedula)}</div>
-        </div>
-      `;
-    }
-    if (pm.transferencia) {
-      pmHtml += `
-        <div class="bank">
-          <div class="t">Transferencia Bancaria</div>
-          <div><strong>Banco:</strong> ${escapeHtml(pm.transferencia.banco)}</div>
-          <div><strong>Cuenta:</strong> ${escapeHtml(pm.transferencia.cuenta)}</div>
-          <div><strong>RIF/C.I:</strong> ${escapeHtml(pm.transferencia.rif_cedula)}</div>
-        </div>
-      `;
-    }
-    document.getElementById('bank-details-box').innerHTML = pmHtml;
+    // Pago Móvil account (Bancamiga), each value with a copy button
+    const pm = (eventConfig.payment_methods || {}).pago_movil;
+    $('bank-details-box').innerHTML = pm ? [
+      ['Banco', pm.banco, pm.banco],
+      ['Teléfono', pm.telefono, String(pm.telefono || '').replace(/\D/g, '')],
+      ['Cédula', pm.rif_cedula, String(pm.rif_cedula || '').replace(/[^\dA-Za-z]/g, '')]
+    ].filter(([, shown]) => shown).map(([label, shown, copy]) => `
+      <div class="pay-row">
+        <dt>${label}</dt>
+        <dd>${escapeHtml(shown)}</dd>
+        <button type="button" class="pay-copy" data-copy="${escapeHtml(copy)}" aria-label="Copiar ${label.toLowerCase()}">Copiar</button>
+      </div>`).join('') : '<p class="pay-fine">Los datos de pago estarán disponibles pronto.</p>';
 
     // Schedule
-    const schedList = document.getElementById('schedule-list');
+    const schedList = $('schedule-list');
     schedList.innerHTML = (eventConfig.event_schedule || []).map(item => `
       <div class="sched-item">
         <div class="t">${escapeHtml(item.time)} — ${escapeHtml(item.title)}</div>
@@ -136,34 +141,32 @@
       </div>
     `).join('');
 
-    document.getElementById('conditions-box').textContent = eventConfig.event_conditions || '';
-    document.getElementById('terms-box').textContent = eventConfig.terms_and_conditions || '';
+    $('conditions-box').textContent = eventConfig.event_conditions || '';
+    $('terms-box').textContent = eventConfig.terms_and_conditions || '';
   }
 
   function syncMyLockFromServer() {
     const mine = tickets.find(t => t.status === 'LOCKED' && t.locked_by_session === sessionId);
-    const checkoutSec = document.getElementById('checkout-section');
 
     if (mine) {
       myLockedTicket = mine.ticket_number;
       myQuote = mine.pricing || myQuote;
-      renderConfig();
       myLockRemainingSec = mine.remaining_seconds || 180;
-      document.getElementById('selected-ticket-label').textContent = mine.ticket_number;
-      checkoutSec.classList.remove('hidden');
+      // Reopen the popup after a reload while the reservation is still running
+      if (payMode !== 'checkout') openPayDialog('checkout');
+      renderConfig();
       updateTimerDisplay();
-    } else {
-      if (myLockedTicket) {
-        // Had a lock that expired or completed
-        myLockedTicket = null;
-        myLockRemainingSec = 0;
-        checkoutSec.classList.add('hidden');
-      }
+    } else if (myLockedTicket) {
+      // The reservation ended (expired or released from another tab)
+      const lost = myLockedTicket;
+      myLockedTicket = null;
+      myLockRemainingSec = 0;
+      if (payMode === 'checkout' && !payDone && !paySubmitting) switchToReportAfterExpiry(lost);
     }
   }
 
   function renderTicketsGrid() {
-    const grid = document.getElementById('tickets-grid');
+    const grid = $('tickets-grid');
     if (!grid) return;
 
     grid.innerHTML = tickets.map(t => {
@@ -219,87 +222,185 @@
 
       myLockedTicket = ticketNumber;
       myQuote = data.pricing;
-      renderConfig();
       myLockRemainingSec = Math.max(0, Math.ceil((data.ticket.locked_until - data.serverTime) / 1000));
-      document.getElementById('selected-ticket-label').textContent = ticketNumber;
-      document.getElementById('checkout-section').classList.remove('hidden');
+      openPayDialog('checkout');
       updateTimerDisplay();
-      showAlert(`Entrada #${ticketNumber} bloqueada para ti por 3 minutos. Completa los datos de tu pago abajo.`, 'success');
-      document.getElementById('checkout-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
     } catch (err) {
       showAlert('Error de conexión al intentar reservar la entrada.', 'error');
     }
   };
 
-  window.cancelCurrentSelection = async function () {
+  async function releaseMyTicket() {
     if (!myLockedTicket) return;
     const num = myLockedTicket;
+    myLockedTicket = null;
+    myLockRemainingSec = 0;
     try {
       await fetch(`${CFG.CENTRAL_API_URL}/api/public/tickets/unlock`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ticket_number: num, session_id: sessionId })
       });
-      myLockedTicket = null;
-      myLockRemainingSec = 0;
-      document.getElementById('checkout-section').classList.add('hidden');
       showAlert(`Liberaste la entrada #${num}. Ya está disponible nuevamente.`, 'info');
     } catch (_) {}
-  };
+  }
 
-  window.submitPaymentForm = async function (e) {
-    e.preventDefault();
-    if (!myLockedTicket) {
-      showAlert('Primero debes seleccionar una entrada disponible.', 'warning');
+  // ---------------------------------------------------------------------------
+  // Popup: Pago Móvil data + payment form
+  // ---------------------------------------------------------------------------
+
+  function openPayDialog(mode, notice = '') {
+    payMode = mode;
+    payDone = false;
+    const isReport = mode === 'report';
+    dialog.dataset.mode = mode;
+    $('pay-kicker').textContent = isReport ? 'Reporte de pago' : 'Entrada reservada para ti';
+    $('pay-title').textContent = isReport ? '¿Ya pagaste? Repórtalo aquí' : `Entrada #${myLockedTicket}`;
+    $('pay-timer-box').hidden = isReport;
+    $('pay-notice').hidden = !notice;
+    $('pay-notice').textContent = notice;
+    $('pay-step-pay').textContent = isReport ? 'Datos de la cuenta' : 'Paga por Pago Móvil';
+    form.querySelectorAll('.report-only').forEach(el => { el.hidden = !isReport; });
+    $('btn-submit-order').textContent = isReport ? 'Enviar reporte de pago' : 'Enviar pago para verificación';
+    $('pay-content').hidden = false;
+    $('pay-done').hidden = true;
+    hideFormError();
+    renderConfig();
+    if (!dialog.open) dialog.showModal();
+    $('pay-dialog').scrollTop = 0;
+  }
+
+  // The 3-minute reservation ended before the form was sent: keep what was typed and offer the report.
+  function switchToReportAfterExpiry(ticketNumber) {
+    const which = ticketNumber ? ` de la entrada #${ticketNumber}` : '';
+    openPayDialog('report', `Tu reserva${which} expiró. Si ya hiciste el pago, envía este reporte y te asignaremos una entrada disponible.`);
+    $('requested_ticket').value = ticketNumber || '';
+  }
+
+  async function closePayDialog() {
+    if (payMode === 'checkout' && !payDone && myLockedTicket) {
+      if (!window.confirm(`Si cierras, la entrada #${myLockedTicket} se liberará para otra persona. ¿Quieres cerrar?`)) return;
+      await releaseMyTicket();
+    }
+    payMode = null;
+    if (dialog.open) dialog.close();
+  }
+
+  $('pay-close').addEventListener('click', closePayDialog);
+  $('pay-done-close').addEventListener('click', () => { payMode = null; dialog.close(); });
+  dialog.addEventListener('cancel', (event) => { event.preventDefault(); closePayDialog(); });
+  $('open-report').addEventListener('click', () => {
+    form.reset();
+    openPayDialog('report');
+  });
+
+  // Copy buttons of the account data and the amount
+  dialog.addEventListener('click', async (event) => {
+    const button = event.target.closest('[data-copy]');
+    if (!button) return;
+    const value = button.dataset.copy;
+    try {
+      await navigator.clipboard.writeText(value);
+    } catch (_) {
+      const temp = document.createElement('textarea');
+      temp.value = value;
+      document.body.appendChild(temp);
+      temp.select();
+      document.execCommand('copy');
+      temp.remove();
+    }
+    const label = button.textContent;
+    button.textContent = 'Copiado';
+    button.classList.add('is-copied');
+    setTimeout(() => { button.textContent = label; button.classList.remove('is-copied'); }, 1600);
+  });
+
+  function showFormError(message, field) {
+    const box = $('pay-error');
+    box.textContent = message;
+    box.hidden = false;
+    form.querySelectorAll('[aria-invalid="true"]').forEach(el => el.removeAttribute('aria-invalid'));
+    const input = field && form.elements[field];
+    if (input) {
+      input.setAttribute('aria-invalid', 'true');
+      input.focus();
+    }
+  }
+  function hideFormError() {
+    $('pay-error').hidden = true;
+    form.querySelectorAll('[aria-invalid="true"]').forEach(el => el.removeAttribute('aria-invalid'));
+  }
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    hideFormError();
+    if (!form.reportValidity()) return;
+    const isReport = payMode === 'report';
+    if (!isReport && !myLockedTicket) {
+      switchToReportAfterExpiry('');
       return;
     }
 
-    const btn = document.getElementById('btn-submit-order');
+    const btn = $('btn-submit-order');
+    const idleText = btn.textContent;
+    const ticketNumber = myLockedTicket;
     btn.disabled = true;
-    btn.textContent = 'Enviando reporte de pago...';
+    btn.textContent = 'Enviando…';
+    paySubmitting = true;
 
     try {
-      const form = document.getElementById('payment-form');
       const formData = new FormData(form);
-      formData.append('ticket_number', myLockedTicket);
+      if (!isReport) formData.append('ticket_number', ticketNumber);
       formData.append('source_web', CFG.SOURCE_WEB);
       formData.append('session_id', sessionId);
+      if (!formData.get('screenshot')?.size) formData.delete('screenshot');
 
-      const res = await fetch(`${CFG.CENTRAL_API_URL}/api/public/orders`, {
+      const res = await fetch(`${CFG.CENTRAL_API_URL}/api/public/${isReport ? 'payment-reports' : 'orders'}`, {
         method: 'POST',
         body: formData
       });
       const data = await res.json();
 
+      if (!isReport && res.status === 409) {
+        // The reservation was lost before sending: keep the data and offer the payment report.
+        myLockedTicket = null;
+        switchToReportAfterExpiry(ticketNumber);
+        return;
+      }
       if (!res.ok || !data.ok) {
-        showAlert(data.message || 'No se pudo procesar el reporte de pago.', 'error');
-        btn.disabled = false;
-        btn.textContent = 'Enviar Soporte de Pago para Verificación';
+        showFormError(data.message || 'No se pudo enviar el pago. Revisa los datos e inténtalo de nuevo.', data.field);
         return;
       }
 
-      form.reset();
+      payDone = true;
       myLockedTicket = null;
       myLockRemainingSec = 0;
-      document.getElementById('checkout-section').classList.add('hidden');
-      showAlert(data.message, 'success');
+      form.reset();
+      $('pay-kicker').textContent = 'Pago enviado';
+      $('pay-content').hidden = true;
+      $('pay-timer-box').hidden = true;
+      $('pay-done-text').textContent = data.message;
+      $('pay-done').hidden = false;
+      $('pay-done-close').focus();
     } catch (err) {
-      showAlert('Error enviando el soporte de pago.', 'error');
+      showFormError('No pudimos conectar con el servidor. Revisa tu conexión e inténtalo de nuevo.');
     } finally {
+      paySubmitting = false;
       btn.disabled = false;
-      btn.textContent = 'Enviar Soporte de Pago para Verificación';
+      btn.textContent = idleText;
     }
-  };
+  });
 
   function updateTimerDisplay() {
     const mins = String(Math.floor(myLockRemainingSec / 60)).padStart(2, '0');
     const secs = String(myLockRemainingSec % 60).padStart(2, '0');
-    const el = document.getElementById('countdown-timer');
+    const el = $('countdown-timer');
     if (el) el.textContent = `${mins}:${secs}`;
+    $('pay-timer-box').classList.toggle('is-ending', myLockRemainingSec > 0 && myLockRemainingSec <= 30);
   }
 
   function showAlert(msg, type = 'info') {
-    const box = document.getElementById('alert-banner');
+    const box = $('alert-banner');
     box.className = 'alert ' + (['success', 'warning', 'error'].includes(type) ? type : 'info');
     box.textContent = msg;
   }
@@ -325,9 +426,9 @@
       myLockRemainingSec = Math.max(0, myLockRemainingSec - 1);
       updateTimerDisplay();
       if (myLockRemainingSec === 0) {
+        const expired = myLockedTicket;
         myLockedTicket = null;
-        document.getElementById('checkout-section').classList.add('hidden');
-        showAlert('El tiempo de reserva de 3 minutos ha expirado. La entrada volvió a estar disponible.', 'warning');
+        if (payMode === 'checkout' && !payDone && !paySubmitting) switchToReportAfterExpiry(expired);
       }
     }
     if (changed) {

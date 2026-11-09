@@ -32,8 +32,21 @@
   </aside>
   <header class="topbar">
     <div><span class="topbar-label">SISTEMA CENTRAL</span><strong id="workspace-title">Pagos y ventas</strong></div>
-    <div class="topbar-status"><span id="connection-status" role="status">Conectando…</span><span class="admin-avatar" aria-label="Administrador">A</span></div>
+    <div class="topbar-status"><span id="connection-status" role="status">Conectando…</span>
+      <div class="notif">
+        <button type="button" id="notif-bell" class="notif-bell" aria-expanded="false" aria-controls="notif-panel" aria-label="Pedidos de entradas">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a6 6 0 0 0-6 6v3.6l-1.7 2.8A1 1 0 0 0 5.2 17h13.6a1 1 0 0 0 .9-1.6L18 12.6V9a6 6 0 0 0-6-6zm0 19a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22z" fill="currentColor"/></svg>
+          <span id="notif-count" class="notif-count" hidden>0</span>
+        </button>
+        <div id="notif-panel" class="notif-panel" hidden>
+          <div class="notif-head"><strong>Pagos por verificar</strong><button type="button" id="notif-sound" class="notif-link" aria-pressed="true">Sonido: activado</button></div>
+          <div id="notif-list" class="notif-list"></div>
+          <button type="button" class="notif-all" onclick="showPendingOrders()">Ver todos los pagos pendientes</button>
+        </div>
+      </div>
+      <span class="admin-avatar" aria-label="Administrador">A</span></div>
   </header>
+  <div id="admin-toast" class="admin-toast" role="status" aria-live="polite" hidden></div>
   <!-- Main Content -->
   <main class="dashboard-main space-y-6">
     <section class="overview-heading"><div><span class="eyebrow">VISTA GENERAL</span><h1>Todo listo para recibirlos.</h1><p>Controla las entradas, verifica los pagos y sigue las ventas de cada proyecto.</p></div><span id="sales-state" class="sales-state">Consultando estado de venta…</span></section>
@@ -335,38 +348,75 @@
           </div>
         </div>
 
-        <!-- SMTP Configuration -->
-        <form onsubmit="saveSmtpSettings(event)" class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-3">
-          <h2 class="text-base font-bold text-slate-900">Configuración del Servidor SMTP</h2>
-          <p class="text-xs text-slate-500">Configura tu cuenta SMTP (Hostinger, Gmail, Brevo, etc.) para el envío automático de las entradas PDF y notificaciones.</p>
-          <div class="grid grid-cols-3 gap-3">
-            <div class="col-span-2">
-              <label class="block text-xs font-semibold text-slate-700 mb-1">Servidor SMTP (Host)</label>
-              <input id="smtp-host" type="text" placeholder="smtp.hostinger.com" class="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm" />
+        <!-- Mail account: SMTP sends, IMAP (optional) keeps a copy in the Sent folder -->
+        <form id="mail-settings-form" onsubmit="saveSmtpSettings(event)" class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-3 mail-settings">
+          <h2 class="text-base font-bold text-slate-900">Cuenta de correo</h2>
+          <p class="text-xs text-slate-500">SMTP envía los correos de pago en verificación, pago aceptado y la entrada en PDF. IMAP es opcional: guarda una copia de cada envío en la carpeta Enviados del buzón.</p>
+          <fieldset>
+            <legend>SMTP · Envío</legend>
+            <div class="grid grid-cols-3 gap-3">
+              <div class="col-span-2">
+                <label for="smtp-host" class="block text-xs font-semibold text-slate-700 mb-1">Servidor SMTP</label>
+                <input id="smtp-host" type="text" placeholder="smtp.hostinger.com" autocomplete="off" class="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm" />
+              </div>
+              <div>
+                <label for="smtp-port" class="block text-xs font-semibold text-slate-700 mb-1">Puerto</label>
+                <input id="smtp-port" type="text" inputmode="numeric" placeholder="465 o 587" class="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm" />
+              </div>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label for="smtp-user" class="block text-xs font-semibold text-slate-700 mb-1">Usuario (correo)</label>
+                <input id="smtp-user" type="text" placeholder="entradas@tudominio.com" autocomplete="off" class="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm" />
+              </div>
+              <div>
+                <label for="smtp-pass" class="block text-xs font-semibold text-slate-700 mb-1">Contraseña</label>
+                <input id="smtp-pass" type="password" placeholder="••••••••" autocomplete="new-password" class="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm" />
+              </div>
             </div>
             <div>
-              <label class="block text-xs font-semibold text-slate-700 mb-1">Puerto</label>
-              <input id="smtp-port" type="text" placeholder="465 o 587" class="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm" />
+              <label for="smtp-from" class="block text-xs font-semibold text-slate-700 mb-1">Remitente (nombre y correo)</label>
+              <input id="smtp-from" type="text" placeholder="Entradas Iluminando Caminos <entradas@tudominio.com>" class="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm" />
             </div>
-          </div>
-          <div class="grid grid-cols-2 gap-3">
+          </fieldset>
+          <fieldset>
+            <legend>IMAP · Copia en Enviados (opcional)</legend>
+            <div class="grid grid-cols-3 gap-3">
+              <div class="col-span-2">
+                <label for="imap-host" class="block text-xs font-semibold text-slate-700 mb-1">Servidor IMAP</label>
+                <input id="imap-host" type="text" placeholder="imap.hostinger.com" autocomplete="off" class="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm" />
+              </div>
+              <div>
+                <label for="imap-port" class="block text-xs font-semibold text-slate-700 mb-1">Puerto</label>
+                <input id="imap-port" type="text" inputmode="numeric" placeholder="993" class="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm" />
+              </div>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label for="imap-user" class="block text-xs font-semibold text-slate-700 mb-1">Usuario</label>
+                <input id="imap-user" type="text" placeholder="El mismo de SMTP" autocomplete="off" class="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm" />
+              </div>
+              <div>
+                <label for="imap-pass" class="block text-xs font-semibold text-slate-700 mb-1">Contraseña</label>
+                <input id="imap-pass" type="password" placeholder="La misma de SMTP" autocomplete="new-password" class="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm" />
+              </div>
+            </div>
             <div>
-              <label class="block text-xs font-semibold text-slate-700 mb-1">Usuario / Correo SMTP</label>
-              <input id="smtp-user" type="text" placeholder="entradas@tudominio.com" class="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm" />
+              <label for="imap-sent-folder" class="block text-xs font-semibold text-slate-700 mb-1">Carpeta de enviados</label>
+              <input id="imap-sent-folder" type="text" placeholder="Se detecta automáticamente" class="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm" />
             </div>
-            <div>
-              <label class="block text-xs font-semibold text-slate-700 mb-1">Contraseña SMTP</label>
-              <input id="smtp-pass" type="password" placeholder="••••••••" class="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm" />
+          </fieldset>
+          <div class="mail-actions">
+            <button type="submit" class="bg-slate-900 hover:bg-slate-800 text-white font-semibold px-4 py-2 rounded-lg text-xs">Guardar configuración</button>
+            <span id="mail-save-status" class="mail-save-status" role="status"></span>
+          </div>
+          <div class="mail-test">
+            <label for="mail-test-to" class="block text-xs font-semibold text-slate-700 mb-1">Probar la configuración guardada</label>
+            <div class="mail-test-row">
+              <input id="mail-test-to" type="email" placeholder="Correo para recibir una prueba (opcional)" class="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm" />
+              <button type="button" id="mail-test-btn" onclick="testMailSettings()" class="bg-white border border-slate-300 hover:bg-slate-50 font-semibold px-4 py-2 rounded-lg text-xs">Probar conexión</button>
             </div>
-          </div>
-          <div>
-            <label class="block text-xs font-semibold text-slate-700 mb-1">Nombre y Correo Remitente (From)</label>
-            <input id="smtp-from" type="text" placeholder="Entradas Labor Social <entradas@tudominio.com>" class="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm" />
-          </div>
-          <div class="flex justify-end pt-1">
-            <button type="submit" class="bg-slate-900 hover:bg-slate-800 text-white font-semibold px-4 py-2 rounded-lg text-xs">
-              Guardar Configuración SMTP
-            </button>
+            <ul id="mail-test-result" class="mail-test-result" aria-live="polite"></ul>
           </div>
         </form>
       </div>

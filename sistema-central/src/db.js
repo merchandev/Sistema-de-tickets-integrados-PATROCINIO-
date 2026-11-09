@@ -96,6 +96,27 @@ db.exec(`
 for (const column of ['quoted_usd', 'quoted_rate', 'quoted_ves']) {
   if (!db.prepare('PRAGMA table_info(tickets)').all().some(c => c.name === column)) db.exec('ALTER TABLE tickets ADD COLUMN ' + column + ' REAL');
 }
+// Backward-compatible migration: separate first/last name, the paying bank and standalone payment
+// reports (report_kind = 'REPORT', ticket_number = '' until an administrator assigns one).
+for (const [column, type] of [
+  ['buyer_first_name', 'TEXT'],
+  ['buyer_last_name', 'TEXT'],
+  ['payment_bank', 'TEXT'],
+  ['report_kind', "TEXT NOT NULL DEFAULT 'CHECKOUT'"],
+  ['requested_ticket', 'TEXT'],
+  ['buyer_comment', 'TEXT']
+]) {
+  if (!db.prepare('PRAGMA table_info(orders)').all().some(c => c.name === column)) db.exec(`ALTER TABLE orders ADD COLUMN ${column} ${type}`);
+}
+
+// Pago Móvil account of the event, shown in the checkout popup.
+const EVENT_PAYMENT_METHODS = JSON.stringify({
+  pago_movil: {
+    banco: 'Bancamiga (0172)',
+    telefono: '0412-2905205',
+    rif_cedula: '28298508'
+  }
+});
 // Seed default settings if not present
 const defaultSettings = {
   event_title: 'Encuentro por una Causa: Conferencias & Concierto Benéfico',
@@ -118,21 +139,7 @@ const defaultSettings = {
   bcv_value_date: '',
   bcv_fetch_status: 'unavailable',
   bcv_last_error: '',
-  payment_methods_json: JSON.stringify({
-    pago_movil: {
-      banco: '0102 - Banco de Venezuela (BDV)',
-      telefono: '0412-0000000',
-      rif_cedula: 'J-00000000-0 / V-12345678',
-      titular: 'Fundación Labor Social'
-    },
-    transferencia: {
-      banco: 'Banco de Venezuela',
-      cuenta: '0102-0000-00-0000000000',
-      tipo: 'Corriente',
-      rif_cedula: 'J-00000000-0',
-      titular: 'Fundación Labor Social'
-    }
-  }),
+  payment_methods_json: EVENT_PAYMENT_METHODS,
   event_schedule_json: JSON.stringify([
     {
       time: '3:30 PM - 4:00 PM',
@@ -171,6 +178,12 @@ const defaultSettings = {
   smtp_user: process.env.SMTP_USER || '',
   smtp_pass: process.env.SMTP_PASS || '',
   smtp_from: process.env.SMTP_FROM || 'Entradas Labor Social <entradas@laborsocial.org>',
+  // Optional IMAP account: a copy of every message sent by SMTP is saved in its "Sent" folder.
+  imap_host: process.env.IMAP_HOST || '',
+  imap_port: process.env.IMAP_PORT || '993',
+  imap_user: process.env.IMAP_USER || '',
+  imap_pass: process.env.IMAP_PASS || '',
+  imap_sent_folder: process.env.IMAP_SENT_FOLDER || '',
   secret_hmac_key: crypto.randomBytes(32).toString('hex')
 };
 
@@ -194,6 +207,11 @@ try {
     const code = String(i).padStart(3, '0');
     insertTicketStmt.run(code, i);
   }
+  // Installations created before the real account still carry the placeholder bank details.
+  db.prepare(`
+    UPDATE settings SET value = ?, updated_at = datetime('now')
+    WHERE key = 'payment_methods_json' AND value LIKE '%0412-0000000%'
+  `).run(EVENT_PAYMENT_METHODS);
   db.exec('COMMIT');
 } catch (err) {
   db.exec('ROLLBACK');
@@ -509,20 +527,23 @@ function submitOrderAtomic(orderData) {
     const insertResult = db.prepare(`
       INSERT INTO orders (
         ticket_number, source_web, session_id,
-        buyer_name, buyer_cedula, buyer_phone, buyer_email,
-        payment_phone, payment_reference, screenshot_path,
+        buyer_name, buyer_first_name, buyer_last_name, buyer_cedula, buyer_phone, buyer_email,
+        payment_phone, payment_reference, payment_bank, screenshot_path,
         amount_usd, bcv_rate, amount_ves, status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')
     `).run(
       orderData.ticket_number,
       ticket.locked_by_source,
       orderData.session_id,
       orderData.buyer_name,
+      orderData.buyer_first_name || null,
+      orderData.buyer_last_name || null,
       orderData.buyer_cedula,
       orderData.buyer_phone,
       orderData.buyer_email,
       orderData.payment_phone,
       orderData.payment_reference,
+      orderData.payment_bank || null,
       orderData.screenshot_path,
       orderData.amount_usd,
       orderData.bcv_rate,
@@ -557,9 +578,44 @@ function submitOrderAtomic(orderData) {
 }
 
 /**
- * Generates a unique cryptographic token for a verified ticket and marks the order APPROVED & ticket SOLD.
+ * Records a payment reported outside the checkout popup (for example after the reservation expired).
+ * It does not hold any ticket: an administrator assigns an available one when approving it.
  */
-function approveOrderAtomic(orderId, adminNotes = '') {
+function submitPaymentReport(report) {
+  const result = db.prepare(`
+    INSERT INTO orders (
+      ticket_number, source_web, session_id,
+      buyer_name, buyer_first_name, buyer_last_name, buyer_cedula, buyer_phone, buyer_email,
+      payment_phone, payment_reference, payment_bank, screenshot_path,
+      amount_usd, bcv_rate, amount_ves, status, report_kind, requested_ticket, buyer_comment
+    ) VALUES ('', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', 'REPORT', ?, ?)
+  `).run(
+    report.source_web,
+    report.session_id,
+    report.buyer_name,
+    report.buyer_first_name,
+    report.buyer_last_name,
+    report.buyer_cedula,
+    report.buyer_phone,
+    report.buyer_email,
+    report.payment_phone,
+    report.payment_reference,
+    report.payment_bank,
+    report.screenshot_path,
+    report.amount_usd,
+    report.bcv_rate,
+    report.amount_ves,
+    report.requested_ticket || null,
+    report.buyer_comment || null
+  );
+  return db.prepare('SELECT * FROM orders WHERE id = ?').get(Number(result.lastInsertRowid));
+}
+
+/**
+ * Generates a unique cryptographic token for a verified ticket and marks the order APPROVED & ticket SOLD.
+ * Standalone payment reports have no ticket yet: `assignTicket` must name an AVAILABLE one.
+ */
+function approveOrderAtomic(orderId, adminNotes = '', assignTicket = null) {
   db.exec('BEGIN IMMEDIATE TRANSACTION');
   try {
     const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
@@ -567,7 +623,29 @@ function approveOrderAtomic(orderId, adminNotes = '') {
       db.exec('ROLLBACK');
       return { success: false, message: 'Orden no encontrada.' };
     }
-    if (order.status !== 'PENDING' || !db.prepare("SELECT 1 FROM tickets WHERE ticket_number = ? AND status = 'PENDING' AND current_order_id = ?").get(order.ticket_number, orderId)) {
+    if (!order.ticket_number) {
+      if (order.status !== 'PENDING') {
+        db.exec('ROLLBACK');
+        return { success: false, message: 'Este reporte de pago ya fue procesado.' };
+      }
+      if (!assignTicket) {
+        db.exec('ROLLBACK');
+        return { success: false, message: 'Indica el número de entrada (001 al 250) que se asignará a este pago.' };
+      }
+      db.prepare(`
+        UPDATE tickets
+        SET status = 'AVAILABLE', locked_by_session = NULL, locked_by_source = NULL, locked_at = NULL, locked_until = NULL, updated_at = datetime('now')
+        WHERE status = 'LOCKED' AND locked_until IS NOT NULL AND locked_until <= ?
+      `).run(Date.now());
+      const ticket = db.prepare('SELECT status FROM tickets WHERE ticket_number = ?').get(assignTicket);
+      if (!ticket || ticket.status !== 'AVAILABLE') {
+        db.exec('ROLLBACK');
+        return { success: false, message: `La entrada #${assignTicket} no está disponible. Elige otra entrada libre.` };
+      }
+      db.prepare('UPDATE orders SET ticket_number = ? WHERE id = ?').run(assignTicket, orderId);
+      db.prepare('UPDATE tickets SET locked_by_source = ? WHERE ticket_number = ?').run(order.source_web, assignTicket);
+      order.ticket_number = assignTicket;
+    } else if (order.status !== 'PENDING' || !db.prepare("SELECT 1 FROM tickets WHERE ticket_number = ? AND status = 'PENDING' AND current_order_id = ?").get(order.ticket_number, orderId)) {
       db.exec('ROLLBACK');
       return { success: false, message: 'Esta orden ya fue aprobada anteriormente.' };
     }
@@ -625,9 +703,10 @@ function rejectOrderAtomic(orderId, reason = 'Pago no verificado o datos inconsi
       db.exec('ROLLBACK');
       return { success: false, message: 'Orden no encontrada.' };
     }
-    if (order.status !== 'PENDING' || !db.prepare("SELECT 1 FROM tickets WHERE ticket_number = ? AND status = 'PENDING' AND current_order_id = ?").get(order.ticket_number, orderId)) {
+    const holdsTicket = Boolean(order.ticket_number);
+    if (order.status !== 'PENDING' || (holdsTicket && !db.prepare("SELECT 1 FROM tickets WHERE ticket_number = ? AND status = 'PENDING' AND current_order_id = ?").get(order.ticket_number, orderId))) {
       db.exec('ROLLBACK');
-      return { success: false, message: 'Esta orden ya fue rechazada.' };
+      return { success: false, message: 'Esta orden ya fue procesada.' };
     }
 
     db.prepare(`
@@ -701,6 +780,7 @@ module.exports = {
   lockTicketAtomic,
   unlockTicketAtomic,
   submitOrderAtomic,
+  submitPaymentReport,
   approveOrderAtomic,
   rejectOrderAtomic,
   getAllTicketsPublic

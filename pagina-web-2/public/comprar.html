@@ -58,69 +58,109 @@
 
       <div id="alert-banner" class="alert hidden"></div>
 
-      <!-- Reserva activa (3 min) y formulario de pago -->
-      <section id="checkout-section" class="checkout hidden">
-        <div class="checkout-head">
+      <!-- Popup de compra: datos del Pago Móvil y formulario para reportar el pago -->
+      <dialog id="pay-dialog" class="pay-dialog" aria-labelledby="pay-title">
+        <div class="pay-head">
           <div>
-            <span class="tag-lock">● Puesto bloqueado exclusivamente para ti</span>
-            <h2>Entrada seleccionada: #<span id="selected-ticket-label">001</span></h2>
-            <p>Completa tu reporte de pago antes de que finalice el contador de 3 minutos.</p>
+            <span id="pay-kicker" class="pay-kicker">Entrada reservada para ti</span>
+            <h2 id="pay-title">Entrada #<span id="selected-ticket-label">001</span></h2>
           </div>
-          <div class="timer">
-            <div class="l">Tiempo restante de reserva</div>
-            <div id="countdown-timer" class="t">03:00</div>
-            <button type="button" onclick="cancelCurrentSelection()" class="link-btn">Cancelar y liberar entrada</button>
+          <div id="pay-timer-box" class="pay-timer" role="timer" aria-label="Tiempo restante de la reserva">
+            <span>Reservada por</span>
+            <strong id="countdown-timer">03:00</strong>
           </div>
+          <button type="button" id="pay-close" class="pay-x" aria-label="Cerrar">&times;</button>
         </div>
 
-        <div class="checkout-grid">
-          <div class="panel">
-            <h3>1. Realiza el pago en moneda nacional</h3>
-            <div class="amount">
-              <div class="l">Monto exacto a pagar hoy (tasa BCV):</div>
-              <div id="checkout-amount-ves" class="v">Bs. 0.00</div>
-              <div id="checkout-amount-usd" class="u">Equivalente a $5.00 USD</div>
-            </div>
-            <div id="bank-details-box" style="display:grid;gap:12px"></div>
-          </div>
+        <div id="pay-content">
+          <p id="pay-notice" class="pay-notice" hidden></p>
 
-          <form id="payment-form" onsubmit="submitPaymentForm(event)" class="form">
-            <h3 class="full">2. Carga tus datos y la captura para verificación</h3>
+          <section class="pay-step" aria-labelledby="pay-step-pay">
+            <h3><span class="pay-num">1</span> <span id="pay-step-pay">Paga por Pago Móvil</span></h3>
+            <div class="pay-amount">
+              <div>
+                <span>Monto exacto</span>
+                <strong id="checkout-amount-ves">Bs. 0,00</strong>
+                <small id="checkout-amount-usd">Equivale a $5.00 USD</small>
+              </div>
+              <button type="button" id="copy-amount" class="pay-copy" data-copy="" aria-label="Copiar monto">Copiar</button>
+            </div>
+            <dl id="bank-details-box" class="pay-account"></dl>
+          </section>
 
-            <div>
-              <label for="buyer_name">Nombre y apellido *</label>
-              <input id="buyer_name" name="buyer_name" type="text" required placeholder="Ej: María Pérez" />
+          <form id="payment-form" class="pay-step pay-form">
+            <h3><span class="pay-num">2</span> Reporta tu pago</h3>
+            <div class="pay-fields">
+              <label>Nombre
+                <input name="buyer_first_name" type="text" autocomplete="given-name" required maxlength="60" placeholder="María" />
+              </label>
+              <label>Apellido
+                <input name="buyer_last_name" type="text" autocomplete="family-name" required maxlength="60" placeholder="Pérez" />
+              </label>
+              <label>Número de cédula
+                <input name="buyer_cedula" type="text" inputmode="text" required maxlength="14" placeholder="V-12345678" pattern="[VvEeJjPpGg]?-?[0-9.]{5,12}" title="Ejemplo: V-12345678" />
+              </label>
+              <label>Teléfono
+                <input name="buyer_phone" type="tel" autocomplete="tel" required maxlength="20" placeholder="0414-1234567" />
+              </label>
+              <label class="pay-wide">Correo electrónico <small>aquí recibirás tu entrada</small>
+                <input name="buyer_email" type="email" autocomplete="email" required maxlength="254" placeholder="tu@correo.com" />
+              </label>
+              <label>Banco desde el que pagaste
+                <input name="payment_bank" type="text" list="bank-list" required maxlength="80" placeholder="Elige o escribe tu banco" />
+              </label>
+              <label>Número de referencia
+                <input name="payment_reference" type="text" inputmode="numeric" required maxlength="30" placeholder="Ej: 123456789" pattern="[A-Za-z0-9-]{4,30}" title="Solo números y letras, como aparece en tu comprobante" />
+              </label>
+              <label class="report-only" hidden>Número de entrada <small>opcional</small>
+                <input id="requested_ticket" name="requested_ticket" type="text" inputmode="numeric" maxlength="3" placeholder="Ej: 042" pattern="[0-9]{1,3}" title="Número del 001 al 250" />
+              </label>
+              <label class="report-only pay-wide" hidden>Comentario <small>opcional</small>
+                <textarea name="buyer_comment" rows="2" maxlength="500" placeholder="Cuéntanos cualquier detalle de tu pago"></textarea>
+              </label>
+              <label class="pay-wide">Captura del pago <small>opcional</small>
+                <input name="screenshot" type="file" accept="image/png,image/jpeg,image/webp" />
+              </label>
             </div>
-            <div>
-              <label for="buyer_cedula">Número de cédula *</label>
-              <input id="buyer_cedula" name="buyer_cedula" type="text" required placeholder="Ej: V-12345678" />
-            </div>
-            <div>
-              <label for="buyer_phone">Teléfono de contacto *</label>
-              <input id="buyer_phone" name="buyer_phone" type="tel" required placeholder="Ej: 0414-1234567" />
-            </div>
-            <div>
-              <label for="buyer_email">Correo electrónico (donde llegará tu PDF) *</label>
-              <input id="buyer_email" name="buyer_email" type="email" required placeholder="tu@correo.com" />
-            </div>
-            <div>
-              <label for="payment_phone">Teléfono que utilizó para realizar el pago *</label>
-              <input id="payment_phone" name="payment_phone" type="tel" required placeholder="Ej: 0412-9876543" />
-            </div>
-            <div>
-              <label for="payment_reference">Referencia bancaria *</label>
-              <input id="payment_reference" name="payment_reference" type="text" required placeholder="Últimos 6 u 8 dígitos / Nro completo" />
-            </div>
-            <div class="full">
-              <label for="screenshot">Captura de pantalla del pago (imagen / comprobante) *</label>
-              <input id="screenshot" name="screenshot" type="file" accept="image/*" required />
-            </div>
-            <div class="full actions">
-              <button type="submit" id="btn-submit-order" class="btn btn-lime btn-lg no-arrow">Enviar soporte de pago para verificación</button>
-            </div>
+            <p id="pay-error" class="pay-error" role="alert" hidden></p>
+            <button type="submit" id="btn-submit-order" class="btn btn-lg no-arrow pay-submit">Enviar pago para verificación</button>
+            <p class="pay-fine">Verificamos cada pago con el banco: puede tardar hasta 24 horas. Te avisaremos por correo y, al aprobarse, recibirás tu entrada en PDF con código QR.</p>
           </form>
         </div>
-      </section>
+
+        <section id="pay-done" class="pay-done" hidden>
+          <span class="pay-done-mark" aria-hidden="true">✓</span>
+          <h3>Tu pago está en verificación</h3>
+          <p id="pay-done-text"></p>
+          <button type="button" id="pay-done-close" class="btn no-arrow">Entendido</button>
+        </section>
+      </dialog>
+
+      <datalist id="bank-list">
+        <option value="Bancamiga (0172)"></option>
+        <option value="Banco de Venezuela (0102)"></option>
+        <option value="Banesco (0134)"></option>
+        <option value="Mercantil (0105)"></option>
+        <option value="BBVA Provincial (0108)"></option>
+        <option value="BNC Nacional de Crédito (0191)"></option>
+        <option value="Bancaribe (0114)"></option>
+        <option value="Banco del Tesoro (0163)"></option>
+        <option value="Banco Bicentenario (0175)"></option>
+        <option value="Banco Exterior (0115)"></option>
+        <option value="Banplus (0174)"></option>
+        <option value="Banco Plaza (0138)"></option>
+        <option value="Banco Activo (0171)"></option>
+        <option value="Venezolano de Crédito (0104)"></option>
+        <option value="Banco Fondo Común (0151)"></option>
+        <option value="100% Banco (0156)"></option>
+        <option value="Banco Caroní (0128)"></option>
+        <option value="Sofitasa (0137)"></option>
+        <option value="Bancrecer (0168)"></option>
+        <option value="R4 Banco Microfinanciero (0169)"></option>
+        <option value="Banco Agrícola de Venezuela (0166)"></option>
+        <option value="Banfanb (0177)"></option>
+        <option value="DelSur (0157)"></option>
+      </datalist>
 
       <!-- Mapa de entradas con explorador inteligente -->
       <section>
@@ -157,6 +197,15 @@
         </div>
 
         <div id="tickets-grid" class="tickets-grid"></div>
+      </section>
+
+      <!-- Reporte de pago independiente: para quien pagó y no pudo terminar el popup -->
+      <section id="reportar-pago" class="report-band" aria-labelledby="report-band-title">
+        <div>
+          <h2 id="report-band-title">¿Ya pagaste y no pudiste reportarlo?</h2>
+          <p>Si tu reserva expiró o hubo un problema de conexión, envíanos los datos de tu pago. Lo verificaremos y te asignaremos una entrada disponible.</p>
+        </div>
+        <button type="button" id="open-report" class="btn no-arrow">Reportar un pago</button>
       </section>
 
       <section class="legal">

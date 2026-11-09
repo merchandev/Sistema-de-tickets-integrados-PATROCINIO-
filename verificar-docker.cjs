@@ -15,7 +15,7 @@ async function req(base, route, body, admin = false, method = 'POST') {
 }
 const lock = (site, number, session) => req(site,'/api/public/tickets/lock',{ticket_number:number, session_id:session,source_web:site === sites[0] ? 'pagina-web-1' : 'pagina-web-2'});
 const unlock = (number,session) => req(central,'/api/public/tickets/unlock',{ticket_number:number,session_id:session});
-const payload = (number,session,site) => ({ticket_number:number, session_id:session, source_web:site, buyer_name:'Comprador de Prueba Docker',buyer_cedula:'V-12345678',buyer_email:'comprador@socials.test',buyer_phone:'04121234567',payment_phone:'04121234567',payment_reference:'DOCKER-'+Date.now(),screenshot_base64:'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='});
+const payload = (number,session,site) => ({ticket_number:number, session_id:session, source_web:site, buyer_first_name:'Comprador',buyer_last_name:'de Prueba',payment_bank:'Bancamiga (0172)',buyer_cedula:'V-12345678',buyer_email:'comprador@socials.test',buyer_phone:'04121234567',payment_phone:'04121234567',payment_reference:'DOCKER-'+Date.now(),screenshot_base64:'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='});
 const sockets = [];
 async function socket(site) {
   const client = io(site,{transports:['websocket'],reconnection:false}); sockets.push(client);

@@ -31,7 +31,7 @@ async function run() {
     assert.equal(lock.data.pricing.amount_ves,expected);
     let id;
     try {
-      const order=await request(site,'/api/public/orders',{ticket_number:ticket,session_id:session,source_web:incorrectSource,buyer_name:`Prueba BCV Web ${index}`,buyer_cedula:'V-12345678',buyer_email:'bcv-origen@socials.test',buyer_phone:'04121234567',payment_phone:'04121234567',payment_reference:`BCV-${index}-${Date.now()}`,screenshot_base64:'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='});
+      const order=await request(site,'/api/public/orders',{ticket_number:ticket,session_id:session,source_web:incorrectSource,buyer_first_name:'Prueba',buyer_last_name:'Origen BCV',payment_bank:'Bancamiga (0172)',buyer_cedula:'V-12345678',buyer_email:'bcv-origen@socials.test',buyer_phone:'04121234567',payment_phone:'04121234567',payment_reference:`BCV-${index}-${Date.now()}`,screenshot_base64:'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='});
       assert.equal(order.status,201,JSON.stringify(order.data));id=order.data.order.id;
       assert.equal(order.data.order.source_web,`pagina-web-${index}`);
       assert.equal(order.data.order.bcv_rate,rate);assert.equal(order.data.order.amount_ves,expected);

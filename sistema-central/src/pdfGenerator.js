@@ -8,6 +8,25 @@ if (!fs.existsSync(ticketsDir)) {
   fs.mkdirSync(ticketsDir, { recursive: true });
 }
 
+// Header name and colour after the page the ticket was bought from.
+const BRANDS = {
+  'pagina-web-1': { name: 'ILUMINANDO CAMINOS', color: '#650b10' },
+  'pagina-web-2': { name: 'HABLEMOS DE MARKETING', color: '#5b21d6' }
+};
+
+function formatDate(value) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ''));
+  if (!m) return value || 'Por definir';
+  return new Intl.DateTimeFormat('es-VE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })
+    .format(new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])));
+}
+function formatTime(value) {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(value || '').trim());
+  if (!m) return value || '';
+  const h = parseInt(m[1], 10);
+  return `${h % 12 || 12}:${m[2]} ${h >= 12 ? 'PM' : 'AM'}`;
+}
+
 /**
  * Generates a clean, minimal PDF ticket with an embedded cryptographic QR code.
  * Returns { pdfFullPath, pdfRelativeUrl, qrDataUrl, verificationUrl }
@@ -49,30 +68,35 @@ async function generateTicketPdf(order, eventConfig, baseUrl = 'http://localhost
     const stream = fs.createWriteStream(pdfFullPath);
     doc.pipe(stream);
 
-    // Clean minimalist border
+    const brand = BRANDS[order.source_web] || BRANDS['pagina-web-1'];
+
+    // Clean minimalist border with the page's colour
     doc
       .rect(20, 20, doc.page.width - 40, doc.page.height - 40)
-      .lineWidth(1)
-      .strokeColor('#111111')
+      .lineWidth(1.2)
+      .strokeColor(brand.color)
       .stroke();
 
     // Header
     doc
-      .fillColor('#111111')
+      .fillColor(brand.color)
       .font('Helvetica-Bold')
-      .fontSize(13)
-      .text(eventConfig.event_title || 'EVENTO BENÉFICO - LABOR SOCIAL', 36, 38, {
+      .fontSize(8)
+      .text(brand.name, 36, 30, {
         width: doc.page.width - 72,
-        align: 'center'
+        align: 'center',
+        characterSpacing: 1.5
       });
 
     doc
-      .font('Helvetica')
-      .fontSize(9)
-      .fillColor('#444444')
-      .text(eventConfig.event_subtitle || 'Acceso General: Conferencias + Concierto', {
+      .fillColor('#111111')
+      .font('Helvetica-Bold')
+      .fontSize(12)
+      .text(eventConfig.event_title || 'EVENTO BENÉFICO - LABOR SOCIAL', 36, 44, {
         width: doc.page.width - 72,
-        align: 'center'
+        align: 'center',
+        height: 30,
+        ellipsis: true
       });
 
     // Divider line
@@ -114,14 +138,16 @@ async function generateTicketPdf(order, eventConfig, baseUrl = 'http://localhost
       .stroke();
 
     doc.font('Helvetica-Bold').fontSize(9).fillColor('#111111').text(
-      `FECHA DEL EVENTO: ${eventConfig.event_date || 'Por definir'}   |   HORA DE INGRESO: ${eventConfig.event_entry_time || '15:30'}`,
+      `${formatDate(eventConfig.event_date).toUpperCase()}   |   INGRESO: ${formatTime(eventConfig.event_entry_time || '15:30')}`,
       40,
-      schedY + 2
+      schedY + 2,
+      { width: doc.page.width - 80 }
     );
     doc.font('Helvetica').fontSize(8.5).fillColor('#222222').text(
-      `• Parte 1 (Conferencias): 4:00 PM a 7:00 PM\n• Parte 2 (Concierto): A partir de las 7:00 PM (Acceso incluido a ambas actividades)`,
+      `${eventConfig.event_location || ''}\nConferencia: ${formatTime(eventConfig.conference_start || '16:00')} a ${formatTime(eventConfig.conference_end || '19:00')}  ·  Concierto: desde las ${formatTime(eventConfig.concert_start || '19:00')} (acceso incluido a ambas)`,
       40,
-      schedY + 18
+      schedY + 15,
+      { width: doc.page.width - 80 }
     );
 
     // QR Code centered
@@ -147,7 +173,7 @@ async function generateTicketPdf(order, eventConfig, baseUrl = 'http://localhost
       .fontSize(7.5)
       .fillColor('#555555')
       .text(
-        `Ref. Bancaria Verificada: ${order.payment_reference} | Origen: ${order.source_web}\nPresente este código QR junto con su Cédula de Identidad en la entrada.`,
+        `Pago verificado: ${order.payment_bank ? `${order.payment_bank} · ` : ''}Ref. ${order.payment_reference}\nPresente este código QR junto con su Cédula de Identidad en la entrada.`,
         36,
         tokenY + 15,
         {

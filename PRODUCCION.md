@@ -12,6 +12,18 @@ Las páginas se publican con **`SALES_ENABLED=false`**. Los visitantes pueden co
 
 Para abrir ventas más adelante: validar los datos bancarios, el contenido y fecha del evento, configurar y probar SMTP real, cambiar `SALES_ENABLED=true` en `.env.domains` del VPS y recrear el servicio central con la configuración completa. Las credenciales administrativas no se guardan en Git.
 
+## Flujo de compra y verificación
+
+1. Al elegir un número, la entrada queda reservada y se abre un popup con el monto en bolívares y la cuenta de Pago Móvil (Bancamiga 0172 · 0412-2905205 · C.I. 28298508), cada dato con botón para copiar.
+2. En el mismo popup el comprador indica nombre, apellido, cédula, teléfono, correo, banco de origen y número de referencia; la captura es opcional. Al enviarlo recibe el correo «Pago en verificación» (hasta 24 horas).
+3. Si la reserva expira o algo falla, el bloque «Reporte de pago» de `/comprar` registra el pago sin entrada asignada; al aprobarlo, el administrador elige una entrada libre.
+4. En el dashboard, la campana muestra los pagos por verificar con aviso sonoro. El detalle del pedido muestra todos los datos del comprador y del pago para aprobar o rechazar. Al aprobar se envían dos correos: «Pago aceptado» y la entrada en PDF con el código QR; al rechazar, el motivo.
+5. En «Control de acceso» el escáner emite un tono distinto para entradas válidas y no válidas (y vibra en teléfonos).
+
+La cuenta de correo se configura en «Correos y avisos»: SMTP para el envío e IMAP opcional para guardar una copia en Enviados (si IMAP no tiene usuario propio usa el de SMTP). «Probar conexión» comprueba ambos y puede enviar un correo de prueba. Las contraseñas guardadas no se devuelven al navegador.
+
+`scripts/desplegar-compras.sh` publica juntos el sistema central y las dos webs desde `release-compras.tar.gz`, con copia previa de SQLite, almacenamiento y código.
+
 ## Configuración del VPS
 
 En `/docker/socials-entradas/.env.domains`:

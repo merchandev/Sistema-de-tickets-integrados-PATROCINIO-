@@ -16,17 +16,21 @@ const {
   lockTicketAtomic,
   unlockTicketAtomic,
   submitOrderAtomic,
+  submitPaymentReport,
   approveOrderAtomic,
   rejectOrderAtomic,
   getAllTicketsPublic
 } = require('./db');
 const { scrapeBcvRate } = require('./bcvScraper');
 const { generateTicketPdf } = require('./pdfGenerator');
+const { parsePaymentForm, parseTicketNumber } = require('./paymentForm');
 const {
   sendPaymentSubmittedEmail,
-  sendTicketApprovedEmail,
+  sendPaymentApprovedEmail,
+  sendTicketEmail,
   sendPaymentRejectedEmail,
-  sendEventCampaignNotification
+  sendEventCampaignNotification,
+  testMailConnections
 } = require('./mailer');
 
 const PORT = parseInt(process.env.PORT || '4000', 10);
@@ -190,7 +194,7 @@ app.post('/api/public/tickets/lock', requireSalesOpen, async (req, res) => {
     const config = getPublicConfig();
     return res.json({
       ok: true,
-      message: `Entrada #${paddedNumber} reservada temporalmente por 3 minutos.`,
+      message: `Entrada #${paddedNumber} reservada temporalmente por ${Math.round(config.lock_duration_seconds / 60)} minutos.`,
       ticket: result.ticket,
       serverTime: result.serverTime,
       lockDurationSeconds: config.lock_duration_seconds,
@@ -226,74 +230,37 @@ app.post('/api/public/tickets/unlock', (req, res) => {
   }
 });
 
+// Optional proof of payment: kept only when the buyer attaches it.
+function saveScreenshot(req, label) {
+  if (req.file) return `/storage/uploads/${req.file.filename}`;
+  if (!req.body.screenshot_base64) return '';
+  const filename = `pago-${label}-${Date.now()}.png`;
+  fs.writeFileSync(path.join(uploadsDir, filename), Buffer.from(req.body.screenshot_base64.replace(/^data:image\/\w+;base64,/, ''), 'base64'));
+  return `/storage/uploads/${filename}`;
+}
+const validScreenshot = (req) => !req.body.screenshot_base64 || /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(req.body.screenshot_base64);
+
 /**
- * Submit payment verification form + screenshot
+ * Payment form of the checkout popup: buyer data + Pago Móvil reference for the ticket locked by this session.
  */
 app.post('/api/public/orders', requireSalesOpen, upload.single('screenshot'), async (req, res) => {
   try {
     if (!resolveSalesSource(req)) return res.status(403).json({ok:false, code:'INVALID_SOURCE', message:'Reporta el pago desde una de las paginas de venta.'});
-    const {
-      ticket_number,
-      source_web,
-      session_id,
-      buyer_name,
-      buyer_cedula,
-      buyer_phone,
-      buyer_email,
-      payment_phone,
-      payment_reference
-    } = req.body;
-
-    if (
-      !ticket_number ||
-      !session_id ||
-      !buyer_name ||
-      !buyer_cedula ||
-      !buyer_phone ||
-      !buyer_email ||
-      !payment_phone ||
-      !payment_reference
-    ) {
-      return res.status(400).json({
-        ok: false,
-        message: 'Todos los campos del formulario son obligatorios (Nombre y Apellido, Cédula, Teléfono, Correo, Teléfono de Pago y Referencia Bancaria).'
-      });
+    const ticketNumber = parseTicketNumber(req.body.ticket_number);
+    const sessionId = req.body.session_id;
+    if (!ticketNumber || typeof sessionId !== 'string' || sessionId.length < 8 || sessionId.length > 254) {
+      return res.status(400).json({ ok: false, message: 'Selecciona una entrada antes de reportar el pago.' });
     }
-
-    if (!req.file && !req.body.screenshot_base64) {
-      return res.status(400).json({
-        ok: false,
-        message: 'Debe adjuntar la captura de pantalla del pago.'
-      });
-    }
-
-    if (![buyer_name, buyer_cedula, buyer_phone, buyer_email, payment_phone, payment_reference, session_id].every(v => typeof v === 'string' && v.trim().length > 0 && v.length <= 254) || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(buyer_email)) return res.status(400).json({ok:false, message:'Datos del comprador invalidos'});
-    if (req.body.screenshot_base64 && !/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(req.body.screenshot_base64)) return res.status(400).json({ok:false, message:'Captura invalida'});
-    const paddedTicket = String(ticket_number).padStart(3, '0');
-    let screenshotPath = '';
-
-    if (req.file) {
-      screenshotPath = `/storage/uploads/${req.file.filename}`;
-    } else if (req.body.screenshot_base64) {
-      const filename = `pago-ticket-${paddedTicket}-${Date.now()}.png`;
-      const base64Data = req.body.screenshot_base64.replace(/^data:image\/\w+;base64,/, '');
-      fs.writeFileSync(path.join(uploadsDir, filename), Buffer.from(base64Data, 'base64'));
-      screenshotPath = `/storage/uploads/${filename}`;
-    }
+    const form = parsePaymentForm(req.body);
+    if (!form.ok) return res.status(400).json({ ok: false, field: form.field, message: form.message });
+    if (!validScreenshot(req)) return res.status(400).json({ ok: false, field: 'screenshot', message: 'Captura invalida' });
 
     const config = getPublicConfig();
-
     const submitResult = submitOrderAtomic({
-      ticket_number: paddedTicket,
-      source_web: source_web || 'pagina-web-1',
-      session_id,
-      buyer_name: buyer_name.trim(),
-      buyer_cedula: buyer_cedula.trim(),
-      buyer_phone: buyer_phone.trim(),
-      buyer_email: buyer_email.trim(),
-      payment_phone: payment_phone.trim(),
-      payment_reference: payment_reference.trim(),
-      screenshot_path: screenshotPath,
+      ticket_number: ticketNumber,
+      session_id: sessionId,
+      ...form.data,
+      screenshot_path: saveScreenshot(req, `ticket-${ticketNumber}`),
       amount_usd: config.ticket_price_usd,
       bcv_rate: config.bcv_rate,
       amount_ves: config.ticket_price_ves
@@ -307,19 +274,18 @@ app.post('/api/public/orders', requireSalesOpen, upload.single('screenshot'), as
       });
     }
 
-    // Send confirmation of payment receipt via SMTP / Outbox
+    // "Pago en verificación" email, then real-time update for both pages and the dashboard
     await sendPaymentSubmittedEmail(submitResult.order);
-
-    // Broadcast real-time update to both web pages and admin dashboard
     broadcastTicketsUpdate({
       name: 'admin:order_created',
       payload: submitResult.order
     });
 
+    const { id, buyer_email: email, status } = submitResult.order;
     return res.status(201).json({
       ok: true,
-      message: `¡Reporte de pago recibido para la Entrada #${paddedTicket}! En cuanto el administrador verifique tu pago, recibirás tu entrada PDF con código QR en ${submitResult.order.buyer_email}.`,
-      order: submitResult.order
+      message: `Recibimos el pago de tu entrada #${ticketNumber}. Te enviamos un correo a ${email}: la verificación puede tardar hasta 24 horas y, al aprobarse, recibirás tu entrada en PDF.`,
+      order: { id, ticket_number: ticketNumber, buyer_email: email, status }
     });
   } catch (err) {
     console.error('Error submitting order:', err);
@@ -327,9 +293,62 @@ app.post('/api/public/orders', requireSalesOpen, upload.single('screenshot'), as
   }
 });
 
+/**
+ * Standalone payment report ("Reporte de pago"), for buyers who paid but could not finish the popup.
+ * No ticket is held: the administrator assigns an available one when approving it.
+ */
+app.post('/api/public/payment-reports', requireSalesOpen, upload.single('screenshot'), async (req, res) => {
+  try {
+    const source = resolveSalesSource(req);
+    if (!source) return res.status(403).json({ok:false, code:'INVALID_SOURCE', message:'Reporta el pago desde una de las paginas de venta.'});
+    const form = parsePaymentForm(req.body);
+    if (!form.ok) return res.status(400).json({ ok: false, field: form.field, message: form.message });
+    const requested = req.body.requested_ticket ? parseTicketNumber(req.body.requested_ticket) : null;
+    if (req.body.requested_ticket && !requested) return res.status(400).json({ ok: false, field: 'requested_ticket', message: 'El número de entrada va del 001 al 250.' });
+    if (!validScreenshot(req)) return res.status(400).json({ ok: false, field: 'screenshot', message: 'Captura invalida' });
+
+    const config = getPublicConfig();
+    const sessionId = typeof req.body.session_id === 'string' && req.body.session_id.length <= 254 ? req.body.session_id : '';
+    const order = submitPaymentReport({
+      source_web: source,
+      session_id: sessionId || 'reporte',
+      ...form.data,
+      screenshot_path: saveScreenshot(req, 'reporte'),
+      amount_usd: config.ticket_price_usd,
+      bcv_rate: config.bcv_rate,
+      amount_ves: config.ticket_price_ves,
+      requested_ticket: requested,
+      buyer_comment: typeof req.body.buyer_comment === 'string' ? req.body.buyer_comment.trim().slice(0, 500) : ''
+    });
+
+    await sendPaymentSubmittedEmail(order);
+    io.emit('admin:order_created', { changed: true });
+
+    return res.status(201).json({
+      ok: true,
+      message: `Recibimos tu reporte de pago. Te enviamos un correo a ${order.buyer_email}: la verificación puede tardar hasta 24 horas y, al aprobarse, recibirás tu entrada en PDF.`,
+      order: { id: order.id, status: order.status }
+    });
+  } catch (err) {
+    console.error('Error submitting payment report:', err);
+    return res.status(500).json({ ok: false, message: 'Error interno al registrar el reporte de pago.' });
+  }
+});
+
 // ============================================================================
 // ADMIN DASHBOARD API
 // ============================================================================
+
+// Settings as the dashboard sees them: stored mail passwords are never sent back, only whether one exists.
+function adminSettings() {
+  const settings = getAllSettings();
+  delete settings.secret_hmac_key;
+  for (const key of ['smtp_pass', 'imap_pass']) {
+    settings[`${key}_set`] = Boolean(settings[key]);
+    delete settings[key];
+  }
+  return settings;
+}
 
 app.get('/api/admin/overview', (_req, res) => {
   releaseExpiredLocks();
@@ -337,8 +356,7 @@ app.get('/api/admin/overview', (_req, res) => {
   const orders = db.prepare('SELECT * FROM orders ORDER BY id DESC').all();
   const emailLogs = db.prepare('SELECT * FROM email_logs ORDER BY id DESC LIMIT 100').all();
   const campaigns = db.prepare('SELECT * FROM notification_campaigns ORDER BY id DESC LIMIT 50').all();
-  const rawSettings = getAllSettings();
-  delete rawSettings.secret_hmac_key;
+  const rawSettings = adminSettings();
   const publicConfig = getPublicConfig();
 
   const counts = {
@@ -390,14 +408,17 @@ app.get('/api/admin/overview', (_req, res) => {
 });
 
 /**
- * Approve payment -> Marks ticket SOLD, generates unique Token & PDF with QR, sends email automatically
+ * Approve payment -> Marks ticket SOLD, generates unique Token & PDF with QR, then emails the buyer
+ * "Pago aceptado" and a second message with the ticket PDF. Payment reports need `ticket_number`.
  */
 app.post('/api/admin/orders/:id/approve', async (req, res) => {
   try {
     const orderId = parseInt(req.params.id, 10);
-    const { admin_notes } = req.body || {};
+    const { admin_notes, ticket_number } = req.body || {};
+    const assignTicket = ticket_number ? parseTicketNumber(ticket_number) : null;
+    if (ticket_number && !assignTicket) return res.status(400).json({ ok: false, message: 'El número de entrada va del 001 al 250.' });
 
-    const result = approveOrderAtomic(orderId, admin_notes);
+    const result = approveOrderAtomic(orderId, admin_notes, assignTicket);
     if (!result.success) {
       return res.status(400).json({ ok: false, message: result.message });
     }
@@ -413,8 +434,9 @@ app.post('/api/admin/orders/:id/approve', async (req, res) => {
     db.prepare('UPDATE orders SET pdf_path = ? WHERE id = ?').run(pdfRelativeUrl, orderId);
     const finalOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
 
-    // Automatically email the buyer with the PDF ticket attached
-    const emailResult = await sendTicketApprovedEmail(finalOrder, pdfFullPath, pdfRelativeUrl);
+    // "Pago aceptado" first, then the ticket itself with the PDF attached
+    const approvedEmail = await sendPaymentApprovedEmail(finalOrder);
+    const emailResult = await sendTicketEmail(finalOrder, pdfFullPath, pdfRelativeUrl);
 
     broadcastTicketsUpdate({
       name: 'admin:order_updated',
@@ -423,7 +445,7 @@ app.post('/api/admin/orders/:id/approve', async (req, res) => {
 
     return res.json({
       ok: true,
-      message: `Pago aprobado. PDF generado. Estado del correo: ${emailResult.status}.`,
+      message: `Pago aprobado y entrada #${finalOrder.ticket_number} generada. Correo de pago aceptado: ${approvedEmail.status}. Correo con la entrada PDF: ${emailResult.status}.`,
       order: finalOrder,
       pdfUrl: pdfRelativeUrl,
       qrDataUrl,
@@ -458,7 +480,7 @@ app.post('/api/admin/orders/:id/reject', async (req, res) => {
 
     return res.json({
       ok: true,
-      message: `Pago rechazado. La entrada #${result.order.ticket_number} vuelve a estar disponible.`,
+      message: result.order.ticket_number ? `Pago rechazado. La entrada #${result.order.ticket_number} vuelve a estar disponible.` : 'Reporte de pago rechazado. Se notificó al comprador.',
       order: result.order
     });
   } catch (err) {
@@ -574,17 +596,33 @@ app.post('/api/admin/verify-qr/:rawToken/checkin', (req, res) => {
 app.put('/api/admin/settings', (req, res) => {
   try {
     const updates = {...(req.body || {})};
+    // An empty password field means "keep the stored one" (the dashboard never receives it).
+    for (const key of ['smtp_pass', 'imap_pass']) if (key in updates && !updates[key]) delete updates[key];
     const allowed = new Set(Object.keys(getAllSettings()).filter(k => k !== 'secret_hmac_key' && (!k.startsWith('bcv_') || ['bcv_mode', 'bcv_manual_rate'].includes(k))));
     if (Object.keys(updates).some(k => !allowed.has(k))) return res.status(400).json({ok:false, message:'Parametro no permitido'});
-    for (const key of ['ticket_price_usd', 'bcv_manual_rate', 'lock_duration_seconds', 'smtp_port']) if (key in updates && (!Number.isFinite(Number(updates[key])) || Number(updates[key]) <= 0)) return res.status(400).json({ok:false, message:'Valor numerico invalido'});
+    for (const key of ['ticket_price_usd', 'bcv_manual_rate', 'lock_duration_seconds', 'smtp_port', 'imap_port']) if (key in updates && (!Number.isFinite(Number(updates[key])) || Number(updates[key]) <= 0)) return res.status(400).json({ok:false, message:'Valor numerico invalido'});
     updateSettings(updates);
     broadcastConfigUpdate();
     return res.json({
       ok: true,
       message: 'Configuración actualizada y sincronizada en tiempo real con Página Web 1 y Página Web 2.',
       publicConfig: getPublicConfig(),
-      settings: Object.fromEntries(Object.entries(getAllSettings()).filter(([key]) => key !== 'secret_hmac_key'))
+      settings: adminSettings()
     });
+  } catch (err) {
+    return res.status(500).json({ ok: false, message: err.message });
+  }
+});
+
+/**
+ * Checks the saved SMTP and IMAP accounts and, with `to`, sends a test message.
+ */
+app.post('/api/admin/mail/test', async (req, res) => {
+  try {
+    const to = typeof req.body?.to === 'string' ? req.body.to.trim() : '';
+    if (to && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) return res.status(400).json({ ok: false, message: 'Correo de prueba invalido' });
+    const result = await testMailConnections(to);
+    return res.json({ ok: result.smtp.ok && result.imap.ok !== false && (!result.sent || result.sent.ok), ...result });
   } catch (err) {
     return res.status(500).json({ ok: false, message: err.message });
   }

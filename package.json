@@ -8,7 +8,8 @@
     "docker:up": "docker compose up -d --build --wait",
     "docker:down": "docker compose down",
     "build:admin": "tailwindcss -c scripts/admin-tailwind.config.cjs -i scripts/admin-tailwind.css -o sistema-central/public/admin/utilities.css --minify",
-    "test:blog": "node --test tests/blog.test.cjs"
+    "test:blog": "node --test tests/blog.test.cjs",
+    "test:payments": "node --test tests/payments.test.cjs"
   },
   "devDependencies": {
     "jsqr": "^1.4.0",
