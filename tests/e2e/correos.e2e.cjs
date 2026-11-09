@@ -6,6 +6,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const { DatabaseSync } = require('node:sqlite');
 
 const root = path.resolve(__dirname, '..', '..');
 const work = fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-correos-'));
@@ -135,9 +136,12 @@ function parseMail(file) {
     // --- QR at the door ---
     const verify = await api('GET', `/api/admin/verify-qr/${encodeURIComponent(token)}`, { admin: true });
     check('QR válido', verify.data.valid === true);
+    check('El QR nuevo usa el prefijo Espressivo', /^Espressivo-210-/.test(token));
     check('QR falso rechazado', (await api('GET', '/api/admin/verify-qr/TK-999-FALSO', { admin: true })).data.valid === false);
-    check('Registrar ingreso a conferencias', (await api('POST', `/api/admin/verify-qr/${encodeURIComponent(token)}/checkin`, { admin: true, json: { stage: 'conference' } })).status === 200);
-    check('Segundo ingreso bloqueado', (await api('POST', `/api/admin/verify-qr/${encodeURIComponent(token)}/checkin`, { admin: true, json: { stage: 'conference' } })).status === 409);
+    const checkInUrl = `/api/admin/verify-qr/${encodeURIComponent(token)}/checkin`;
+    const arrivals = await Promise.all([api('POST', checkInUrl, { admin: true }), api('POST', checkInUrl, { admin: true })]);
+    check('Una sola asistencia para todo el evento incluso con solicitudes simultáneas', arrivals.map(r => r.status).sort().join(',') === '200,409');
+    check('Se guarda la hora de asistencia', Boolean(arrivals.find(r => r.status === 200)?.data.order.checked_in_at));
     const qrLink = await api('GET', `/verify/${encodeURIComponent(token)}`);
     check('Enlace del QR lleva al verificador', qrLink.status === 302 && qrLink.headers.get('location').includes('verifyToken='));
 
@@ -150,6 +154,16 @@ function parseMail(file) {
     const approveReport = await api('POST', `/api/admin/orders/${report.data.order.id}/approve`, { admin: true, json: { ticket_number: '211' } });
     check('Aprobar reporte asignando #211', approveReport.status === 200 && approveReport.data.order.ticket_number === '211');
     await waitMails(5);
+
+    const legacyToken = 'TK-211-12345678-ABCDEF012345';
+    const legacyDb = new DatabaseSync(path.join(dataDir, 'entradas.sqlite'));
+    try {
+      legacyDb.prepare("UPDATE orders SET verification_token = ?, checked_in_concert = 1, checked_in_concert_at = datetime('now') WHERE id = ?")
+        .run(legacyToken, approveReport.data.order.id);
+    } finally { legacyDb.close(); }
+    const legacyUrl = `/api/admin/verify-qr/${legacyToken}`;
+    check('Una entrada con QR anterior conserva su validez', (await api('GET', legacyUrl, { admin: true })).data.valid === true);
+    check('La asistencia anterior al concierto cuenta para todo el evento', (await api('POST', legacyUrl + '/checkin', { admin: true })).status === 409);
 
     // --- 3. Rejection ---
     await api('POST', '/api/public/tickets/lock', { json: { ticket_number: '212', session_id: 'sess_e2e_checkout_3', source_web: 'pagina-web-1' } });

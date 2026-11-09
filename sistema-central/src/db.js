@@ -62,6 +62,7 @@ db.exec(`
     checked_in_conference_at TEXT,
     checked_in_concert INTEGER DEFAULT 0,
     checked_in_concert_at TEXT,
+    checked_in_at TEXT,
     admin_notes TEXT,
     created_at TEXT DEFAULT (datetime('now')),
     verified_at TEXT
@@ -104,7 +105,8 @@ for (const [column, type] of [
   ['payment_bank', 'TEXT'],
   ['report_kind', "TEXT NOT NULL DEFAULT 'CHECKOUT'"],
   ['requested_ticket', 'TEXT'],
-  ['buyer_comment', 'TEXT']
+  ['buyer_comment', 'TEXT'],
+  ['checked_in_at', 'TEXT']
 ]) {
   if (!db.prepare('PRAGMA table_info(orders)').all().some(c => c.name === column)) db.exec(`ALTER TABLE orders ADD COLUMN ${column} ${type}`);
 }
@@ -196,6 +198,17 @@ const insertSettingStmt = db.prepare(`
 
 db.exec('BEGIN IMMEDIATE TRANSACTION');
 try {
+  // Preserve the first recorded arrival for tickets scanned before attendance was unified.
+  db.exec(`
+    UPDATE orders
+    SET checked_in_at = COALESCE(
+      MIN(checked_in_conference_at, checked_in_concert_at),
+      checked_in_conference_at,
+      checked_in_concert_at
+    )
+    WHERE checked_in_at IS NULL
+      AND (checked_in_conference_at IS NOT NULL OR checked_in_concert_at IS NOT NULL)
+  `);
   for (const [k, v] of Object.entries(defaultSettings)) {
     insertSettingStmt.run(k, String(v));
   }
@@ -676,7 +689,7 @@ function approveOrderAtomic(orderId, adminNotes = '', assignTicket = null) {
       .slice(0, 12)
       .toUpperCase();
 
-    const verificationToken = `TK-${order.ticket_number}-${rawUuid.split('-')[0]}-${signature}`;
+    const verificationToken = `Espressivo-${order.ticket_number}-${rawUuid.split('-')[0]}-${signature}`;
 
     db.prepare(`
       UPDATE orders

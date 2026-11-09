@@ -79,17 +79,15 @@ async function run() {
     assert.equal(decoded.data,approval.data.verificationUrl);
     const token=approval.data.order.verification_token;
     assert.equal((await req(central,'/api/admin/verify-qr/'+token,undefined,true)).data.valid,true);
-    for (const stage of ['conference','concert']) {
-      const ingress=await Promise.all([req(central,`/api/admin/verify-qr/${token}/checkin`,{stage},true),req(central,`/api/admin/verify-qr/${token}/checkin`,{stage},true)]);
-      assert.deepEqual(ingress.map(r=>r.status).sort(),[200,409]);
-    }
+    const ingress=await Promise.all([req(central,`/api/admin/verify-qr/${token}/checkin`,{},true),req(central,`/api/admin/verify-qr/${token}/checkin`,{},true)]);
+    assert.deepEqual(ingress.map(r=>r.status).sort(),[200,409]);
     assert.equal((await req(central,`/api/admin/orders/${order.data.order.id}/reject`,{},true)).status,400);
     approved.push(approval.data.order);
   }
   assert.notEqual(approved[0].verification_token,approved[1].verification_token);
   assert.equal((await req(central,'/api/admin/verify-qr/TK-FALSO',undefined,true)).status,404);
   pass('Compra desde ambas webs, aprobacion, PDF, QR decodificado y SMTP real a Mailpit');
-  pass('QR falso rechazado; ingreso unico en conferencias y concierto incluso con escaneos simultaneos');
+  pass('QR falso rechazado e ingreso único a todo el evento incluso con escaneos simultáneos');
   await lock(sites[0],regression,'regression-old');
   const old = await req(sites[0],'/api/public/orders',payload(regression,'regression-old','pagina-web-1'));
   await req(central,`/api/admin/orders/${old.data.order.id}/reject`,{},true);

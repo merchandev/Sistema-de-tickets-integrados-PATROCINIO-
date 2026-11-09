@@ -645,6 +645,7 @@ async function verifyQrToken(rawToken, { silent = false } = {}) {
     }
 
     const o = data.order;
+    const attendanceRecorded = o.checked_in_at || o.checked_in_conference || o.checked_in_concert;
     box.className = 'p-6 rounded-xl border-2 border-emerald-500 bg-emerald-50/60 text-slate-900 space-y-4 text-left';
     box.innerHTML = `
       <div class="flex items-center justify-between border-b border-emerald-200 pb-3">
@@ -679,23 +680,12 @@ async function verifyQrToken(rawToken, { silent = false } = {}) {
 
       <div class="p-3 rounded-xl border border-emerald-200 bg-white space-y-2">
         <div class="text-sm font-bold text-slate-900">Acceso a todo el evento</div>
-        <p class="text-xs text-slate-600">La misma entrada incluye las conferencias y el concierto. Puedes registrar la asistencia por actividad.</p>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            ${
-              o.checked_in_conference
-                ? `<div class="text-xs text-emerald-800 font-semibold mt-1">✓ Asistencia a conferencias registrada · ${escapeHtml(o.checked_in_conference_at)}</div>`
-                : `<button onclick="checkInAttendee('${o.verification_token}', 'conference')" class="mt-2 w-full py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold">Registrar asistencia a conferencias</button>`
-            }
-          </div>
-          <div>
-            ${
-              o.checked_in_concert
-                ? `<div class="text-xs text-emerald-800 font-semibold mt-1">✓ Asistencia al concierto registrada · ${escapeHtml(o.checked_in_concert_at)}</div>`
-                : `<button onclick="checkInAttendee('${o.verification_token}', 'concert')" class="mt-2 w-full py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold">Registrar asistencia al concierto</button>`
-            }
-          </div>
-        </div>
+        <p class="text-xs text-slate-600">La misma entrada incluye las conferencias y el concierto.</p>
+        ${
+          attendanceRecorded
+            ? `<div class="text-xs text-emerald-800 font-semibold mt-1">✓ Asistencia registrada ${escapeHtml(o.checked_in_at || '')}</div>`
+            : `<button type="button" data-token="${escapeHtml(o.verification_token)}" onclick="checkInAttendee(this)" class="mt-2 w-full py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold">Registrar asistencia</button>`
+        }
       </div>
     `;
   } catch (err) {
@@ -704,12 +694,12 @@ async function verifyQrToken(rawToken, { silent = false } = {}) {
   }
 }
 
-async function checkInAttendee(token, stage) {
+async function checkInAttendee(button) {
+  const token = button.dataset.token;
+  button.disabled = true;
   try {
     const res = await fetch(`/api/admin/verify-qr/${encodeURIComponent(token)}/checkin`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ stage })
+      method: 'POST'
     });
     const data = await res.json();
     if (!data.ok) {
@@ -722,6 +712,8 @@ async function checkInAttendee(token, stage) {
     await fetchAdminOverview();
   } catch (err) {
     alert('No se pudo registrar la asistencia.');
+  } finally {
+    button.disabled = false;
   }
 }
 

@@ -530,7 +530,7 @@ app.post('/api/admin/orders/:id/reject', async (req, res) => {
 app.get('/api/admin/verify-qr/:rawToken', (req, res) => {
   try {
     let token = decodeURIComponent(req.params.rawToken || '').trim();
-    // If scanned QR is a full URL like http://.../verify/TK-001-..., extract the token part
+    // Extract the token from full QR links as well as from manually entered codes.
     if (token.includes('/verify/')) {
       token = token.split('/verify/').pop().split('?')[0].split('#')[0].trim();
     } else if (token.includes('verifyToken=')) {
@@ -570,7 +570,7 @@ app.get('/api/admin/verify-qr/:rawToken', (req, res) => {
 });
 
 /**
- * Record attendance for an activity using the full-event ticket.
+ * Record one arrival for the entire event.
  */
 app.post('/api/admin/verify-qr/:rawToken/checkin', (req, res) => {
   try {
@@ -579,40 +579,25 @@ app.post('/api/admin/verify-qr/:rawToken/checkin', (req, res) => {
       token = token.split('/verify/').pop().split('?')[0].split('#')[0].trim();
     }
 
-    const { stage } = req.body;
-    if (!['conference', 'concert'].includes(stage)) return res.status(400).json({ok:false, message:'Etapa invalida'}); // 'conference' or 'concert'
-    const order = db.prepare('SELECT * FROM orders WHERE verification_token = ? AND status = \'APPROVED\'').get(token);
-    if (!order) {
-      return res.status(404).json({ ok: false, message: 'Token QR no válido.' });
+    const updated = db.prepare(`
+      UPDATE orders SET checked_in_at = datetime('now')
+      WHERE verification_token = ? AND status = 'APPROVED'
+        AND checked_in_at IS NULL
+        AND COALESCE(checked_in_conference, 0) = 0
+        AND COALESCE(checked_in_concert, 0) = 0
+      RETURNING *
+    `).get(token);
+    if (!updated) {
+      const order = db.prepare("SELECT * FROM orders WHERE verification_token = ? AND status = 'APPROVED'").get(token);
+      if (!order) return res.status(404).json({ ok: false, message: 'Token QR no válido.' });
+      return res.status(409).json({
+        ok: false,
+        alreadyCheckedIn: true,
+        message: `La asistencia para la entrada #${order.ticket_number} ya está registrada.`,
+        order
+      });
     }
 
-    if (stage === 'concert') {
-      if (order.checked_in_concert) {
-        return res.status(409).json({
-          ok: false,
-          alreadyCheckedIn: true,
-          message: `La asistencia al concierto para la entrada #${order.ticket_number} ya se registró a las ${order.checked_in_concert_at}.`,
-          order
-        });
-      }
-      db.prepare(`
-        UPDATE orders SET checked_in_concert = 1, checked_in_concert_at = datetime('now') WHERE id = ?
-      `).run(order.id);
-    } else {
-      if (order.checked_in_conference) {
-        return res.status(409).json({
-          ok: false,
-          alreadyCheckedIn: true,
-          message: `La asistencia a conferencias para la entrada #${order.ticket_number} ya se registró a las ${order.checked_in_conference_at}.`,
-          order
-        });
-      }
-      db.prepare(`
-        UPDATE orders SET checked_in_conference = 1, checked_in_conference_at = datetime('now') WHERE id = ?
-      `).run(order.id);
-    }
-
-    const updated = db.prepare('SELECT * FROM orders WHERE id = ?').get(order.id);
     io.emit('admin:order_updated', { changed: true });
 
     return res.json({

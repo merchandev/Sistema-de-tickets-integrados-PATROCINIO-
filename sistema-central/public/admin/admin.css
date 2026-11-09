@@ -98,7 +98,6 @@ a {
   height: 48px;
   flex-shrink: 0;
   object-fit: contain;
-  mix-blend-mode: multiply;
 }
 .admin-brand small {
   display: block;

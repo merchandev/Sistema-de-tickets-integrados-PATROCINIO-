@@ -191,7 +191,7 @@ async function generateDemoTicketPdf(source, eventConfig) {
     buyer_cedula: 'V-00000000',
     buyer_phone: '0000-0000000',
     buyer_email: 'andrea@example.invalid',
-    verification_token: 'DEMO-001'
+    verification_token: 'Espressivo-001-DEMO'
   };
   const qrBuffer = await QRCode.toBuffer('DEMO-ENTRADA-SIN-VALIDEZ', qrOptions);
   const doc = createTicketDocument(sample, eventConfig, qrBuffer, true);

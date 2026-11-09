@@ -8,7 +8,7 @@ Un único repositorio para tres aplicaciones independientes que comparten invent
 | `pagina-web-1/` | Iluminando Caminos: portada y compra | 3001 |
 | `pagina-web-2/` | Hablemos de Marketing: portada y compra | 3002 |
 
-Las dos páginas consultan exclusivamente el sistema central. Cada reserva se protege con una transacción SQLite y dura 180 segundos. La orden conserva el origen de la web y la cotización de su reserva; aprobar el pago genera la entrada PDF y el token QR. Los ingresos a conferencias y concierto se registran por separado.
+Las dos páginas consultan exclusivamente el sistema central. Cada reserva se protege con una transacción SQLite y dura 180 segundos. La orden conserva el origen de la web y la cotización de su reserva. Aprobar el pago genera la entrada PDF y el token QR. En puerta se registra una sola asistencia para todo el evento.
 
 ## Desarrollo local
 
