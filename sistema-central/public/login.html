@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="robots" content="noindex" />
   <title>Iniciar sesión · Panel de entradas</title>
+  <link rel="icon" type="image/png" href="/admin/brands/espressivo-venezuela.png?v=2" />
   <style>
     :root {
       --ink: #1d232c;
@@ -39,22 +40,15 @@
       margin-bottom: 28px;
     }
     .mark {
-      width: 40px;
-      height: 40px;
-      display: grid;
-      place-items: center;
+      width: 52px;
+      height: 52px;
+      display: block;
+      padding: 4px;
+      flex-shrink: 0;
+      object-fit: contain;
       border-radius: 12px;
-      background: var(--accent);
-      color: #fff;
-    }
-    .mark svg {
-      width: 24px;
-      height: 24px;
-      fill: none;
-      stroke: currentColor;
-      stroke-width: 1.6;
-      stroke-linecap: round;
-      stroke-linejoin: round;
+      background: #fff;
+      border: 1px solid var(--line);
     }
     .brand strong {
       display: block;
@@ -200,7 +194,7 @@
 <body>
   <main class="login">
     <div class="brand">
-      <span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 7h18v3a2 2 0 0 0 0 4v3H3v-3a2 2 0 0 0 0-4z M15 7v3 M15 14v3"/></svg></span>
+      <img class="mark" src="/admin/brands/espressivo-venezuela.png?v=2" width="52" height="52" alt="Espressivo Venezuela" />
       <div><strong>Entradas</strong><span>Administración del evento</span></div>
     </div>
 

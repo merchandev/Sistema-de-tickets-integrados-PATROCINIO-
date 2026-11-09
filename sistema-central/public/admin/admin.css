@@ -99,7 +99,8 @@ a {
   padding: 4px;
   flex-shrink: 0;
   object-fit: contain;
-  background: #181619;
+  background: #fff;
+  border: 1px solid var(--line);
   border-radius: 11px;
 }
 .admin-brand small {

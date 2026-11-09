@@ -65,6 +65,9 @@ app.get(['/admin/login', '/admin/login/'], (req, res) => {
 });
 app.post('/admin/login', loginBody, adminAuth.login);
 app.post('/admin/logout', adminAuth.logout);
+app.get('/admin/brands/espressivo-venezuela.png', (_req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'public', 'admin', 'brands', 'espressivo-venezuela.png'));
+});
 app.use(['/admin', '/api/admin', '/storage'], adminAuth.requireAdmin);
 const server = http.createServer(app);
 const io = new Server(server, {
