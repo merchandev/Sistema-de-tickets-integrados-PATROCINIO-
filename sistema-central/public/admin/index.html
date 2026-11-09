@@ -44,7 +44,14 @@
           <button type="button" class="notif-all" onclick="showPendingOrders()">Ver todos los pagos pendientes</button>
         </div>
       </div>
-      <span class="admin-avatar" aria-label="Administrador">A</span></div>
+      <div class="account">
+        <button type="button" id="account-btn" class="admin-avatar" aria-expanded="false" aria-controls="account-menu" aria-label="Cuenta del administrador">A</button>
+        <div id="account-menu" class="account-menu" hidden>
+          <p class="account-user"><span>Sesión iniciada como</span><strong id="account-user">—</strong></p>
+          <button type="button" onclick="openAccountForm()">Cambiar usuario y contraseña</button>
+          <button type="button" onclick="logout()">Cerrar sesión</button>
+        </div>
+      </div></div>
   </header>
   <div id="admin-toast" class="admin-toast" role="status" aria-live="polite" hidden></div>
   <!-- Main Content -->

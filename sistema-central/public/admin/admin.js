@@ -1,3 +1,13 @@
+// An expired session answers 401 on any admin request: go back to the sign-in page and return here after.
+const nativeFetch = window.fetch.bind(window);
+window.fetch = async (input, init) => {
+  const res = await nativeFetch(input, init);
+  if (res.status === 401 && String(input).startsWith('/api/admin')) {
+    location.href = `/admin/login?next=${encodeURIComponent(location.pathname + location.search + location.hash)}`;
+  }
+  return res;
+};
+
 let state = {
   counts: {},
   publicConfig: {},
@@ -1035,3 +1045,102 @@ document.addEventListener('keydown', event => {
     else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
   }
 });
+
+// ============================================================================
+// ACCOUNT: signed-in user, change of user and password, sign-out
+// ============================================================================
+
+async function loadSession() {
+  try {
+    const res = await fetch('/api/admin/session');
+    const data = await res.json();
+    if (!data.ok) return;
+    document.getElementById('account-user').textContent = data.user;
+    document.getElementById('account-btn').textContent = (data.user || 'A').charAt(0).toUpperCase();
+  } catch (_) {}
+}
+
+function closeAccountMenu() {
+  document.getElementById('account-menu').hidden = true;
+  document.getElementById('account-btn').setAttribute('aria-expanded', 'false');
+}
+
+function openAccountForm() {
+  closeAccountMenu();
+  openModal('Cambiar usuario y contraseña', `
+    <form id="account-form" class="account-form" onsubmit="saveAccount(event)">
+      <p class="od-muted">El panel es el mismo para Iluminando Caminos y Hablemos de Marketing. Al guardar se cierran las demás sesiones abiertas.</p>
+      <label for="account-current">Contraseña actual
+        <input id="account-current" name="current_password" type="password" autocomplete="current-password" required />
+      </label>
+      <label for="account-new-user">Nuevo usuario o correo
+        <input id="account-new-user" name="new_user" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required value="${escapeHtml(document.getElementById('account-user').textContent)}" />
+      </label>
+      <label for="account-new-password">Nueva contraseña <small>mínimo 8 caracteres</small>
+        <input id="account-new-password" name="new_password" type="password" autocomplete="new-password" minlength="8" required />
+      </label>
+      <label for="account-confirm">Repite la nueva contraseña
+        <input id="account-confirm" type="password" autocomplete="new-password" minlength="8" required />
+      </label>
+      <p id="account-error" class="od-warning" role="alert" hidden></p>
+      <div class="od-actions">
+        <button type="submit" class="od-approve" id="account-save">Guardar</button>
+        <button type="button" class="od-cancel" onclick="closeModal()">Cancelar</button>
+      </div>
+    </form>
+  `);
+  document.getElementById('account-current').focus();
+}
+
+async function saveAccount(event) {
+  event.preventDefault();
+  const form = event.target;
+  const error = document.getElementById('account-error');
+  const show = (message, field) => {
+    error.textContent = message;
+    error.hidden = false;
+    if (field && form.elements[field]) form.elements[field].focus();
+  };
+  if (form.elements.new_password.value !== document.getElementById('account-confirm').value) return show('Las contraseñas nuevas no coinciden.', 'new_password');
+  const button = document.getElementById('account-save');
+  button.disabled = true;
+  try {
+    const res = await fetch('/api/admin/account', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        current_password: form.elements.current_password.value,
+        new_user: form.elements.new_user.value,
+        new_password: form.elements.new_password.value
+      })
+    });
+    const data = await res.json();
+    if (!data.ok) return show(data.message, data.field);
+    closeModal();
+    showToast(data.message);
+    await loadSession();
+  } catch (_) {
+    show('No se pudo guardar. Revisa tu conexión e inténtalo de nuevo.');
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function logout() {
+  try {
+    await fetch('/admin/logout', { method: 'POST' });
+  } finally {
+    location.href = '/admin/login';
+  }
+}
+
+document.getElementById('account-btn').addEventListener('click', (event) => {
+  event.stopPropagation();
+  const menu = document.getElementById('account-menu');
+  menu.hidden = !menu.hidden;
+  event.currentTarget.setAttribute('aria-expanded', String(!menu.hidden));
+});
+document.addEventListener('click', (event) => {
+  if (!event.target.closest('.account')) closeAccountMenu();
+});
+loadSession();

@@ -48,15 +48,21 @@ function resolveSalesSource(req) {
   return null;
 }
 if (!process.env.ADMIN_PASSWORD) throw new Error('ADMIN_PASSWORD es obligatorio');
-function adminAuth(req, res, next) {
-  const expected = Buffer.from((process.env.ADMIN_USER || 'admin') + ':' + process.env.ADMIN_PASSWORD);
-  const supplied = Buffer.from((req.headers.authorization || '').replace(/^Basic /, ''), 'base64');
-  if (supplied.length === expected.length && crypto.timingSafeEqual(supplied, expected)) return next();
-  res.set('WWW-Authenticate', 'Basic realm="Administracion de entradas"');
-  return res.status(401).json({ok:false, message:'Autenticacion requerida'});
-}
+const adminAuth = require('./adminAuth');
+// Traefik terminates HTTPS: trust its X-Forwarded-* headers for the client IP and the Secure cookie.
+app.set('trust proxy', 1);
 app.get('/health', (_req, res) => { db.prepare('SELECT 1').get(); res.json({ok:true}); });
-app.use(['/admin', '/api/admin', '/storage'], adminAuth);
+
+// Sign-in page of the dashboard shared by both sites (outside the protected area)
+const loginBody = [express.json({ limit: '10kb' }), express.urlencoded({ extended: false, limit: '10kb' })];
+app.get(['/admin/login', '/admin/login/'], (req, res) => {
+  if (adminAuth.sessionFrom(req)) return res.redirect(adminAuth.safeNext(req.query.next));
+  res.set('Cache-Control', 'no-store');
+  return res.sendFile(path.join(__dirname, '..', 'public', 'login.html'));
+});
+app.post('/admin/login', loginBody, adminAuth.login);
+app.post('/admin/logout', adminAuth.logout);
+app.use(['/admin', '/api/admin', '/storage'], adminAuth.requireAdmin);
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
@@ -351,6 +357,8 @@ app.post('/api/public/payment-reports', requireSalesOpen, upload.single('screens
 function adminSettings() {
   const settings = getAllSettings();
   delete settings.secret_hmac_key;
+  delete settings.admin_user;
+  delete settings.admin_password_hash;
   for (const key of ['smtp_pass', 'imap_pass']) {
     settings[`${key}_set`] = Boolean(settings[key]);
     delete settings[key];
@@ -606,7 +614,7 @@ app.put('/api/admin/settings', (req, res) => {
     const updates = {...(req.body || {})};
     // An empty password field means "keep the stored one" (the dashboard never receives it).
     for (const key of ['smtp_pass', 'imap_pass']) if (key in updates && !updates[key]) delete updates[key];
-    const allowed = new Set(Object.keys(getAllSettings()).filter(k => k !== 'secret_hmac_key' && (!k.startsWith('bcv_') || ['bcv_mode', 'bcv_manual_rate'].includes(k))));
+    const allowed = new Set(Object.keys(getAllSettings()).filter(k => k !== 'secret_hmac_key' && !k.startsWith('admin_') && (!k.startsWith('bcv_') || ['bcv_mode', 'bcv_manual_rate'].includes(k))));
     if (Object.keys(updates).some(k => !allowed.has(k))) return res.status(400).json({ok:false, message:'Parametro no permitido'});
     for (const key of ['ticket_price_usd', 'bcv_manual_rate', 'lock_duration_seconds', 'smtp_port', 'imap_port']) if (key in updates && (!Number.isFinite(Number(updates[key])) || Number(updates[key]) <= 0)) return res.status(400).json({ok:false, message:'Valor numerico invalido'});
     updateSettings(updates);
@@ -621,6 +629,12 @@ app.put('/api/admin/settings', (req, res) => {
     return res.status(500).json({ ok: false, message: err.message });
   }
 });
+
+/**
+ * Signed-in administrator, and the change of user and password from the panel.
+ */
+app.get('/api/admin/session', (req, res) => res.json({ ok: true, user: req.adminUser }));
+app.put('/api/admin/account', adminAuth.changeAccount);
 
 /**
  * Checks the saved SMTP and IMAP accounts and, with `to`, sends a test message.

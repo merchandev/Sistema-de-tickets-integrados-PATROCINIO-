@@ -26,6 +26,12 @@ El correo de «Pago en verificación» sale en segundo plano, así que el compra
 
 `scripts/desplegar-compras.sh` publica juntos el sistema central y las dos webs desde `release-compras.tar.gz`, con copia previa de SQLite, almacenamiento y código.
 
+## Acceso al panel
+
+El panel es uno solo para las dos webs: `https://iluminandocaminos.com/admin/`. Sin sesión, cualquier ruta del panel (incluidos los enlaces de los QR) lleva a `/admin/login` y, tras iniciar sesión, vuelve a donde iba. La sesión dura 12 horas, se guarda en SQLite y sobrevive a reinicios; ocho intentos fallidos desde la misma IP bloquean el acceso 15 minutos.
+
+La primera vez se entra con `ADMIN_USER` / `ADMIN_PASSWORD` de `.env.docker`. Desde el menú de la cuenta (avatar arriba a la derecha) se cambian usuario y contraseña: la contraseña se guarda con scrypt, la cuenta guardada reemplaza a la de `.env.docker` y se cierran las demás sesiones. Los scripts de verificación pueden seguir usando credenciales HTTP Basic.
+
 ## Configuración del VPS
 
 En `/docker/socials-entradas/.env.domains`:
