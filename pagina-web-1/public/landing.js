@@ -50,7 +50,6 @@
     if (notice && cfg.sales_enabled !== false) notice.remove();
     const usd = Number(cfg.ticket_price_usd || 5);
     const usdTxt = `$${Number.isInteger(usd) ? usd : usd.toFixed(2)}`;
-    $('#chip-price').innerHTML = `${usdTxt}<small> USD</small>`;
     $('#cta-price').textContent = usdTxt;
     $('#sticky-price').textContent = usdTxt;
     $$('.faq-price').forEach((e) => { e.textContent = `$${usd.toFixed(2)} USD`; });
@@ -61,8 +60,6 @@
       const rate = Number(cfg.bcv_rate || 0);
       if (rate > 0) $('#cta-rate').textContent = `Tasa oficial BCV: Bs. ${rate.toFixed(4)}`;
     }
-
-    if (cfg.event_date) $('#chip-date').textContent = fmtDate(cfg.event_date);
 
     if (Array.isArray(cfg.event_schedule) && cfg.event_schedule.length) {
       $('#timeline').innerHTML = cfg.event_schedule.map((it) => `
