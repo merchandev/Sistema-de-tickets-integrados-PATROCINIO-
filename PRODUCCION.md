@@ -22,6 +22,8 @@ Para abrir ventas más adelante: validar los datos bancarios, el contenido y fec
 
 La cuenta de correo se configura en «Correos y avisos»: SMTP para el envío e IMAP opcional para guardar una copia en Enviados (si IMAP no tiene usuario propio usa el de SMTP). «Probar conexión» comprueba ambos y puede enviar un correo de prueba. Las contraseñas guardadas no se devuelven al navegador.
 
+El correo de «Pago en verificación» sale en segundo plano, así que el comprador ve la confirmación sin esperar al servidor de correo. Cada mensaje lleva versión HTML y texto plano, Message-ID y Reply-To del dominio del remitente, y deja una línea `[Mail] TIPO -> ESTADO (@dominio)` en el registro del contenedor (`docker logs socials-entradas-sistema-central-1`). `SIMULATED_OUTBOX` significa que no hay servidor SMTP guardado y el correo no salió.
+
 `scripts/desplegar-compras.sh` publica juntos el sistema central y las dos webs desde `release-compras.tar.gz`, con copia previa de SQLite, almacenamiento y código.
 
 ## Configuración del VPS

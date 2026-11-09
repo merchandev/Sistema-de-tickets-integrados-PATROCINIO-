@@ -5,19 +5,45 @@ const MailComposer = require('nodemailer/lib/mail-composer');
 const { ImapFlow } = require('imapflow');
 const { db, getAllSettings, getPublicConfig } = require('./db');
 
+// Address and domain of the configured sender ("Nombre <correo@dominio>" or a bare address).
+function senderAddress(from) {
+  const m = /<([^>]+)>/.exec(String(from || ''));
+  return (m ? m[1] : String(from || '')).trim();
+}
+const senderDomain = (from) => senderAddress(from).split('@')[1] || 'localhost';
+
+// Plain-text alternative of the HTML layout: mail filters distrust HTML-only messages.
+function htmlToText(html) {
+  return String(html || '')
+    .replace(/<(style|script)[\s\S]*?<\/\1>/gi, '')
+    .replace(/<span style="display:none[^>]*>[\s\S]*?<\/span>/i, '')
+    .replace(/<\/td>\s*<td[^>]*>/gi, ': ')
+    .replace(/<a [^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi, '$2 ($1)')
+    .replace(/<br\s*\/?>|<\/(p|h1|div|tr)>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/ *\n */g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 /**
  * Creates a Nodemailer transporter using the current SMTP settings in the database.
  */
 function getTransporter() {
   const s = getAllSettings();
   if (s.smtp_host) {
+    const from = s.smtp_from || s.smtp_user;
     return {
       isLiveSmtp: true,
-      from: s.smtp_from || s.smtp_user,
+      from,
       transporter: nodemailer.createTransport({
         host: s.smtp_host,
         port: parseInt(s.smtp_port || '587', 10),
         secure: s.smtp_secure === 'true' || s.smtp_port === '465',
+        // Greet the server with the sender's domain instead of the container's random hostname
+        name: senderDomain(from),
         auth: s.smtp_user ? { user: s.smtp_user, pass: s.smtp_pass } : undefined,
         connectionTimeout: 10000, greetingTimeout: 10000, socketTimeout: 20000
       })
@@ -92,11 +118,13 @@ async function sendSystemEmail({
   let imapSaved = false;
   const mailOptions = {
     from,
+    replyTo: senderAddress(from),
     to: toName ? { name: toName, address: toEmail } : toEmail,
     subject,
     html,
+    text: htmlToText(html),
     attachments,
-    messageId: `<${crypto.randomUUID()}@entradas>`,
+    messageId: `<${crypto.randomUUID()}@${senderDomain(from)}>`,
     date: new Date()
   };
 
@@ -117,6 +145,9 @@ async function sendSystemEmail({
       console.error('[IMAP Error] Could not save sent copy:', err.message);
     }
   }
+
+  // One line per message in the container log (no personal data beyond the recipient's domain)
+  console.log(`[Mail] ${type} -> ${status}${imapSaved ? ' + copia en Enviados' : ''} (@${String(toEmail).split('@')[1] || '?'})${errorMessage ? `: ${errorMessage}` : ''}`);
 
   const insertStmt = db.prepare(`
     INSERT INTO email_logs (
@@ -474,5 +505,6 @@ module.exports = {
   sendTicketEmail,
   sendPaymentRejectedEmail,
   sendEventCampaignNotification,
-  testMailConnections
+  testMailConnections,
+  htmlToText
 };

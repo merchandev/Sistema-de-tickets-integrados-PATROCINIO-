@@ -90,3 +90,14 @@ test("rejecting a payment report only closes the report", () => {
   assert.equal(store.db.prepare("SELECT COUNT(*) AS c FROM tickets WHERE status = 'AVAILABLE'").get().c, before);
   assert.equal(store.rejectOrderAtomic(pending.id, "otra vez").success, false);
 });
+
+test("emails carry a plain-text version with the payment details", async () => {
+  const { sendPaymentSubmittedEmail, htmlToText } = require("../sistema-central/src/mailer");
+  const sent = await sendPaymentSubmittedEmail(report("31415926"));
+  assert.equal(sent.status, "SIMULATED_OUTBOX");
+  const text = htmlToText(store.db.prepare("SELECT body_html FROM email_logs WHERE id = ?").get(sent.logId).body_html);
+  assert.match(text, /Tu pago está en verificación/);
+  assert.match(text, /hasta 24 horas/);
+  assert.match(text, /Referencia: 31415926/);
+  assert.doesNotMatch(text, /<[a-z]|&amp;/);
+});

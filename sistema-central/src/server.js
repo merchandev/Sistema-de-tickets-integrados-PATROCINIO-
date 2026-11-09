@@ -230,6 +230,13 @@ app.post('/api/public/tickets/unlock', (req, res) => {
   }
 });
 
+// Emails that must not delay the HTTP response; failures are already recorded in email_logs.
+function sendInBackground(promise) {
+  promise.then((result) => {
+    if (result.status === 'ERROR') console.error('[Mail] No se pudo enviar el correo:', result.errorMessage);
+  }).catch((err) => console.error('[Mail] Error inesperado al enviar el correo:', err.message));
+}
+
 // Optional proof of payment: kept only when the buyer attaches it.
 function saveScreenshot(req, label) {
   if (req.file) return `/storage/uploads/${req.file.filename}`;
@@ -274,12 +281,13 @@ app.post('/api/public/orders', requireSalesOpen, upload.single('screenshot'), as
       });
     }
 
-    // "Pago en verificación" email, then real-time update for both pages and the dashboard
-    await sendPaymentSubmittedEmail(submitResult.order);
+    // Real-time update for both pages and the dashboard; the "Pago en verificación" email goes out in
+    // the background so the buyer gets the confirmation without waiting for the mail server.
     broadcastTicketsUpdate({
       name: 'admin:order_created',
       payload: submitResult.order
     });
+    sendInBackground(sendPaymentSubmittedEmail(submitResult.order));
 
     const { id, buyer_email: email, status } = submitResult.order;
     return res.status(201).json({
@@ -321,8 +329,8 @@ app.post('/api/public/payment-reports', requireSalesOpen, upload.single('screens
       buyer_comment: typeof req.body.buyer_comment === 'string' ? req.body.buyer_comment.trim().slice(0, 500) : ''
     });
 
-    await sendPaymentSubmittedEmail(order);
     io.emit('admin:order_created', { changed: true });
+    sendInBackground(sendPaymentSubmittedEmail(order));
 
     return res.status(201).json({
       ok: true,
