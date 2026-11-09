@@ -101,3 +101,27 @@ test("emails carry a plain-text version with the payment details", async () => {
   assert.match(text, /Referencia: 31415926/);
   assert.doesNotMatch(text, /<[a-z]|&amp;/);
 });
+
+test("Mailpit captures test messages and a pending notice can be retried once through real SMTP", async (t) => {
+  const nodemailer = require("../sistema-central/node_modules/nodemailer");
+  const { sendPaymentSubmittedEmail, testMailConnections, retryOrderEmail } = require("../sistema-central/src/mailer");
+  const previousHost = store.getAllSettings().smtp_host;
+  t.after(() => store.updateSettings({ smtp_host: previousHost }));
+  const sendMail = t.mock.fn(async () => ({ accepted: ["buyer@example.test"] }));
+  const verify = t.mock.fn(async () => true);
+  t.mock.method(nodemailer, "createTransport", () => ({ sendMail, verify }));
+
+  store.updateSettings({ smtp_host: "mailpit" });
+  const order = report("27182818");
+  const captured = await sendPaymentSubmittedEmail(order);
+  assert.equal(captured.status, "SIMULATED_OUTBOX");
+  assert.equal((await testMailConnections()).smtp.ok, false);
+  assert.equal(verify.mock.callCount(), 0);
+  assert.equal((await retryOrderEmail(captured.logId)).ok, false);
+
+  store.updateSettings({ smtp_host: "smtp.example.test" });
+  const results = await Promise.all([retryOrderEmail(captured.logId), retryOrderEmail(captured.logId)]);
+  assert.equal(results.filter(result => result.ok).length, 1);
+  assert.equal((await retryOrderEmail(captured.logId)).ok, false);
+  assert.equal(sendMail.mock.callCount(), 2);
+});

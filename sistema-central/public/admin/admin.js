@@ -797,6 +797,12 @@ function populateCmsAndSmtpForms() {
 
 // Stored passwords never reach the browser: an empty field keeps the saved one.
 function populateMailForm(s) {
+  const mode = document.getElementById('mail-delivery-mode');
+  mode.textContent = s.smtp_delivery_mode === 'smtp'
+    ? 'Servidor SMTP configurado. Usa «Probar conexión» y confirma la recepción en tu buzón.'
+    : s.smtp_delivery_mode === 'mailpit'
+      ? 'Mailpit está en modo de pruebas. Los compradores no reciben estos correos.'
+      : 'Configura un servidor SMTP para entregar correos a los compradores.';
   document.getElementById('smtp-host').value = s.smtp_host || '';
   document.getElementById('smtp-port').value = s.smtp_port || '465';
   document.getElementById('smtp-user').value = s.smtp_user || '';
@@ -870,6 +876,8 @@ async function saveSmtpSettings(e) {
     const data = await res.json();
     if (!data.ok) throw new Error(data.message || 'No se pudo guardar');
     populateMailForm(data.settings || {});
+    state.settings = data.settings || {};
+    renderEmailLogs();
     status.textContent = 'Configuración guardada. Usa «Probar conexión» para comprobarla.';
   } catch (err) {
     status.textContent = `No se pudo guardar: ${err.message}`;
@@ -921,6 +929,18 @@ function renderEmailLogs() {
   if (!tbody) return;
 
   const logs = state.emailLogs || [];
+  const latest = new Set();
+  const emailStates = { PAYMENT_RECEIVED: 'PENDING', PAYMENT_APPROVED: 'APPROVED', TICKET_APPROVED: 'APPROVED', PAYMENT_REJECTED: 'REJECTED' };
+  const canRetry = logs.map(log => {
+    const key = `${log.order_id}:${log.type}`;
+    const isLatest = !latest.has(key);
+    latest.add(key);
+    return isLatest && state.settings?.smtp_delivery_mode === 'smtp' &&
+      ['SIMULATED_OUTBOX', 'ERROR'].includes(log.status) &&
+      Object.hasOwn(emailStates, log.type) &&
+      state.orders?.some(order => order.id === log.order_id && order.status === emailStates[log.type]);
+  });
+  const statusLabels = { SENT_SMTP: 'Aceptado por SMTP', SIMULATED_OUTBOX: 'Prueba · sin entrega', ERROR: 'Error de envío' };
   if (logs.length === 0) {
     tbody.innerHTML = `<tr><td colspan="7" class="py-6 text-center text-slate-400">Aún no se han enviado correos.</td></tr>`;
     return;
@@ -936,16 +956,35 @@ function renderEmailLogs() {
         ${l.attachment_path ? `<a href="${l.attachment_path}" target="_blank" class="text-blue-600 font-semibold hover:underline">📄 PDF Adjunto</a>` : '-'}
       </td>
       <td class="py-2.5 px-3">
-        <span class="px-2 py-0.5 rounded text-[10px] font-bold ${l.status === 'ERROR' ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-800'}">${l.status}</span>
+        <span class="px-2 py-0.5 rounded text-[10px] font-bold ${l.status === 'SENT_SMTP' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-700'}">${escapeHtml(statusLabels[l.status] || l.status)}</span>
         ${l.error_message ? `<div class="text-[10px] text-red-700 mt-1">${escapeHtml(l.error_message)}</div>` : ''}
       </td>
       <td class="py-2.5 px-3 text-right">
         <button onclick="previewEmailLog(${idx})" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 rounded text-xs font-semibold">
           Ver Correo
         </button>
+        ${canRetry[idx] ? `<button onclick="retryMailLog(${l.id}, this)" class="px-2.5 py-1 rounded text-xs font-semibold">Reenviar</button>` : ''}
       </td>
     </tr>
   `).join('');
+}
+
+async function retryMailLog(id, button) {
+  button.disabled = true;
+  try {
+    const res = await fetch(`/api/admin/mail/${id}/retry`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}'
+    });
+    const data = await res.json();
+    alert(data.message);
+    await fetchAdminOverview();
+  } catch (err) {
+    alert('No se pudo confirmar el reenvío. Revisa el registro de correos.');
+  } finally {
+    button.disabled = false;
+  }
 }
 
 function previewEmailLog(index) {

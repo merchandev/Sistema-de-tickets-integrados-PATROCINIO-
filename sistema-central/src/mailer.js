@@ -1,5 +1,7 @@
 function escapeHtml(value) { return String(value ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 const crypto = require('node:crypto');
+const fs = require('node:fs');
+const path = require('node:path');
 const nodemailer = require('nodemailer');
 const MailComposer = require('nodemailer/lib/mail-composer');
 const { ImapFlow } = require('imapflow');
@@ -31,12 +33,17 @@ function htmlToText(html) {
 /**
  * Creates a Nodemailer transporter using the current SMTP settings in the database.
  */
-function getTransporter() {
-  const s = getAllSettings();
+function mailDeliveryMode(settings = getAllSettings()) {
+  const host = String(settings.smtp_host || '').trim().toLowerCase();
+  if (!host) return 'disabled';
+  return /^mailpit(?:\.|$)/.test(host) ? 'mailpit' : 'smtp';
+}
+
+function getTransporter(s) {
   if (s.smtp_host) {
     const from = s.smtp_from || s.smtp_user;
     return {
-      isLiveSmtp: true,
+      isLiveSmtp: mailDeliveryMode(s) === 'smtp',
       from,
       transporter: nodemailer.createTransport({
         host: s.smtp_host,
@@ -112,7 +119,7 @@ async function sendSystemEmail({
   attachmentUrl = null
 }) {
   const settings = getAllSettings();
-  const { isLiveSmtp, from, transporter } = getTransporter();
+  const { isLiveSmtp, from, transporter } = getTransporter(settings);
   let status = isLiveSmtp ? 'SENT_SMTP' : 'SIMULATED_OUTBOX';
   let errorMessage = null;
   let imapSaved = false;
@@ -461,9 +468,13 @@ async function testMailConnections(to = '') {
     sent: null
   };
 
-  if (s.smtp_host) {
+  const mode = mailDeliveryMode(s);
+  if (mode === 'mailpit') {
+    result.smtp.message = 'Mailpit es un buzón de pruebas. Configura un servidor SMTP real para entregar correos a los compradores.';
+  }
+  if (mode === 'smtp') {
     try {
-      await getTransporter().transporter.verify();
+      await getTransporter(s).transporter.verify();
       result.smtp = { ok: true, message: `SMTP conectado con ${s.smtp_host}.` };
     } catch (err) {
       result.smtp = { ok: false, message: `SMTP: ${err.message}` };
@@ -492,11 +503,68 @@ async function testMailConnections(to = '') {
       type: 'TEST'
     });
     result.sent = sent.status === 'SENT_SMTP'
-      ? { ok: true, message: `Correo de prueba enviado a ${to}.${sent.imapSaved ? ' Se guardó una copia en Enviados.' : ''}${sent.errorMessage ? ` ${sent.errorMessage}` : ''}` }
+      ? { ok: true, message: `El servidor SMTP aceptó el correo de prueba para ${to}. Comprueba si llegó a tu buzón.${sent.imapSaved ? ' Se guardó una copia en Enviados.' : ''}${sent.errorMessage ? ` ${sent.errorMessage}` : ''}` }
       : { ok: false, message: `No se pudo enviar el correo de prueba: ${sent.errorMessage}` };
   }
 
   return result;
+}
+
+const retryableStatuses = new Set(['ERROR', 'SIMULATED_OUTBOX']);
+const pendingRetries = new Set();
+const orderEmailStates = {
+  PAYMENT_RECEIVED: 'PENDING',
+  PAYMENT_APPROVED: 'APPROVED',
+  TICKET_APPROVED: 'APPROVED',
+  PAYMENT_REJECTED: 'REJECTED'
+};
+
+async function retryOrderEmail(logId) {
+  const log = db.prepare('SELECT * FROM email_logs WHERE id = ?').get(logId);
+  if (!log?.order_id || !retryableStatuses.has(log.status) || !Object.hasOwn(orderEmailStates, log.type)) {
+    return { ok: false, message: 'Este correo no está disponible para reenvío.' };
+  }
+  if (mailDeliveryMode() !== 'smtp') {
+    return { ok: false, message: 'Configura y prueba un servidor SMTP real antes de reenviar.' };
+  }
+  const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(log.order_id);
+  if (!order || order.status !== orderEmailStates[log.type]) {
+    return { ok: false, message: 'El estado del pago cambió. Este aviso ya no corresponde.' };
+  }
+  const latest = db.prepare('SELECT id FROM email_logs WHERE order_id = ? AND type = ? ORDER BY id DESC LIMIT 1').get(log.order_id, log.type);
+  const key = `${log.order_id}:${log.type}`;
+  if (latest.id !== log.id || pendingRetries.has(key)) {
+    return { ok: false, message: 'Este correo ya tiene un intento posterior o un reenvío en curso.' };
+  }
+  pendingRetries.add(key);
+  try {
+    let result;
+    switch (log.type) {
+      case 'PAYMENT_RECEIVED':
+        result = await sendPaymentSubmittedEmail(order);
+        break;
+      case 'PAYMENT_APPROVED':
+        result = await sendPaymentApprovedEmail(order);
+        break;
+      case 'PAYMENT_REJECTED':
+        result = await sendPaymentRejectedEmail(order, order.admin_notes);
+        break;
+      case 'TICKET_APPROVED': {
+        const filename = /^\/storage\/tickets\/([\w-]+\.pdf)$/.exec(order.pdf_path || '')?.[1];
+        const pdfPath = filename && path.join(__dirname, '..', 'storage', 'tickets', filename);
+        if (!pdfPath || !fs.existsSync(pdfPath)) {
+          return { ok: false, message: 'No se encontró el PDF de la entrada.' };
+        }
+        result = await sendTicketEmail(order, pdfPath, order.pdf_path);
+        break;
+      }
+    }
+    return result.status === 'SENT_SMTP'
+      ? { ok: true, message: 'El servidor SMTP aceptó el reenvío.' }
+      : { ok: false, message: result.errorMessage || 'El correo sigue pendiente de envío real.' };
+  } finally {
+    pendingRetries.delete(key);
+  }
 }
 
 module.exports = {
@@ -506,5 +574,7 @@ module.exports = {
   sendPaymentRejectedEmail,
   sendEventCampaignNotification,
   testMailConnections,
-  htmlToText
+  htmlToText,
+  mailDeliveryMode,
+  retryOrderEmail
 };

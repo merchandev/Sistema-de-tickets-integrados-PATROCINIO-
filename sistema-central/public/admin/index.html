@@ -358,6 +358,7 @@
         <!-- Mail account: SMTP sends, IMAP (optional) keeps a copy in the Sent folder -->
         <form id="mail-settings-form" onsubmit="saveSmtpSettings(event)" class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-3 mail-settings">
           <h2 class="text-base font-bold text-slate-900">Cuenta de correo</h2>
+          <p id="mail-delivery-mode" role="status" class="text-xs font-semibold"></p>
           <p class="text-xs text-slate-500">SMTP envía los correos de pago en verificación, pago aceptado y la entrada en PDF. IMAP es opcional: guarda una copia de cada envío en la carpeta Enviados del buzón.</p>
           <fieldset>
             <legend>SMTP · Envío</legend>

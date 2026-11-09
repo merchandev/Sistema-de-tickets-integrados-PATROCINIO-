@@ -30,7 +30,9 @@ const {
   sendTicketEmail,
   sendPaymentRejectedEmail,
   sendEventCampaignNotification,
-  testMailConnections
+  testMailConnections,
+  mailDeliveryMode,
+  retryOrderEmail
 } = require('./mailer');
 
 const PORT = parseInt(process.env.PORT || '4000', 10);
@@ -356,6 +358,7 @@ app.post('/api/public/payment-reports', requireSalesOpen, upload.single('screens
 // Settings as the dashboard sees them: stored mail passwords are never sent back, only whether one exists.
 function adminSettings() {
   const settings = getAllSettings();
+  settings.smtp_delivery_mode = mailDeliveryMode(settings);
   delete settings.secret_hmac_key;
   delete settings.admin_user;
   delete settings.admin_password_hash;
@@ -487,7 +490,7 @@ app.post('/api/admin/orders/:id/reject', async (req, res) => {
       return res.status(400).json({ ok: false, message: result.message });
     }
 
-    await sendPaymentRejectedEmail(result.order, reason);
+    const emailResult = await sendPaymentRejectedEmail(result.order, reason);
 
     broadcastTicketsUpdate({
       name: 'admin:order_updated',
@@ -496,7 +499,8 @@ app.post('/api/admin/orders/:id/reject', async (req, res) => {
 
     return res.json({
       ok: true,
-      message: result.order.ticket_number ? `Pago rechazado. La entrada #${result.order.ticket_number} vuelve a estar disponible.` : 'Reporte de pago rechazado. Se notificó al comprador.',
+      message: (result.order.ticket_number ? `Pago rechazado. La entrada #${result.order.ticket_number} vuelve a estar disponible.` : 'Reporte de pago rechazado.') +
+        (emailResult.status === 'SENT_SMTP' ? ' El servidor SMTP aceptó el aviso.' : ' El aviso está pendiente de envío real. Revísalo en Correos y avisos.'),
       order: result.order
     });
   } catch (err) {
@@ -647,6 +651,19 @@ app.post('/api/admin/mail/test', async (req, res) => {
     return res.json({ ok: result.smtp.ok && result.imap.ok !== false && (!result.sent || result.sent.ok), ...result });
   } catch (err) {
     return res.status(500).json({ ok: false, message: err.message });
+  }
+});
+
+app.post('/api/admin/mail/:id/retry', async (req, res) => {
+  if (!req.is('application/json')) return res.status(415).json({ ok: false, message: 'Se requiere una solicitud JSON.' });
+  const id = Number(req.params.id);
+  if (!Number.isSafeInteger(id) || id < 1) return res.status(400).json({ ok: false, message: 'Correo inválido.' });
+  try {
+    const result = await retryOrderEmail(id);
+    return res.status(result.ok ? 200 : 409).json(result);
+  } catch (err) {
+    console.error('Error retrying order email:', err.message);
+    return res.status(500).json({ ok: false, message: 'No se pudo reenviar el correo.' });
   }
 });
 
