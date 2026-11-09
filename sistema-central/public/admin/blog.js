@@ -16,6 +16,9 @@
     "author",
     "cover_url",
     "cover_alt",
+    "seo_title",
+    "seo_description",
+    "focus_keyphrase",
   ];
   const statusNames = {
     draft: "Borrador",
@@ -52,6 +55,85 @@
       status: postStatus,
       version: current?.version,
     };
+  }
+  const visual = $("blog-visual"), source = $("blog-content");
+  const converter = typeof TurndownService === "function" ? new TurndownService({ headingStyle: "atx", bulletListMarker: "-", codeBlockStyle: "fenced" }) : null;
+  converter?.addRule("blogVideo", {
+    filter: (node) => node.nodeName === "FIGURE" && node.hasAttribute("data-blog-video"),
+    replacement: (_content, node) => "\n\n@video " + node.getAttribute("data-blog-video") + "\n\n",
+  });
+  let analysisTimer, analysisRun = 0, editorRun = 0, visualMode = false;
+  const postJSON = (value) => ({
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(value),
+  });
+  function renderSEO(data) {
+    const { metadata, automatic, score, stats, checks } = data;
+    $("blog-focus_keyphrase").placeholder = automatic.keyphrase || "Se genera a partir del título";
+    $("blog-seo_title").placeholder = automatic.title || "Se genera a partir del título";
+    $("blog-seo_description").placeholder = automatic.description || "Se genera a partir del extracto o del contenido";
+    $("blog-seo-url").textContent = "hablemosdemarketingmaturin.com/blog/" + (metadata.slug || "tu-articulo");
+    $("blog-seo-title-preview").textContent = metadata.title || "Título de la publicación";
+    $("blog-seo-description-preview").textContent = metadata.description || "Aquí aparecerá la descripción.";
+    $("blog-seo-score").value = score + "%";
+    $("blog-seo-score").dataset.level = score >= 78 ? "ready" : score >= 55 ? "review" : "work";
+    $("blog-seo-stats").textContent = [stats.words + " palabras", stats.images + " imágenes", stats.videos + " videos", "Meta editorial: 78–100%"].join(" · ");
+    $("blog-seo-checks").replaceChildren(...[...checks].sort((a, b) => Number(a.pass) - Number(b.pass)).map((check) => {
+      const row = document.createElement("li");
+      row.dataset.pass = String(check.pass);
+      row.textContent = (check.pass ? "✓ " : "• ") + check.text;
+      return row;
+    }));
+  }
+  function scheduleSEO(delay = 250) {
+    clearTimeout(analysisTimer);
+    const run = ++analysisRun;
+    analysisTimer = setTimeout(async () => {
+      try {
+        const data = await api("/analyze", postJSON(payload("draft")));
+        if (run === analysisRun) renderSEO(data);
+      } catch {
+        if (run === analysisRun) {
+          $("blog-seo-score").value = "—";
+          $("blog-seo-stats").textContent = "No se pudo actualizar el análisis. Vuelve a editar un campo para reintentarlo.";
+        }
+      }
+    }, delay);
+  }
+  function setMode(showVisual) {
+    visualMode = showVisual;
+    visual.hidden = !showVisual;
+    source.hidden = showVisual;
+    $("blog-visual-tools").hidden = !showVisual;
+    $("blog-visual-mode").setAttribute("aria-pressed", String(showVisual));
+    $("blog-markdown-mode").setAttribute("aria-pressed", String(!showVisual));
+  }
+  async function openVisual(focus = false) {
+    if (!converter) return;
+    const run = ++editorRun;
+    const content = source.value;
+    $("blog-visual-mode").disabled = true;
+    try {
+      const data = content ? await api("/analyze", postJSON({ content, render: true })) : { content_html: "" };
+      if (run !== editorRun || content !== source.value || $("blog-editor").hidden) return;
+      visual.innerHTML = data.content_html;
+      lastRange = null;
+      setMode(true);
+      document.execCommand("defaultParagraphSeparator", false, "p");
+      if (focus) visual.focus();
+    } catch {
+      if (run === editorRun) notice("No se pudo abrir el editor visual. Puedes seguir en Markdown.", true);
+    } finally {
+      if (run === editorRun) $("blog-visual-mode").disabled = false;
+    }
+  }
+  function syncVisual() {
+    if (!visualMode) return;
+    rememberSelection();
+    source.value = converter.turndown(visual);
+    dirty = true;
+    scheduleSEO();
   }
   function date(value) {
     return new Date(value).toLocaleString("es-VE", {
@@ -118,6 +200,12 @@
       post?.status === "published" ? "Actualizar publicación" : "Publicar";
     $("blog-preview-frame").hidden = true;
     $("blog-editor").hidden = false;
+    $("blog-seo-score").value = "—";
+    $("blog-seo-checks").replaceChildren();
+    $("blog-seo-stats").textContent = "Analizando la publicación…";
+    setMode(false);
+    openVisual();
+    scheduleSEO(0);
     dirty = false;
     $("blog-title").focus();
     notice("");
@@ -163,6 +251,7 @@
       current = data.post;
       dirty = false;
       $("blog-slug").value = current.slug;
+      scheduleSEO(0);
       $("blog-editor-state").textContent = statusNames[current.status];
       $("blog-trash").hidden = current.status === "trash";
       $("blog-publish").textContent =
@@ -203,7 +292,11 @@
     const button = event.target.closest("[data-edit]");
     if (button) edit(button.dataset.edit);
   });
-  $("blog-form").addEventListener("input", () => (dirty = true));
+  $("blog-form").addEventListener("input", (event) => {
+    if (event.target === visual) return;
+    dirty = true;
+    scheduleSEO();
+  });
   $("blog-form").addEventListener("submit", (event) => {
     event.preventDefault();
     save(current?.status === "published" ? "published" : "draft");
@@ -234,6 +327,7 @@
       const data = await api("/media", { method: "POST", body: form });
       $("blog-cover_url").value = data.url;
       dirty = true;
+      scheduleSEO();
       notice(
         "Imagen subida. Añade un texto alternativo y guarda la publicación.",
       );
@@ -269,29 +363,133 @@
     page++;
     load();
   });
-  document.querySelectorAll("[data-blog-format]").forEach((button) =>
-    button.addEventListener("click", () => {
-      const textarea = $("blog-content"),
-        start = textarea.selectionStart,
-        end = textarea.selectionEnd,
-        selected = textarea.value.slice(start, end);
-      const snippets = {
-        heading: "\n## " + (selected || "Subtítulo") + "\n",
-        bold: "**" + (selected || "Texto destacado") + "**",
-        list: "\n- " + (selected || "Elemento de la lista") + "\n",
-        link: "[" + (selected || "Texto del enlace") + "](https://)",
-        quote: "\n> " + (selected || "Cita") + "\n",
-      };
-      textarea.setRangeText(
-        snippets[button.dataset.blogFormat],
-        start,
-        end,
-        "end",
-      );
-      textarea.focus();
-      dirty = true;
-    }),
-  );
+  let lastRange = null, mediaKind = "", editingImage = null;
+  const dialog = $("blog-media-dialog");
+  $("blog-visual-mode").addEventListener("click", () => { if (!visualMode) openVisual(true); });
+  $("blog-markdown-mode").addEventListener("click", () => {
+    editorRun++;
+    $("blog-visual-mode").disabled = !converter;
+    setMode(false);
+    source.focus();
+  });
+  if (!converter) $("blog-visual-mode").disabled = true;
+  function rememberSelection() {
+    if (!visualMode || dialog.open) return;
+    const selection = getSelection();
+    if (!selection.rangeCount || !visual.contains(selection.anchorNode) || !visual.contains(selection.focusNode)) return;
+    lastRange = selection.getRangeAt(0).cloneRange();
+    const block = selection.anchorNode.parentElement?.closest("p,h1,h2,h3,h4,h5,h6,blockquote");
+    $("blog-block").value = block && visual.contains(block) ? block.tagName.toLowerCase() : "p";
+  }
+  document.addEventListener("selectionchange", rememberSelection);
+  function restoreSelection() {
+    const selection = getSelection();
+    let range = selection.rangeCount && visual.contains(selection.getRangeAt(0).commonAncestorContainer)
+      ? selection.getRangeAt(0).cloneRange() : lastRange;
+    if (!range || !visual.contains(range.commonAncestorContainer)) {
+      range = document.createRange();
+      range.selectNodeContents(visual);
+      range.collapse(false);
+    }
+    visual.focus();
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }
+  function format(command, value = null) {
+    restoreSelection();
+    document.execCommand(command, false, value);
+    syncVisual();
+  }
+  visual.addEventListener("input", syncVisual);
+  visual.addEventListener("paste", (event) => {
+    event.preventDefault();
+    document.execCommand("insertText", false, event.clipboardData.getData("text/plain"));
+    syncVisual();
+  });
+  visual.addEventListener("drop", (event) => event.preventDefault());
+  $("blog-block").addEventListener("change", (event) => format("formatBlock", event.target.value));
+  document.querySelectorAll("[data-blog-command]").forEach((button) => {
+    button.addEventListener("mousedown", (event) => event.preventDefault());
+    button.addEventListener("click", () => format(button.dataset.blogCommand));
+  });
+  function openMedia(kind, image = null) {
+    mediaKind = kind;
+    editingImage = image;
+    $("blog-media-form").reset();
+    $("blog-media-title").textContent = image ? "Editar imagen" : { image: "Insertar imagen", link: "Insertar enlace", video: "Insertar video" }[kind];
+    $("blog-media-insert").textContent = image ? "Guardar imagen" : "Insertar";
+    $("blog-media-file-field").hidden = kind !== "image";
+    $("blog-media-text-field").hidden = kind === "video";
+    $("blog-media-text-label").textContent = kind === "image" ? "Texto alternativo" : "Texto del enlace";
+    $("blog-media-text").value = image?.alt || (kind === "link" ? lastRange?.toString().slice(0, 200) || "" : "");
+    $("blog-media-url").value = image?.getAttribute("src") || "";
+    $("blog-media-url").required = kind !== "image";
+    $("blog-media-help").textContent = kind === "video" ? "Pega una URL HTTPS de YouTube, Vimeo, MP4 o WebM." : kind === "image" ? "Describe qué muestra la imagen y por qué es relevante." : "";
+    $("blog-media-error").textContent = "";
+    dialog.showModal();
+  }
+  document.querySelectorAll("[data-blog-media]").forEach((button) => {
+    button.addEventListener("mousedown", (event) => event.preventDefault());
+    button.addEventListener("click", () => openMedia(button.dataset.blogMedia));
+  });
+  visual.addEventListener("click", (event) => {
+    if (event.target instanceof HTMLImageElement && !dialog.open) openMedia("image", event.target);
+  });
+  $("blog-media-cancel").addEventListener("click", () => dialog.close());
+  dialog.addEventListener("cancel", (event) => { if ($("blog-media-insert").disabled) event.preventDefault(); });
+  $("blog-media-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const insert = $("blog-media-insert"), cancel = $("blog-media-cancel");
+    insert.disabled = cancel.disabled = true;
+    $("blog-media-error").textContent = "";
+    try {
+      const file = $("blog-media-file").files[0];
+      let url = $("blog-media-url").value.trim();
+      const label = $("blog-media-text").value.trim();
+      if (mediaKind === "image" && file) {
+        const form = new FormData();
+        form.append("image", file);
+        url = (await api("/media", { method: "POST", body: form })).url;
+      } else if (!(mediaKind === "image" && /^\/api\/public\/blog\/media\/[a-f0-9-]{36}\.(png|jpg|webp)$/.test(url))) {
+        let parsed;
+        try { parsed = new URL(url); } catch { /* Report a useful editor error below. */ }
+        if (!parsed || parsed.protocol !== "https:" || parsed.username || parsed.password)
+          throw new Error("Escribe una URL HTTPS válida.");
+        url = parsed.href;
+      }
+      if (editingImage) {
+        editingImage.setAttribute("src", url);
+        editingImage.alt = label;
+        dialog.close();
+        syncVisual();
+        return;
+      }
+      let element;
+      if (mediaKind === "video") {
+        const { provider } = await api("/video", postJSON({ url }));
+        element = document.createElement("figure");
+        element.dataset.blogVideo = url;
+        element.className = "blog-video";
+        element.contentEditable = "false";
+        element.textContent = "Video · " + provider;
+      } else if (mediaKind === "image") {
+        element = document.createElement("img");
+        element.src = url;
+        element.alt = label;
+      } else {
+        element = document.createElement("a");
+        element.href = url;
+        element.textContent = label || url;
+      }
+      dialog.close();
+      const html = mediaKind === "image" ? "<p>" + element.outerHTML + "</p>" : element.outerHTML;
+      format("insertHTML", html + (mediaKind === "link" ? "" : "<p><br></p>"));
+    } catch (error) {
+      $("blog-media-error").textContent = error.message;
+    } finally {
+      insert.disabled = cancel.disabled = false;
+    }
+  });
   window.addEventListener("beforeunload", (event) => {
     if (dirty) {
       event.preventDefault();

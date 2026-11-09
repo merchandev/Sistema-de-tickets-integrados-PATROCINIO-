@@ -3,6 +3,8 @@ const path = require("node:path");
 const crypto = require("node:crypto");
 const multer = require("multer");
 const MarkdownIt = require("markdown-it");
+const { inspect } = require("./blog-seo");
+const { installBlogVideo, videoSource } = require("./blog-video");
 const markdown = new MarkdownIt({ html: false, linkify: false, breaks: true });
 const escape = (value) =>
   String(value ?? "").replace(
@@ -20,6 +22,9 @@ const slugify = (value) =>
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "")
     .slice(0, 150);
+installBlogVideo(markdown, escape);
+const seoFields = { seo_title: 180, seo_description: 320, focus_keyphrase: 100 };
+const analysis = (post) => inspect(post, markdown.parse(post.content || "", {}), slugify);
 function fail(status, message) {
   throw Object.assign(new Error(message), { status });
 }
@@ -68,6 +73,7 @@ function validatePost(input = {}) {
       text("author", 100, "Equipo Hablemos de Marketing") ||
       "Equipo Hablemos de Marketing",
     cover_alt: text("cover_alt", 200),
+    ...Object.fromEntries(Object.entries(seoFields).map(([key, max]) => [key, text(key, max)])),
   };
 }
 function createBlogStore(db) {
@@ -79,6 +85,9 @@ function createBlogStore(db) {
     cover_alt TEXT NOT NULL DEFAULT '', version INTEGER NOT NULL DEFAULT 1,
     published_at TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
   ); CREATE INDEX IF NOT EXISTS marketing_blog_status_date ON marketing_blog_posts(status,published_at);`);
+  const columns = new Set(db.prepare("PRAGMA table_info(marketing_blog_posts)").all().map((column) => column.name));
+  for (const field of Object.keys(seoFields))
+    if (!columns.has(field)) db.exec("ALTER TABLE marketing_blog_posts ADD COLUMN " + field + " TEXT NOT NULL DEFAULT ''");
   const fields = [
     "title",
     "slug",
@@ -90,6 +99,7 @@ function createBlogStore(db) {
     "author",
     "cover_url",
     "cover_alt",
+    ...Object.keys(seoFields),
   ];
   const get = (id) =>
     db.prepare("SELECT * FROM marketing_blog_posts WHERE id=?").get(id);
@@ -192,13 +202,13 @@ function createBlogStore(db) {
   };
 }
 function decorate(post) {
+  const { metadata, stats } = analysis(post);
+  const { focus_keyphrase, seo_title, seo_description, ...publicPost } = post;
   return {
-    ...post,
+    ...publicPost,
+    seo: { title: metadata.title, description: metadata.description },
     content_html: markdown.render(post.content),
-    reading_minutes: Math.max(
-      1,
-      Math.ceil(post.content.split(/\s+/).length / 200),
-    ),
+    reading_minutes: Math.max(1, Math.ceil(stats.words / 200)),
   };
 }
 function previewHtml(post) {
@@ -272,6 +282,25 @@ function registerBlogRoutes(app, { db, storageDir }) {
     safe((req, res) =>
       res.json({ ok: true, post: store.save(req.body, req.params.id) }),
     ),
+  );
+  app.post(
+    "/api/admin/blog/analyze",
+    safe((req, res) => {
+      const limits = { title: 180, slug: 150, excerpt: 500, content: 200000, cover_url: 2000, cover_alt: 200, ...seoFields };
+      const post = Object.fromEntries(Object.entries(limits).map(([key, max]) => [key, String(req.body?.[key] ?? "").slice(0, max)]));
+      const response = { ok: true, ...analysis(post) };
+      if (req.body?.render) response.content_html = markdown.render(post.content, { editor: true });
+      res.json(response);
+    }),
+  );
+  app.post(
+    "/api/admin/blog/video",
+    safe((req, res) => {
+      const url = String(req.body?.url ?? "").trim();
+      const video = url.length <= 2000 && !/\s/.test(url) && videoSource(url);
+      if (!video) fail(400, "Usa un enlace HTTPS de YouTube, Vimeo, MP4 o WebM.");
+      res.json({ ok: true, provider: video.provider });
+    }),
   );
   app.post(
     "/api/admin/blog/preview",
@@ -359,6 +388,7 @@ function registerBlogRoutes(app, { db, storageDir }) {
 module.exports = {
   createBlogStore,
   validatePost,
+  analysis,
   slugify,
   decorate,
   registerBlogRoutes,

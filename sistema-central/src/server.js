@@ -133,6 +133,9 @@ app.get('/admin/pdfjs/:file(pdf.min.mjs|pdf.worker.min.mjs)', (req, res) => {
   res.sendFile(path.join(pdfJsDir, 'legacy', 'build', req.params.file));
 });
 app.use('/admin/pdfjs/fonts', express.static(path.join(pdfJsDir, 'standard_fonts')));
+app.get('/admin/blog-turndown.js', (req, res) => {
+    res.sendFile(path.join(__dirname, '..', 'node_modules', 'turndown', 'dist', 'turndown.js'));
+});
 app.use('/admin', express.static(path.join(__dirname, '..', 'public', 'admin')));
 
 // Root redirect to /admin

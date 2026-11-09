@@ -5,6 +5,7 @@ const {
   createBlogStore,
   decorate,
   validatePost,
+  analysis,
 } = require("../sistema-central/src/blog");
 test("drafts stay private, published articles are searchable, trash is recoverable", () => {
   const db = new DatabaseSync(":memory:");
@@ -32,6 +33,48 @@ test("drafts stay private, published articles are searchable, trash is recoverab
   assert.equal(store.get(restored.id).status, "draft");
   assert.equal(store.list({ status: "draft" }).total, 1);
   db.close();
+});
+
+test("SEO metadata is generated from article text and editable overrides survive saving", () => {
+  const db = new DatabaseSync(":memory:");
+  const store = createBlogStore(db);
+  const draft = store.save({
+    title: "Marketing local para emprendedores",
+    content: "Marketing local para emprendedores empieza con conocer a tu público. Esta guía te ayuda a dar ese primer paso.",
+  });
+  const auto = analysis(draft);
+  assert.equal(auto.metadata.title, draft.title);
+  assert.equal(auto.metadata.description, draft.content);
+  assert.equal(auto.metadata.keyphrase, "Marketing local");
+  assert.ok(auto.score < 78);
+  const published = store.save({ ...draft, status: "published", seo_title: "Guía de marketing local para emprendedores", seo_description: "Un resumen escrito por el autor", focus_keyphrase: "marketing local" }, draft.id);
+  assert.deepEqual(decorate(store.bySlug(published.slug)).seo, { title: published.seo_title, description: published.seo_description });
+  assert.ok(!Object.hasOwn(decorate(published), "focus_keyphrase"));
+  assert.equal(store.save({ ...published, seo_description: "" }, published.id).seo_description, "");
+  db.close();
+});
+
+test("readability reports long text, heading hierarchy and missing image alt", () => {
+  const report = analysis({
+    title: "Plan de marketing para pequeños negocios",
+    content: "### Sin sección principal\n\n" + "palabra ".repeat(125) + ".\n\n![](https://example.org/imagen.png)",
+  });
+  const tips = report.checks.filter((entry) => !entry.pass).map((entry) => entry.text).join("\n");
+  assert.match(tips, /superan 120 palabras/);
+  assert.match(tips, /superan 25 palabras/);
+  assert.match(tips, /jerarquía|Usa H2/);
+  assert.match(tips, /texto alternativo/);
+});
+
+test("rich Markdown emits heading and image tags and embeds only supported HTTPS video", () => {
+  const html = decorate({
+    content: "# Uno\n## Dos\n### Tres\n#### Cuatro\n##### Cinco\n###### Seis\n\n![Diagrama](https://example.org/imagen.png)\n\n@video https://youtu.be/dQw4w9WgXcQ\n\n@video https://example.org/video.webm\n\n@video https://youtu.be.example.org/dQw4w9WgXcQ\n\n@video javascript:alert(1)",
+  }).content_html;
+  for (let level = 1; level <= 6; level++) assert.ok(html.includes("<h" + level + ">"));
+  assert.match(html, /alt="Diagrama"/);
+  assert.match(html, /<iframe src="https:\/\/www\.youtube-nocookie\.com\/embed\/dQw4w9WgXcQ"/);
+  assert.match(html, /<video src="https:\/\/example\.org\/video\.webm"/);
+  assert.equal((html.match(/<iframe /g) || []).length, 1);
 });
 test("duplicate links, empty publication and unsafe image URLs are rejected", () => {
   const db = new DatabaseSync(":memory:");

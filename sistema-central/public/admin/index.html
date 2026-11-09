@@ -7,7 +7,7 @@
   <link rel="icon" type="image/png" href="/admin/brands/espressivo-venezuela.png?v=3" />
   <link rel="stylesheet" href="/admin/utilities.css" />
   <link rel="stylesheet" href="/admin/admin.css" />
-  <link rel="stylesheet" href="/admin/blog.css" />
+  <link rel="stylesheet" href="/admin/blog.css?v=seo-1" />
   <script src="/socket.io/socket.io.js"></script>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 
@@ -499,8 +499,14 @@
           <label class="blog-field">Título<input class="blog-title-input" id="blog-title" maxlength="180" required placeholder="Escribe un título" /></label>
           <label class="blog-field">Enlace permanente<input id="blog-slug" maxlength="150" placeholder="Se genera automáticamente a partir del título" /><small>hablemosdemarketingmaturin.com/blog/tu-articulo · Usa un enlace diferente para cada publicación.</small></label>
           <label class="blog-field">Extracto<textarea id="blog-excerpt" rows="3" maxlength="500" placeholder="Un resumen que invite a seguir leyendo"></textarea></label>
-          <label class="blog-field" for="blog-content">Contenido</label><div class="blog-editor-tools" role="group" aria-label="Formato del contenido"><button type="button" data-blog-format="heading">Subtítulo</button><button type="button" data-blog-format="bold">Negrita</button><button type="button" data-blog-format="list">Lista</button><button type="button" data-blog-format="link">Enlace</button><button type="button" data-blog-format="quote">Cita</button></div>
-          <label class="blog-field"><span class="sr-only">Texto de la publicación</span><textarea id="blog-content" class="blog-content" maxlength="200000" placeholder="Comparte una idea con tu comunidad…"></textarea><small>Usa los botones para añadir formato. La vista previa muestra cómo se verá el artículo.</small></label>
+          <div class="blog-editor-label"><strong id="blog-content-label">Contenido</strong><div role="group" aria-label="Modo de edición"><button type="button" id="blog-visual-mode" aria-pressed="true">Visual</button><button type="button" id="blog-markdown-mode" aria-pressed="false">Markdown</button></div></div>
+          <div class="blog-editor-tools" id="blog-visual-tools" role="group" aria-label="Formato del contenido">
+            <select id="blog-block" aria-label="Tipo de bloque"><option value="p">Párrafo</option><option value="h1">Encabezado H1</option><option value="h2">Encabezado H2</option><option value="h3">Encabezado H3</option><option value="h4">Encabezado H4</option><option value="h5">Encabezado H5</option><option value="h6">Encabezado H6</option><option value="blockquote">Cita</option></select>
+            <button type="button" data-blog-command="bold">Negrita</button><button type="button" data-blog-command="italic">Cursiva</button><button type="button" data-blog-command="insertUnorderedList">Viñetas</button><button type="button" data-blog-command="insertOrderedList">Lista numerada</button><button type="button" data-blog-media="link">Enlace</button><button type="button" data-blog-media="image">Imagen</button><button type="button" data-blog-media="video">Video</button>
+          </div>
+          <div id="blog-visual" class="blog-content blog-visual" role="textbox" aria-multiline="true" aria-labelledby="blog-content-label" contenteditable="true" data-placeholder="Comparte una idea con tu comunidad…"></div>
+          <textarea id="blog-content" class="blog-content" aria-labelledby="blog-content-label" maxlength="200000" hidden></textarea>
+          <small class="blog-content-hint">El título de la entrada ya es H1. Empieza las secciones con H2. Puedes tocar una imagen para editar su texto alternativo.</small>
         </div><aside class="blog-aside"><h4>Detalles de la publicación</h4>
           <label class="blog-field">Autor<input id="blog-author" maxlength="100" /></label>
           <label class="blog-field">Categoría<input id="blog-category" maxlength="80" list="blog-category-options" /><datalist id="blog-category-options"><option>Marketing digital</option><option>Contenido</option><option>Eventos</option><option>Comunidad</option></datalist></label>
@@ -509,8 +515,28 @@
           <label class="blog-field">URL de la imagen<input id="blog-cover_url" maxlength="2000" placeholder="Sube una imagen o pega un enlace HTTPS" /></label>
           <label class="blog-field">Texto alternativo<input id="blog-cover_alt" maxlength="200" placeholder="Describe brevemente la imagen" /></label>
         </aside></div>
+        <section class="blog-seo" aria-labelledby="blog-seo-heading">
+          <header><div><h4 id="blog-seo-heading">SEO y legibilidad</h4><p>Los campos vacíos se completan con el contenido. Puedes editarlos cuando lo necesites.</p></div><output id="blog-seo-score" aria-label="Puntuación editorial">—</output></header>
+          <div class="blog-seo-grid"><div>
+            <label class="blog-field">Frase clave objetivo<input id="blog-focus_keyphrase" maxlength="100" /></label>
+            <label class="blog-field">Título SEO<input id="blog-seo_title" maxlength="180" /></label>
+            <label class="blog-field">Descripción SEO<textarea id="blog-seo_description" maxlength="320" rows="3"></textarea></label>
+          </div><div class="blog-search-preview"><strong>Vista previa para buscadores</strong><p id="blog-seo-url"></p><p id="blog-seo-title-preview"></p><p id="blog-seo-description-preview"></p></div></div>
+          <p id="blog-seo-stats" class="blog-content-hint" role="status"></p>
+          <ul id="blog-seo-checks" class="blog-seo-checks"></ul>
+        </section>
         <div class="blog-editor-actions"><button type="button" id="blog-save-draft" class="blog-secondary blog-save-action">Guardar borrador</button><button type="button" id="blog-preview" class="blog-secondary">Vista previa</button><button type="button" id="blog-publish" class="blog-primary blog-save-action">Publicar</button><button type="button" id="blog-trash" class="blog-trash blog-save-action" hidden>Mover a la papelera</button></div></form>
-        <iframe id="blog-preview-frame" class="blog-preview-frame" title="Vista previa de la publicación" sandbox="" hidden></iframe>
+        <dialog id="blog-media-dialog" class="blog-media-dialog" aria-labelledby="blog-media-title">
+          <form id="blog-media-form">
+            <h4 id="blog-media-title"></h4>
+            <label class="blog-field">URL <input id="blog-media-url" type="text" inputmode="url" maxlength="2000" placeholder="https://" /></label>
+            <label class="blog-field" id="blog-media-file-field">O sube una imagen <input id="blog-media-file" type="file" accept="image/png,image/jpeg,image/webp" /><small>PNG, JPG o WebP · Hasta 5 MB.</small></label>
+            <label class="blog-field" id="blog-media-text-field"><span id="blog-media-text-label"></span><input id="blog-media-text" maxlength="200" /></label>
+            <p id="blog-media-help" class="blog-content-hint"></p><p id="blog-media-error" class="blog-error" role="alert"></p>
+            <div class="blog-editor-actions"><button id="blog-media-cancel" type="button" class="blog-secondary">Cancelar</button><button id="blog-media-insert" class="blog-primary">Insertar</button></div>
+          </form>
+        </dialog>
+        <iframe id="blog-preview-frame" class="blog-preview-frame" title="Vista previa de la publicación" sandbox="allow-scripts allow-presentation" hidden></iframe>
       </section><p id="blog-message" class="blog-message" role="status"></p>
     </section>
     <section id="tab-panel-users" class="hidden" aria-labelledby="users-title">
@@ -590,7 +616,8 @@
     </div>
   </div>
 
-  <script src="/admin/blog.js"></script>
+  <script src="/admin/blog-turndown.js"></script>
+  <script src="/admin/blog.js?v=seo-1"></script>
   <script src="/admin/admin.js"></script>
 </body>
 </html>
