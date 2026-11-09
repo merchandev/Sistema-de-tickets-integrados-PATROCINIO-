@@ -1319,7 +1319,6 @@ async function loadUsers() {
           <div class="users-actions">
             ${canManage ? `<button type="button" class="od-cancel" onclick="openUserPasswordForm(${Number(user.id)})">Nueva contraseña</button>
             <button type="button" class="od-reject" onclick="removeAdminUser(${Number(user.id)})">Eliminar</button>` : ''}
-            ${user.role === 'superadmin' ? '<small>No se puede eliminar</small>' : ''}
           </div>
         </li>`;
     }).join('');
