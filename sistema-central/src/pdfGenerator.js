@@ -118,10 +118,14 @@ function createTicketDocument(order, config, qrBuffer, demo) {
   fitText(doc, order.verification_token, inset, 540, scanWidth, 22, 8, 7);
 
   divider(568);
+  const credit = 'Desarrollado por Espressivo Venezuela';
+  doc.font('Helvetica').fontSize(8).fillColor(muted);
+  const creditWidth = doc.widthOfString(credit);
+  doc.text(credit, inset + width - creditWidth, 577, { lineBreak: false });
   value(
     demo ? 'Pago de muestra · Ref. 000000'
       : `Pago verificado · ${order.payment_bank ? `${order.payment_bank} · ` : ''}Ref. ${order.payment_reference}`,
-    inset, 577, width, 16, 8
+    inset, 577, width - creditWidth - 12, 16, 8
   );
   return doc;
 }
