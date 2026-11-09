@@ -22,7 +22,7 @@ const {
   getAllTicketsPublic
 } = require('./db');
 const { scrapeBcvRate } = require('./bcvScraper');
-const { generateTicketPdf } = require('./pdfGenerator');
+const { generateTicketPdf, generateDemoTicketPdf } = require('./pdfGenerator');
 const { parsePaymentForm, parseTicketNumber } = require('./paymentForm');
 const {
   sendPaymentSubmittedEmail,
@@ -102,6 +102,11 @@ require('./blog').registerBlogRoutes(app, {db, storageDir:process.env.BLOG_STORA
 // Static assets
 app.use('/storage/uploads', express.static(uploadsDir));
 app.use('/storage/tickets', express.static(ticketsDir));
+const pdfJsDir = path.join(__dirname, '..', 'node_modules', 'pdfjs-dist');
+app.get('/admin/pdfjs/:file(pdf.min.mjs|pdf.worker.min.mjs)', (req, res) => {
+  res.sendFile(path.join(pdfJsDir, 'legacy', 'build', req.params.file));
+});
+app.use('/admin/pdfjs/fonts', express.static(path.join(pdfJsDir, 'standard_fonts')));
 app.use('/admin', express.static(path.join(__dirname, '..', 'public', 'admin')));
 
 // Root redirect to /admin
@@ -639,6 +644,26 @@ app.put('/api/admin/settings', (req, res) => {
  */
 app.get('/api/admin/session', (req, res) => res.json({ ok: true, user: req.adminUser }));
 app.put('/api/admin/account', adminAuth.changeAccount);
+
+app.get('/api/admin/tickets/demo.pdf', async (req, res) => {
+  const source = req.query.source || 'pagina-web-1';
+  if (!['pagina-web-1', 'pagina-web-2'].includes(source)) {
+    return res.status(400).json({ ok: false, message: 'Elige una de las dos marcas.' });
+  }
+  try {
+    const pdf = await generateDemoTicketPdf(source, getPublicConfig());
+    const brand = source === 'pagina-web-2' ? 'marketing' : 'iluminando-caminos';
+    res.set({
+      'Cache-Control': 'no-store',
+      'Content-Disposition': `inline; filename="entrada-demo-${brand}.pdf"`,
+      'X-Content-Type-Options': 'nosniff'
+    });
+    return res.type('application/pdf').send(pdf);
+  } catch (err) {
+    console.error('Error rendering demo ticket:', err.message);
+    return res.status(500).json({ ok: false, message: 'No se pudo generar la vista previa.' });
+  }
+});
 
 /**
  * Checks the saved SMTP and IMAP accounts and, with `to`, sends a test message.

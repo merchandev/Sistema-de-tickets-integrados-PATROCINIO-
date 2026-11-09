@@ -792,7 +792,9 @@ function populateCmsAndSmtpForms() {
   document.getElementById('cms-conditions').value = s.event_conditions || '';
   document.getElementById('cms-terms').value = s.terms_and_conditions || '';
 
-  populateMailForm(s);
+  if (document.getElementById('mail-settings-form').dataset.editing !== 'true') {
+    populateMailForm(s);
+  }
 }
 
 // Stored passwords never reach the browser: an empty field keeps the saved one.
@@ -814,8 +816,28 @@ function populateMailForm(s) {
   for (const [id, isSet, fallback] of [['smtp-pass', s.smtp_pass_set, '••••••••'], ['imap-pass', s.imap_pass_set, 'La misma de SMTP']]) {
     const input = document.getElementById(id);
     input.value = '';
+    input.required = false;
     input.placeholder = isSet ? 'Guardada · escribe otra para cambiarla' : fallback;
   }
+}
+
+function fillHostingerSettings() {
+  const fields = {
+    'smtp-host': 'smtp.hostinger.com',
+    'smtp-port': '465',
+    'smtp-user': 'soporte@merchan.dev',
+    'smtp-from': 'Entradas del evento <soporte@merchan.dev>'
+  };
+  for (const [id, value] of Object.entries(fields)) {
+    document.getElementById(id).value = value;
+  }
+  const password = document.getElementById('smtp-pass');
+  password.value = '';
+  password.required = true;
+  password.placeholder = 'Contraseña del buzón de Hostinger';
+  document.getElementById('mail-settings-form').dataset.editing = 'true';
+  document.getElementById('mail-save-status').textContent = 'Ingresa la contraseña del buzón y guarda la configuración.';
+  password.focus();
 }
 
 async function saveCmsSettings(e) {
@@ -875,6 +897,7 @@ async function saveSmtpSettings(e) {
     });
     const data = await res.json();
     if (!data.ok) throw new Error(data.message || 'No se pudo guardar');
+    delete e.target.dataset.editing;
     populateMailForm(data.settings || {});
     state.settings = data.settings || {};
     renderEmailLogs();
@@ -1002,17 +1025,69 @@ function previewEmailLog(index) {
   `);
 }
 
+const sectionTitles = {
+  orders: 'Pagos y ventas',
+  seats: 'Mapa de entradas',
+  pdf: 'Diseño de entrada',
+  qr: 'Control de acceso',
+  cms: 'Evento y contenido',
+  smtp: 'Correos y avisos',
+  blog: 'Blog · Marketing'
+};
+
+let ticketPreviewRequest = 0;
+async function updateTicketDemo() {
+  const source = document.getElementById('ticket-demo-source').value;
+  const url = `/api/admin/tickets/demo.pdf?source=${encodeURIComponent(source)}`;
+  const preview = document.getElementById('ticket-demo-preview');
+  const status = document.getElementById('ticket-demo-status');
+  document.getElementById('ticket-demo-open').href = url;
+  document.getElementById('ticket-demo-download').href = url;
+  const request = ++ticketPreviewRequest;
+  preview.querySelector('canvas')?.remove();
+  preview.setAttribute('aria-busy', 'true');
+  status.textContent = 'Cargando la vista previa…';
+  let loadingTask;
+  try {
+    const pdfjs = await import('/admin/pdfjs/pdf.min.mjs');
+    pdfjs.GlobalWorkerOptions.workerSrc = '/admin/pdfjs/pdf.worker.min.mjs';
+    loadingTask = pdfjs.getDocument({ url, standardFontDataUrl: '/admin/pdfjs/fonts/' });
+    const pdf = await loadingTask.promise;
+    const page = await pdf.getPage(1);
+    const viewport = page.getViewport({ scale: 2.5 });
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.ceil(viewport.width);
+    canvas.height = Math.ceil(viewport.height);
+    canvas.setAttribute('role', 'img');
+    canvas.setAttribute('aria-label', 'Vista previa de la entrada de demostración');
+    await page.render({ canvas, viewport }).promise;
+    if (request === ticketPreviewRequest) {
+      status.textContent = '';
+      preview.append(canvas);
+    }
+  } catch {
+    if (request === ticketPreviewRequest) {
+      status.textContent = 'No se pudo mostrar la vista previa. Usa «Abrir PDF» o «Descargar».';
+    }
+  } finally {
+    if (request === ticketPreviewRequest) preview.setAttribute('aria-busy', 'false');
+    await loadingTask?.destroy();
+  }
+}
+
 function switchTab(tabName) {
-  const titles = {orders:'Pagos y ventas', seats:'Mapa de entradas', qr:'Control de acceso', cms:'Evento y contenido', smtp:'Correos y avisos', blog:'Blog · Marketing'};
-  document.getElementById('workspace-title').textContent = titles[tabName] || titles.orders;
+  if (!Object.hasOwn(sectionTitles, tabName)) return;
+  document.getElementById('workspace-title').textContent = sectionTitles[tabName];
+  document.getElementById('admin-section').value = tabName;
   document.querySelector('.dashboard-main').classList.toggle('focused-tab', tabName !== 'orders');
-  ['orders', 'seats', 'qr', 'cms', 'smtp', 'blog'].forEach(t => {
+  Object.keys(sectionTitles).forEach(t => {
     document.getElementById(`tab-panel-${t}`).classList.toggle('hidden', t !== tabName);
     const button = document.getElementById(`tab-btn-${t}`);
     button.classList.toggle('active', t === tabName);
     if (t === tabName) button.setAttribute('aria-current', 'page'); else button.removeAttribute('aria-current');
   });
   if (tabName === 'blog') window.loadMarketingBlog();
+  if (tabName === 'pdf') updateTicketDemo();
   if (tabName !== 'orders') window.scrollTo({top: 0});
 }
 
@@ -1061,13 +1136,17 @@ setInterval(() => {
 
 // Check URL params if redirected from QR scan (/admin/?verifyToken=...)
 window.addEventListener('DOMContentLoaded', async () => {
+  switchTab(window.location.hash.slice(1));
   await fetchAdminOverview();
-  if (window.location.hash === '#blog') switchTab('blog');
   const params = new URLSearchParams(window.location.search);
   const verifyToken = params.get('verifyToken');
   if (verifyToken) {
     testTokenInScanner(verifyToken);
   }
+});
+
+document.getElementById('mail-settings-form').addEventListener('input', (event) => {
+  if (event.target.id !== 'mail-test-to') event.currentTarget.dataset.editing = 'true';
 });
 
 document.getElementById('admin-modal').addEventListener('click', event => {

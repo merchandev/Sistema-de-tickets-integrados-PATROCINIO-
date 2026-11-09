@@ -2,199 +2,144 @@ const PDFDocument = require('pdfkit');
 const QRCode = require('qrcode');
 const fs = require('node:fs');
 const path = require('node:path');
+const { pipeline } = require('node:stream/promises');
 
 const ticketsDir = path.join(__dirname, '..', 'storage', 'tickets');
-if (!fs.existsSync(ticketsDir)) {
-  fs.mkdirSync(ticketsDir, { recursive: true });
-}
-
-// Header name and colour after the page the ticket was bought from.
-const BRANDS = {
-  'pagina-web-1': { name: 'ILUMINANDO CAMINOS', color: '#650b10' },
-  'pagina-web-2': { name: 'HABLEMOS DE MARKETING', color: '#5b21d6' }
+const brands = {
+  'pagina-web-1': { name: 'Iluminando Caminos', accent: '#681b2a' },
+  'pagina-web-2': { name: 'Hablemos de Marketing', accent: '#5221b5' }
 };
+const ink = '#1c2634';
+const muted = '#526173';
 
 function formatDate(value) {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ''));
-  if (!m) return value || 'Por definir';
-  return new Intl.DateTimeFormat('es-VE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })
-    .format(new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])));
-}
-function formatTime(value) {
-  const m = /^(\d{1,2}):(\d{2})$/.exec(String(value || '').trim());
-  if (!m) return value || '';
-  const h = parseInt(m[1], 10);
-  return `${h % 12 || 12}:${m[2]} ${h >= 12 ? 'PM' : 'AM'}`;
+  const parts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ''));
+  if (!parts) return value || 'Por definir';
+  return new Intl.DateTimeFormat('es-VE', {
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC'
+  }).format(new Date(Date.UTC(+parts[1], +parts[2] - 1, +parts[3])));
 }
 
-/**
- * Generates a clean, minimal PDF ticket with an embedded cryptographic QR code.
- * Returns { pdfFullPath, pdfRelativeUrl, qrDataUrl, verificationUrl }
- */
+function formatTime(value) {
+  const parts = /^(\d{1,2}):(\d{2})$/.exec(String(value || '').trim());
+  if (!parts) return value || '';
+  const hour = Number(parts[1]);
+  return `${hour % 12 || 12}:${parts[2]} ${hour >= 12 ? 'p. m.' : 'a. m.'}`;
+}
+
+function fitText(doc, value, x, y, width, height, size, minimum = 8) {
+  const text = String(value || '').replace(/\s+/g, ' ').trim();
+  const options = { width, lineGap: 1 };
+  doc.fontSize(size);
+  while (size > minimum && doc.heightOfString(text, options) > height) {
+    size -= 0.5;
+    doc.fontSize(size);
+  }
+  doc.text(text, x, y, { ...options, height, ellipsis: true });
+}
+
+function createTicketDocument(order, config, qrBuffer, demo) {
+  const brand = brands[order.source_web] || brands['pagina-web-1'];
+  const eventTitle = config.event_title || 'Encuentro por una causa';
+  const doc = new PDFDocument({
+    size: 'A5', margin: 0,
+    info: { Title: demo ? 'Entrada de demostración' : `Entrada #${order.ticket_number} - ${eventTitle}`, Author: brand.name }
+  });
+  const inset = 32;
+  const width = doc.page.width - 2 * inset;
+
+  const label = (text, x, y) => doc.font('Helvetica-Bold').fontSize(8).fillColor(muted).text(text, x, y, { lineBreak: false });
+  const divider = y => doc.moveTo(inset, y).lineTo(inset + width, y).lineWidth(0.6).stroke('#dce2e9');
+  const value = (text, x, y, maxWidth, height, size = 11) => {
+    doc.font('Helvetica').fillColor(ink);
+    fitText(doc, text, x, y, maxWidth, height, size);
+  };
+
+  doc.rect(0, 0, doc.page.width, 6).fill(brand.accent);
+  doc.font('Helvetica-Bold').fontSize(10).fillColor(brand.accent).text(brand.name, inset, 31, { lineBreak: false });
+  if (demo) {
+    doc.roundedRect(inset + width - 112, 24, 112, 23, 6).fill('#f5e7d0');
+    doc.font('Helvetica-Bold').fontSize(8).fillColor('#734719')
+      .text('DEMO / SIN VALIDEZ', inset + width - 112, 32, { width: 112, align: 'center' });
+  }
+
+  doc.font('Helvetica-Bold').fillColor(ink);
+  fitText(doc, eventTitle, inset, 57, width, 55, 23, 14);
+  label(`ENTRADA #${order.ticket_number}  /  ACCESO GENERAL`, inset, 120);
+
+  doc.roundedRect(inset, 141, width, 100, 12).fill('#f1f4f8');
+  const eventX = inset + 14;
+  const eventWidth = width - 28;
+  label('FECHA E INGRESO', eventX, 153);
+  value(`${formatDate(config.event_date)} · ${formatTime(config.event_entry_time || '15:30')}`, eventX, 167, eventWidth, 18);
+  value(config.event_location || 'Lugar por definir', eventX, 188, eventWidth, 21, 10);
+  value(`Conferencias ${formatTime(config.conference_start || '16:00')} a ${formatTime(config.conference_end || '19:00')} · Concierto ${formatTime(config.concert_start || '19:00')}`, eventX, 212, eventWidth, 22, 9);
+
+  label('TITULAR', inset, 259);
+  doc.font('Helvetica-Bold').fillColor(ink);
+  fitText(doc, order.buyer_name, inset, 273, width, 41, 17, 11);
+  label('IDENTIDAD', inset, 319);
+  label('TELÉFONO', inset + width / 2, 319);
+  value(order.buyer_cedula, inset, 333, width / 2 - 10, 18);
+  value(order.buyer_phone, inset + width / 2, 333, width / 2, 18);
+  label('CORREO', inset, 358);
+  value(order.buyer_email, inset, 372, width, 31, 10);
+
+  divider(412);
+  const qrSize = 114;
+  doc.image(qrBuffer, inset + width - qrSize, 421, { width: qrSize, height: qrSize });
+  const scanWidth = width - qrSize - 14;
+  doc.font('Helvetica-Bold').fontSize(15).fillColor(ink)
+    .text(demo ? 'QR de muestra' : 'Código de acceso', inset, 433, { width: scanWidth });
+  value(demo ? 'Datos ficticios. Este código es una muestra del formato de la entrada.' : 'Muestra el QR y tu cédula al personal de ingreso. La entrada incluye ambos bloques.', inset, 459, scanWidth, 42, 10);
+  doc.font('Courier').fillColor(ink);
+  fitText(doc, order.verification_token, inset, 509, scanWidth, 28, 8, 7);
+
+  divider(550);
+  value(
+    demo ? 'Pago de muestra · Ref. 000000'
+      : `Pago verificado · ${order.payment_bank ? `${order.payment_bank} · ` : ''}Ref. ${order.payment_reference}`,
+    inset, 561, width, 20, 8
+  );
+  return doc;
+}
+
+const qrOptions = { errorCorrectionLevel: 'H', margin: 4, width: 360 };
+
 async function generateTicketPdf(order, eventConfig, baseUrl = 'http://localhost:4000') {
   const filename = `ENTRADA-${order.ticket_number}-ORD${order.id}.pdf`;
   const pdfFullPath = path.join(ticketsDir, filename);
-  const pdfRelativeUrl = `/storage/tickets/${filename}`;
-
   const verificationUrl = `${baseUrl.replace(/\/$/, '')}/verify/${encodeURIComponent(order.verification_token)}`;
-
-  // Generate QR code buffer & Data URL encoding the verification URL (which contains the unique token)
-  const qrBuffer = await QRCode.toBuffer(verificationUrl, {
-    errorCorrectionLevel: 'H',
-    margin: 1,
-    width: 220,
-    color: {
-      dark: '#000000',
-      light: '#FFFFFF'
-    }
-  });
-
-  const qrDataUrl = await QRCode.toDataURL(verificationUrl, {
-    errorCorrectionLevel: 'H',
-    margin: 1,
-    width: 220
-  });
-
-  await new Promise((resolve, reject) => {
-    const doc = new PDFDocument({
-      size: 'A5',
-      margin: 32,
-      info: {
-        Title: `Entrada #${order.ticket_number} - ${eventConfig.event_title}`,
-        Author: 'Sistema Central de Entradas'
-      }
-    });
-
-    const stream = fs.createWriteStream(pdfFullPath);
-    doc.pipe(stream);
-
-    const brand = BRANDS[order.source_web] || BRANDS['pagina-web-1'];
-
-    // Clean minimalist border with the page's colour
-    doc
-      .rect(20, 20, doc.page.width - 40, doc.page.height - 40)
-      .lineWidth(1.2)
-      .strokeColor(brand.color)
-      .stroke();
-
-    // Header
-    doc
-      .fillColor(brand.color)
-      .font('Helvetica-Bold')
-      .fontSize(8)
-      .text(brand.name, 36, 30, {
-        width: doc.page.width - 72,
-        align: 'center',
-        characterSpacing: 1.5
-      });
-
-    doc
-      .fillColor('#111111')
-      .font('Helvetica-Bold')
-      .fontSize(12)
-      .text(eventConfig.event_title || 'EVENTO BENÉFICO - LABOR SOCIAL', 36, 44, {
-        width: doc.page.width - 72,
-        align: 'center',
-        height: 30,
-        ellipsis: true
-      });
-
-    // Divider line
-    doc
-      .moveTo(36, 82)
-      .lineTo(doc.page.width - 36, 82)
-      .lineWidth(0.5)
-      .strokeColor('#CCCCCC')
-      .stroke();
-
-    // Ticket Number Box
-    doc
-      .font('Helvetica-Bold')
-      .fontSize(22)
-      .fillColor('#000000')
-      .text(`ENTRADA #${order.ticket_number}`, 36, 94, {
-        width: doc.page.width - 72,
-        align: 'center'
-      });
-
-    // Buyer details
-    const startY = 132;
-    doc.font('Helvetica-Bold').fontSize(9).fillColor('#555555').text('TITULAR DE LA ENTRADA:', 40, startY);
-    doc.font('Helvetica-Bold').fontSize(12).fillColor('#000000').text(order.buyer_name, 40, startY + 13);
-
-    doc.font('Helvetica-Bold').fontSize(9).fillColor('#555555').text('CÉDULA DE IDENTIDAD:', 40, startY + 34);
-    doc.font('Helvetica').fontSize(11).fillColor('#000000').text(order.buyer_cedula, 40, startY + 47);
-
-    doc.font('Helvetica-Bold').fontSize(9).fillColor('#555555').text('TELÉFONO / CORREO:', 210, startY + 34);
-    doc.font('Helvetica').fontSize(9).fillColor('#000000').text(`${order.buyer_phone}\n${order.buyer_email}`, 210, startY + 47);
-
-    // Event Schedule Summary
-    const schedY = startY + 76;
-    doc
-      .moveTo(36, schedY - 6)
-      .lineTo(doc.page.width - 36, schedY - 6)
-      .lineWidth(0.5)
-      .strokeColor('#CCCCCC')
-      .stroke();
-
-    doc.font('Helvetica-Bold').fontSize(9).fillColor('#111111').text(
-      `${formatDate(eventConfig.event_date).toUpperCase()}   |   INGRESO: ${formatTime(eventConfig.event_entry_time || '15:30')}`,
-      40,
-      schedY + 2,
-      { width: doc.page.width - 80 }
-    );
-    doc.font('Helvetica').fontSize(8.5).fillColor('#222222').text(
-      `${eventConfig.event_location || ''}\nConferencia: ${formatTime(eventConfig.conference_start || '16:00')} a ${formatTime(eventConfig.conference_end || '19:00')}  ·  Concierto: desde las ${formatTime(eventConfig.concert_start || '19:00')} (acceso incluido a ambas)`,
-      40,
-      schedY + 15,
-      { width: doc.page.width - 80 }
-    );
-
-    // QR Code centered
-    const qrSize = 155;
-    const qrX = (doc.page.width - qrSize) / 2;
-    const qrY = schedY + 50;
-
-    doc.image(qrBuffer, qrX, qrY, { width: qrSize, height: qrSize });
-
-    // Token and Verification footer
-    const tokenY = qrY + qrSize + 8;
-    doc
-      .font('Courier-Bold')
-      .fontSize(8.5)
-      .fillColor('#000000')
-      .text(`TOKEN ÚNICO: ${order.verification_token}`, 36, tokenY, {
-        width: doc.page.width - 72,
-        align: 'center'
-      });
-
-    doc
-      .font('Helvetica')
-      .fontSize(7.5)
-      .fillColor('#555555')
-      .text(
-        `Pago verificado: ${order.payment_bank ? `${order.payment_bank} · ` : ''}Ref. ${order.payment_reference}\nPresente este código QR junto con su Cédula de Identidad en la entrada.`,
-        36,
-        tokenY + 15,
-        {
-          width: doc.page.width - 72,
-          align: 'center'
-        }
-      );
-
-    doc.end();
-    stream.on('finish', resolve);
-    stream.on('error', reject);
-  });
-
+  const qrBuffer = await QRCode.toBuffer(verificationUrl, qrOptions);
+  const doc = createTicketDocument(order, eventConfig, qrBuffer, false);
+  fs.mkdirSync(ticketsDir, { recursive: true });
+  const write = pipeline(doc, fs.createWriteStream(pdfFullPath));
+  doc.end();
+  await write;
   return {
     pdfFullPath,
-    pdfRelativeUrl,
-    qrDataUrl,
+    pdfRelativeUrl: `/storage/tickets/${filename}`,
+    qrDataUrl: `data:image/png;base64,${qrBuffer.toString('base64')}`,
     verificationUrl
   };
 }
 
-module.exports = {
-  generateTicketPdf
-};
+async function generateDemoTicketPdf(source, eventConfig) {
+  const sample = {
+    source_web: source,
+    ticket_number: '001',
+    buyer_name: 'Andrea Pérez',
+    buyer_cedula: 'V-00000000',
+    buyer_phone: '0000-0000000',
+    buyer_email: 'andrea@example.invalid',
+    verification_token: 'DEMO-001'
+  };
+  const qrBuffer = await QRCode.toBuffer('DEMO-ENTRADA-SIN-VALIDEZ', qrOptions);
+  const doc = createTicketDocument(sample, eventConfig, qrBuffer, true);
+  doc.end();
+  const chunks = [];
+  for await (const chunk of doc) chunks.push(chunk);
+  return Buffer.concat(chunks);
+}
+
+module.exports = { generateTicketPdf, generateDemoTicketPdf };

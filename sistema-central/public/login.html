@@ -5,15 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="robots" content="noindex" />
   <title>Iniciar sesión · Panel de entradas</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <style>
     :root {
-      --ink: #272331;
-      --muted: #77717e;
-      --line: #e8e4e9;
-      --paper: #f7f5f2;
+      --ink: #1d232c;
+      --muted: #596472;
+      --line: #dfe4eb;
+      --paper: #f3f4f8;
+      --accent: #075dc4;
       --wine: #681b2a;
       --purple: #5b21d6;
     }
@@ -28,7 +26,7 @@
       padding: 32px 16px;
       background: var(--paper);
       color: var(--ink);
-      font-family: "Plus Jakarta Sans", system-ui, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
       -webkit-font-smoothing: antialiased;
     }
     .login {
@@ -46,10 +44,17 @@
       display: grid;
       place-items: center;
       border-radius: 12px;
-      background: var(--ink);
-      color: #f3dfb6;
-      font-size: 18px;
-      font-weight: 800;
+      background: var(--accent);
+      color: #fff;
+    }
+    .mark svg {
+      width: 24px;
+      height: 24px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.6;
+      stroke-linecap: round;
+      stroke-linejoin: round;
     }
     .brand strong {
       display: block;
@@ -99,7 +104,7 @@
     }
     input:focus {
       border-color: transparent;
-      outline: 2px solid #7c5cd6;
+      outline: 2px solid var(--accent);
       outline-offset: 0;
     }
     #password {
@@ -125,7 +130,7 @@
       padding: 13px;
       border: 0;
       border-radius: 10px;
-      background: var(--ink);
+      background: var(--accent);
       color: #fff;
       font: inherit;
       font-size: 14px;
@@ -133,7 +138,7 @@
       cursor: pointer;
     }
     .submit:hover {
-      background: #3a3445;
+      background: #004d9f;
     }
     .submit:disabled {
       opacity: 0.6;
@@ -187,7 +192,7 @@
       background: var(--purple);
     }
     :focus-visible {
-      outline: 3px solid #a78bfa;
+      outline: 3px solid #3e83d9;
       outline-offset: 3px;
     }
   </style>
@@ -195,7 +200,7 @@
 <body>
   <main class="login">
     <div class="brand">
-      <span class="mark" aria-hidden="true">e.</span>
+      <span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 7h18v3a2 2 0 0 0 0 4v3H3v-3a2 2 0 0 0 0-4z M15 7v3 M15 14v3"/></svg></span>
       <div><strong>Entradas</strong><span>Administración del evento</span></div>
     </div>
 
@@ -203,7 +208,7 @@
       <h1>Iniciar sesión</h1>
       <p class="lead">Un solo panel para las 250 entradas que se venden en Iluminando Caminos y Hablemos de Marketing.</p>
       <p id="login-error" class="error" role="alert" hidden></p>
-      <form id="login-form">
+      <form id="login-form" method="post" action="/admin/login">
         <label for="username">Usuario o correo</label>
         <div class="field">
           <input id="username" name="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required autofocus />

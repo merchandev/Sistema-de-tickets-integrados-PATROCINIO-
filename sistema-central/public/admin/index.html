@@ -4,9 +4,6 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Dashboard Administrador | Sistema Central de Entradas (001-250)</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/admin/utilities.css" />
   <link rel="stylesheet" href="/admin/admin.css" />
   <link rel="stylesheet" href="/admin/blog.css" />
@@ -17,21 +14,29 @@
 <body class="text-slate-900 min-h-screen flex flex-col">
 
   <aside class="sidebar" aria-label="Navegación principal">
-    <a class="admin-brand" href="/admin/"><span class="brand-mark">e.</span><span>Entradas<small>Administración del evento</small></span></a>
-    <span class="nav-caption">ESPACIO DE TRABAJO</span>
+    <a class="admin-brand" href="/admin/"><span class="brand-mark"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h18v3a2 2 0 0 0 0 4v3H3v-3a2 2 0 0 0 0-4z M15 7v3 M15 14v3"/></svg></span><span>Entradas<small>Administración del evento</small></span></a>
     <nav class="admin-nav" aria-label="Secciones del dashboard">
-      <button onclick="switchTab('orders')" id="tab-btn-orders" class="tab-btn active" aria-current="page"><span class="nav-icon">01</span> Pagos y ventas <span id="badge-pending-orders" class="nav-count">0</span></button>
-      <button onclick="switchTab('seats')" id="tab-btn-seats" class="tab-btn"><span class="nav-icon">02</span> Mapa de entradas</button>
-      <button onclick="switchTab('qr')" id="tab-btn-qr" class="tab-btn"><span class="nav-icon">03</span> Control de acceso</button>
-      <button onclick="switchTab('cms')" id="tab-btn-cms" class="tab-btn"><span class="nav-icon">04</span> Evento y contenido</button>
-      <button onclick="switchTab('smtp')" id="tab-btn-smtp" class="tab-btn"><span class="nav-icon">05</span> Correos y avisos</button>
-      <button onclick="switchTab('blog')" id="tab-btn-blog" class="tab-btn"><span class="nav-icon">06</span> Blog · Marketing</button>
+      <button type="button" onclick="switchTab('orders')" id="tab-btn-orders" class="tab-btn active" aria-current="page"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18v12H3z M3 10h18 M6 15h4"/></svg> Pagos y ventas <span id="badge-pending-orders" class="nav-count">0</span></button>
+      <button type="button" onclick="switchTab('seats')" id="tab-btn-seats" class="tab-btn"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h6v6H4z M14 4h6v6h-6z M4 14h6v6H4z M14 14h6v6h-6z"/></svg> Mapa de entradas</button>
+      <button type="button" onclick="switchTab('pdf')" id="tab-btn-pdf" class="tab-btn"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6z M14 3v5h4 M9 13h6 M9 17h6"/></svg> Diseño de entrada</button>
+      <button type="button" onclick="switchTab('qr')" id="tab-btn-qr" class="tab-btn"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5 M15 4h5v5 M20 15v5h-5 M9 20H4v-5 M9 9h6v6H9z"/></svg> Control de acceso</button>
+      <button type="button" onclick="switchTab('cms')" id="tab-btn-cms" class="tab-btn"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v14H4z M8 3v6 M16 3v6 M4 11h16"/></svg> Evento y contenido</button>
+      <button type="button" onclick="switchTab('smtp')" id="tab-btn-smtp" class="tab-btn"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18v14H3z M3 6l9 7 9-7"/></svg> Correos y avisos</button>
+      <button type="button" onclick="switchTab('blog')" id="tab-btn-blog" class="tab-btn"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v16H5z M8 8h8 M8 12h8 M8 16h5"/></svg> Blog · Marketing</button>
     </nav>
+    <div class="mobile-nav"><label for="admin-section">Sección</label><select id="admin-section" onchange="switchTab(this.value)">
+      <option value="orders">Pagos y ventas</option>
+      <option value="seats">Mapa de entradas</option>
+      <option value="pdf">Diseño de entrada</option>
+      <option value="qr">Control de acceso</option>
+      <option value="cms">Evento y contenido</option>
+      <option value="smtp">Correos y avisos</option>
+      <option value="blog">Blog · Marketing</option>
+    </select></div>
     <div class="sidebar-sites"><span class="nav-caption">WEBS CONECTADAS</span><a href="https://iluminandocaminos.com" target="_blank" rel="noopener"><i class="site-dot caminos"></i>Iluminando Caminos <span>↗</span></a><a href="https://hablemosdemarketingmaturin.com" target="_blank" rel="noopener"><i class="site-dot marketing"></i>Hablemos de Marketing <span>↗</span></a></div>
-    <div class="sidebar-footer">Un inventario compartido.<br>250 entradas, dos páginas.</div>
   </aside>
   <header class="topbar">
-    <div><span class="topbar-label">SISTEMA CENTRAL</span><strong id="workspace-title">Pagos y ventas</strong></div>
+    <div><strong id="workspace-title">Pagos y ventas</strong></div>
     <div class="topbar-status"><span id="connection-status" role="status">Conectando…</span>
       <div class="notif">
         <button type="button" id="notif-bell" class="notif-bell" aria-expanded="false" aria-controls="notif-panel" aria-label="Pedidos de entradas">
@@ -56,7 +61,7 @@
   <div id="admin-toast" class="admin-toast" role="status" aria-live="polite" hidden></div>
   <!-- Main Content -->
   <main class="dashboard-main space-y-6">
-    <section class="overview-heading"><div><span class="eyebrow">VISTA GENERAL</span><h1>Todo listo para recibirlos.</h1><p>Controla las entradas, verifica los pagos y sigue las ventas de cada proyecto.</p></div><span id="sales-state" class="sales-state">Consultando estado de venta…</span></section>
+    <section class="overview-heading"><div><h1>Pagos y ventas</h1><p>Revisa las solicitudes de pago y las ventas de cada página.</p></div><span id="sales-state" class="sales-state">Consultando estado de venta…</span></section>
     <section class="exchange-bar" aria-label="Precio de la entrada"><div><span>Tasa BCV</span><strong id="header-bcv-rate">Bs. —</strong></div><div><span>Entrada general</span><strong id="header-ticket-price">$5.00 (<span id="header-price-ves">Bs. —</span>)</strong></div><button onclick="forceRefreshBcv()" title="Consultar tasa oficial del BCV">↻ Actualizar tasa</button><details class="rate-detail"><summary>Fuente y actualización</summary><p id="admin-bcv-source"></p></details></section>
 
     <!-- KPI Cards -->
@@ -94,7 +99,7 @@
     </section>
 
     <section class="sources-section" aria-labelledby="sources-title">
-      <div class="section-label"><div><span class="eyebrow">DOS PROYECTOS, UN EVENTO</span><h2 id="sources-title">Ventas por página</h2></div><span>Solo pagos aprobados en la recaudación</span></div>
+      <div class="section-label"><h2 id="sources-title">Ventas por página</h2><span>Recaudación de pagos aprobados</span></div>
       <div class="source-grid">
         <article class="source-card source-caminos"><div class="source-card-head"><span class="source-monogram">IC</span><div><h3>Iluminando Caminos</h3><p>iluminandocaminos.com</p></div><span class="source-number">01</span></div><div id="sales-web-1" class="source-stats">Cargando ventas…</div><button onclick="filterBySource('pagina-web-1')">Ver operaciones de esta web <span>↗</span></button></article>
         <article class="source-card source-marketing"><div class="source-card-head"><span class="source-monogram">HDM</span><div><h3>Hablemos de Marketing</h3><p>hablemosdemarketingmaturin.com</p></div><span class="source-number">02</span></div><div id="sales-web-2" class="source-stats">Cargando ventas…</div><button onclick="filterBySource('pagina-web-2')">Ver operaciones de esta web <span>↗</span></button></article>
@@ -359,7 +364,11 @@
         <form id="mail-settings-form" onsubmit="saveSmtpSettings(event)" class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-3 mail-settings">
           <h2 class="text-base font-bold text-slate-900">Cuenta de correo</h2>
           <p id="mail-delivery-mode" role="status" class="text-xs font-semibold"></p>
-          <p class="text-xs text-slate-500">SMTP envía los correos de pago en verificación, pago aceptado y la entrada en PDF. IMAP es opcional: guarda una copia de cada envío en la carpeta Enviados del buzón.</p>
+          <p class="text-sm text-slate-600">Configura el buzón que envía los avisos de pago en verificación, aprobación o rechazo y las entradas en PDF.</p>
+          <div class="hostinger-preset">
+            <div><strong>Hostinger Email</strong><p>soporte@merchan.dev</p></div>
+            <button type="button" class="admin-secondary" onclick="fillHostingerSettings()">Usar datos de Hostinger</button>
+          </div>
           <fieldset>
             <legend>SMTP · Envío</legend>
             <div class="grid grid-cols-3 gap-3">
@@ -475,6 +484,41 @@
         <div class="blog-editor-actions"><button type="button" id="blog-save-draft" class="blog-secondary blog-save-action">Guardar borrador</button><button type="button" id="blog-preview" class="blog-secondary">Vista previa</button><button type="button" id="blog-publish" class="blog-primary blog-save-action">Publicar</button><button type="button" id="blog-trash" class="blog-trash blog-save-action" hidden>Mover a la papelera</button></div></form>
         <iframe id="blog-preview-frame" class="blog-preview-frame" title="Vista previa de la publicación" sandbox="" hidden></iframe>
       </section><p id="blog-message" class="blog-message" role="status"></p>
+    </section>
+    <section id="tab-panel-pdf" class="hidden ticket-demo" aria-labelledby="ticket-demo-title">
+      <header class="demo-heading">
+        <h1 id="ticket-demo-title">Diseño de entrada</h1>
+        <p>Revisa el PDF que se adjunta al correo cuando se aprueba un pago.</p>
+      </header>
+      <div class="demo-grid">
+        <div class="demo-document">
+          <div class="demo-toolbar">
+            <label for="ticket-demo-source">Página de origen
+              <select id="ticket-demo-source" onchange="updateTicketDemo()">
+                <option value="pagina-web-1">Iluminando Caminos</option>
+                <option value="pagina-web-2">Hablemos de Marketing</option>
+              </select>
+            </label>
+            <div class="demo-actions">
+              <a id="ticket-demo-open" class="admin-secondary" target="_blank" rel="noopener">Abrir PDF ↗</a>
+              <a id="ticket-demo-download" class="admin-primary" download>Descargar</a>
+            </div>
+          </div>
+          <div class="demo-preview" id="ticket-demo-preview" aria-busy="false">
+            <p id="ticket-demo-status" role="status"></p>
+          </div>
+        </div>
+        <aside class="demo-spec">
+          <h2>Qué incluye el PDF</h2>
+          <dl>
+            <div><dt>Identificación de la entrada</dt><dd>Número, página de origen y datos del titular.</dd></div>
+            <div><dt>Datos del evento</dt><dd>Fecha, lugar y horarios tomados de la configuración del evento.</dd></div>
+            <div><dt>Control de acceso</dt><dd>Un código QR por entrada para validar el acceso.</dd></div>
+            <div><dt>Referencia del pago</dt><dd>Banco y referencia del pago verificado.</dd></div>
+          </dl>
+          <p>La demo usa datos ficticios y su QR está marcado como inválido para el ingreso.</p>
+        </aside>
+      </div>
     </section>
   </main>
 
