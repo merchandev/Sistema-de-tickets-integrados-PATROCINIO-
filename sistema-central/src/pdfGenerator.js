@@ -154,7 +154,12 @@ function createTicketDocument(order, config, qrBuffer, demo) {
 
   const credit = 'Desarrollado por Espressivo Venezuela';
   doc.font('Helvetica').fontSize(10).fillColor(wine);
-  doc.text(credit, 510 - doc.widthOfString(credit), 934, { lineBreak: false });
+  const creditX = 510 - doc.widthOfString(credit);
+  const footerLogoSize = 28;
+  doc.image(path.join(brandAssets, 'espressivo-venezuela.png'), creditX - footerLogoSize - 8, 926, {
+    width: footerLogoSize, height: footerLogoSize
+  });
+  doc.text(credit, creditX, 934, { lineBreak: false });
   return doc;
 }
 
