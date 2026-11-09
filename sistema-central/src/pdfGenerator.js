@@ -5,9 +5,10 @@ const path = require('node:path');
 const { pipeline } = require('node:stream/promises');
 
 const ticketsDir = path.join(__dirname, '..', 'storage', 'tickets');
-const brands = {
-  'pagina-web-1': { name: 'Iluminando Caminos', accent: '#681b2a' },
-  'pagina-web-2': { name: 'Hablemos de Marketing', accent: '#5221b5' }
+const brandAssets = path.join(__dirname, '..', 'public', 'admin', 'brands');
+const salesSources = {
+  'pagina-web-1': 'Iluminando Caminos',
+  'pagina-web-2': 'Hablemos de Marketing'
 };
 const ink = '#1c2634';
 const muted = '#526173';
@@ -38,12 +39,31 @@ function fitText(doc, value, x, y, width, height, size, minimum = 8) {
   doc.text(text, x, y, { ...options, height, ellipsis: true });
 }
 
+function drawBrandHeader(doc, inset, width) {
+  const middle = inset + width / 2;
+  const background = doc.linearGradient(inset, 24, inset + width, 24)
+    .stop(0, '#581424')
+    .stop(0.5, '#35172e')
+    .stop(1, '#27154e');
+  doc.roundedRect(inset, 24, width, 86, 12).fill(background);
+  doc.moveTo(middle, 42).lineTo(middle, 92).lineWidth(0.6).stroke('#825b78');
+  doc.image(path.join(brandAssets, 'iluminando-caminos.png'), inset, 36, {
+    fit: [width / 2, 62], align: 'center', valign: 'center'
+  });
+  doc.image(path.join(brandAssets, 'hablemos-de-marketing.png'), middle, 38, {
+    fit: [width / 2, 58], align: 'center', valign: 'center'
+  });
+}
+
 function createTicketDocument(order, config, qrBuffer, demo) {
-  const brand = brands[order.source_web] || brands['pagina-web-1'];
+  const sourceName = salesSources[order.source_web];
   const eventTitle = config.event_title || 'Encuentro por una causa';
   const doc = new PDFDocument({
     size: 'A5', margin: 0,
-    info: { Title: demo ? 'Entrada de demostración' : `Entrada #${order.ticket_number} - ${eventTitle}`, Author: brand.name }
+    info: {
+      Title: demo ? 'Entrada de demostración' : `Entrada #${order.ticket_number} - ${eventTitle}`,
+      Author: 'Iluminando Caminos y Hablemos de Marketing'
+    }
   });
   const inset = 32;
   const width = doc.page.width - 2 * inset;
@@ -55,51 +75,53 @@ function createTicketDocument(order, config, qrBuffer, demo) {
     fitText(doc, text, x, y, maxWidth, height, size);
   };
 
-  doc.rect(0, 0, doc.page.width, 6).fill(brand.accent);
-  doc.font('Helvetica-Bold').fontSize(10).fillColor(brand.accent).text(brand.name, inset, 31, { lineBreak: false });
-  if (demo) {
-    doc.roundedRect(inset + width - 112, 24, 112, 23, 6).fill('#f5e7d0');
-    doc.font('Helvetica-Bold').fontSize(8).fillColor('#734719')
-      .text('DEMO / SIN VALIDEZ', inset + width - 112, 32, { width: 112, align: 'center' });
-  }
-
+  drawBrandHeader(doc, inset, width);
   doc.font('Helvetica-Bold').fillColor(ink);
-  fitText(doc, eventTitle, inset, 57, width, 55, 23, 14);
-  label(`ENTRADA #${order.ticket_number}  /  ACCESO GENERAL`, inset, 120);
+  fitText(doc, eventTitle, inset, 127, width, 54, 23, 14);
 
-  doc.roundedRect(inset, 141, width, 100, 12).fill('#f1f4f8');
+  doc.roundedRect(inset, 188, 169, 20, 5).fill('#f4e9ed');
+  doc.font('Helvetica-Bold').fontSize(8).fillColor('#581424')
+    .text(`ENTRADA #${order.ticket_number}  /  ACCESO GENERAL`, inset + 9, 195, { lineBreak: false });
+  if (demo) {
+    doc.roundedRect(inset + width - 112, 188, 112, 20, 5).fill('#f5e7d0');
+    doc.font('Helvetica-Bold').fontSize(8).fillColor('#734719')
+      .text('DEMO / SIN VALIDEZ', inset + width - 112, 195, { width: 112, align: 'center' });
+  }
+  if (sourceName) value(`Página de origen: ${sourceName}`, inset, 215, width, 12, 9);
+
+  doc.roundedRect(inset, 235, width, 87, 10).fill('#f3f0f8');
   const eventX = inset + 14;
   const eventWidth = width - 28;
-  label('FECHA E INGRESO', eventX, 153);
-  value(`${formatDate(config.event_date)} · ${formatTime(config.event_entry_time || '15:30')}`, eventX, 167, eventWidth, 18);
-  value(config.event_location || 'Lugar por definir', eventX, 188, eventWidth, 21, 10);
-  value(`Conferencias ${formatTime(config.conference_start || '16:00')} a ${formatTime(config.conference_end || '19:00')} · Concierto ${formatTime(config.concert_start || '19:00')}`, eventX, 212, eventWidth, 22, 9);
+  label('FECHA E INGRESO', eventX, 246);
+  value(`${formatDate(config.event_date)} · ${formatTime(config.event_entry_time || '15:30')}`, eventX, 259, eventWidth, 16);
+  value(config.event_location || 'Lugar por definir', eventX, 277, eventWidth, 21, 10);
+  value(`Conferencias ${formatTime(config.conference_start || '16:00')} a ${formatTime(config.conference_end || '19:00')} · Concierto ${formatTime(config.concert_start || '19:00')}`, eventX, 301, eventWidth, 18, 9);
 
-  label('TITULAR', inset, 259);
+  label('TITULAR', inset, 337);
   doc.font('Helvetica-Bold').fillColor(ink);
-  fitText(doc, order.buyer_name, inset, 273, width, 41, 17, 11);
-  label('IDENTIDAD', inset, 319);
-  label('TELÉFONO', inset + width / 2, 319);
-  value(order.buyer_cedula, inset, 333, width / 2 - 10, 18);
-  value(order.buyer_phone, inset + width / 2, 333, width / 2, 18);
-  label('CORREO', inset, 358);
-  value(order.buyer_email, inset, 372, width, 31, 10);
+  fitText(doc, order.buyer_name, inset, 350, width, 33, 16, 10);
+  label('IDENTIDAD', inset, 387);
+  label('TELÉFONO', inset + width / 2, 387);
+  value(order.buyer_cedula, inset, 399, width / 2 - 10, 17);
+  value(order.buyer_phone, inset + width / 2, 399, width / 2, 17);
+  label('CORREO', inset, 418);
+  value(order.buyer_email, inset, 430, width, 25, 10);
 
-  divider(412);
-  const qrSize = 114;
-  doc.image(qrBuffer, inset + width - qrSize, 421, { width: qrSize, height: qrSize });
+  divider(458);
+  const qrSize = 106;
+  doc.image(qrBuffer, inset + width - qrSize, 460, { width: qrSize, height: qrSize });
   const scanWidth = width - qrSize - 14;
   doc.font('Helvetica-Bold').fontSize(15).fillColor(ink)
-    .text(demo ? 'QR de muestra' : 'Código de acceso', inset, 433, { width: scanWidth });
-  value(demo ? 'Datos ficticios. Este código es una muestra del formato de la entrada.' : 'Muestra el QR y tu cédula al personal de ingreso. La entrada incluye ambos bloques.', inset, 459, scanWidth, 42, 10);
+    .text(demo ? 'QR de muestra' : 'Código de acceso', inset, 475, { width: scanWidth });
+  value(demo ? 'Datos ficticios. Este código es una muestra del formato de la entrada.' : 'Muestra el QR y tu cédula al personal de ingreso. La entrada incluye ambos bloques.', inset, 498, scanWidth, 37, 10);
   doc.font('Courier').fillColor(ink);
-  fitText(doc, order.verification_token, inset, 509, scanWidth, 28, 8, 7);
+  fitText(doc, order.verification_token, inset, 540, scanWidth, 22, 8, 7);
 
-  divider(550);
+  divider(568);
   value(
     demo ? 'Pago de muestra · Ref. 000000'
       : `Pago verificado · ${order.payment_bank ? `${order.payment_bank} · ` : ''}Ref. ${order.payment_reference}`,
-    inset, 561, width, 20, 8
+    inset, 577, width, 16, 8
   );
   return doc;
 }
