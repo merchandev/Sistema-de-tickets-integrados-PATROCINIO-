@@ -10,8 +10,14 @@ const salesSources = {
   'pagina-web-1': 'Iluminando Caminos',
   'pagina-web-2': 'Hablemos de Marketing'
 };
-const ink = '#1c2634';
-const muted = '#526173';
+const ink = '#181619';
+const wine = '#440C12';
+const deepWine = '#220408';
+const night = '#0B0716';
+const violet = '#5B21D6';
+const gold = '#E5C384';
+const lime = '#A8FF00';
+const pink = '#FF72B5';
 
 function formatDate(value) {
   const parts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ''));
@@ -52,11 +58,7 @@ function createTicketDocument(order, config, qrBuffer, demo) {
   });
   // Draw on a 540 × 960 grid so the layout and typography share one scale.
   doc.scale(1.5);
-  const paper = '#eeebf0';
-  const cream = '#faf7f1';
-  const light = '#fff9f3';
-  const lavender = '#e4d5eb';
-  const lime = '#def45b';
+  const light = '#fff';
   const perforation = 302;
   const stubX = 255;
   const stubWidth = 225;
@@ -64,7 +66,7 @@ function createTicketDocument(order, config, qrBuffer, demo) {
   const qrY = 59;
   const qrSize = 178;
 
-  const label = (text, x, y, color = muted) => {
+  const label = (text, x, y, color = wine) => {
     doc.font('Helvetica-Bold').fontSize(11).fillColor(color)
       .text(text, x, y, { lineBreak: false, characterSpacing: 0.7 });
   };
@@ -73,39 +75,40 @@ function createTicketDocument(order, config, qrBuffer, demo) {
     fitText(doc, text, x, y, width, height, size);
   };
 
-  doc.rect(0, 0, 540, 960).fill(paper);
-  doc.roundedRect(30, 39, 480, 882, 19).fill('#dbd4df');
+  doc.rect(0, 0, 540, 960).fill(ink);
+  doc.roundedRect(30, 39, 480, 882, 19).fill(night);
   doc.save().roundedRect(30, 34, 480, 882, 19).clip();
 
   const background = doc.linearGradient(30, perforation, 510, 916)
-    .stop(0, '#5c1830')
-    .stop(0.56, '#45194f')
-    .stop(1, '#29225e');
+    .stop(0, wine)
+    .stop(0.28, deepWine)
+    .stop(0.62, night)
+    .stop(1, violet);
   doc.rect(30, perforation, 480, 916 - perforation).fill(background);
-  doc.save().strokeOpacity(0.24).lineWidth(1.1);
-  doc.moveTo(290, perforation).bezierCurveTo(364, 391, 448, 319, 510, 404).stroke('#e094cb');
-  doc.moveTo(325, perforation).bezierCurveTo(388, 372, 464, 304, 510, 379).stroke('#e094cb');
-  doc.moveTo(364, perforation).bezierCurveTo(426, 351, 476, 295, 510, 354).stroke('#e094cb');
+  doc.save().strokeOpacity(0.55).lineWidth(1.1);
+  doc.moveTo(290, perforation).bezierCurveTo(364, 391, 448, 319, 510, 404).stroke(pink);
+  doc.moveTo(325, perforation).bezierCurveTo(388, 372, 464, 304, 510, 379).stroke(pink);
+  doc.moveTo(364, perforation).bezierCurveTo(426, 351, 476, 295, 510, 354).stroke(pink);
   doc.restore();
-  doc.rect(30, 34, 480, perforation - 34).fill(cream);
+  doc.rect(30, 34, 480, perforation - 34).fill(gold);
   doc.restore();
 
   doc.save().lineWidth(1.2).dash(3, { space: 5 })
-    .moveTo(45, perforation - 1).lineTo(495, perforation - 1).stroke('#a490a6').restore();
-  doc.circle(30, perforation, 12).fill(paper);
-  doc.circle(510, perforation, 12).fill(paper);
+    .moveTo(45, perforation - 1).lineTo(495, perforation - 1).stroke(wine).restore();
+  doc.circle(30, perforation, 12).fill(ink);
+  doc.circle(510, perforation, 12).fill(ink);
 
   doc.roundedRect(qrX - 3, qrY - 3, qrSize + 6, qrSize + 6, 9).fill('#fff');
   doc.image(qrBuffer, qrX, qrY, { width: qrSize, height: qrSize });
-  doc.font('Helvetica-Bold').fontSize(12).fillColor('#45194f')
+  doc.font('Helvetica-Bold').fontSize(12).fillColor(wine)
     .text(demo ? 'DEMO / SIN VALIDEZ' : 'Escanea para ingresar', qrX, 252, { width: qrSize, align: 'center' });
-  doc.font('Helvetica').fontSize(10).fillColor(muted)
+  doc.font('Helvetica').fontSize(10).fillColor(ink)
     .text(demo ? 'QR de muestra' : 'Presenta también tu cédula.', qrX, 270, { width: qrSize, align: 'center' });
 
   label('ACCESO GENERAL', stubX, 61);
-  doc.font('Helvetica-Bold').fillColor('#45194f');
+  doc.font('Helvetica-Bold').fillColor(deepWine);
   fitText(doc, `#${order.ticket_number}`, stubX - 2, 84, stubWidth, 83, 67, 39);
-  doc.moveTo(stubX, 169).lineTo(stubX + stubWidth, 169).lineWidth(0.8).stroke('#d7ccd6');
+  doc.save().strokeOpacity(0.5).moveTo(stubX, 169).lineTo(stubX + stubWidth, 169).lineWidth(0.8).stroke(wine).restore();
   label('CÓDIGO DE ENTRADA', stubX, 183);
   doc.font('Courier').fillColor(ink);
   fitText(doc, order.verification_token, stubX, 200, stubWidth, 26, 9, 7);
@@ -117,7 +120,7 @@ function createTicketDocument(order, config, qrBuffer, demo) {
   doc.image(path.join(brandAssets, 'iluminando-caminos.png'), 59, 325, {
     fit: [67, 65], align: 'center', valign: 'center'
   });
-  doc.moveTo(139, 335).lineTo(139, 380).lineWidth(0.7).stroke('#b488ae');
+  doc.moveTo(139, 335).lineTo(139, 380).lineWidth(0.7).stroke(gold);
   doc.image(path.join(brandAssets, 'hablemos-de-marketing-blanco.png'), 153, 327, {
     fit: [76, 61], align: 'center', valign: 'center'
   });
@@ -126,29 +129,29 @@ function createTicketDocument(order, config, qrBuffer, demo) {
   doc.font('Helvetica-Bold').fillColor(light);
   fitText(doc, eventTitle, 58, 431, 422, 112, 36, 23);
 
-  doc.moveTo(60, 553).lineTo(480, 553).lineWidth(0.8).stroke('#896887');
-  label('FECHA E INGRESO', 60, 569, lavender);
+  doc.moveTo(60, 553).lineTo(480, 553).lineWidth(0.8).stroke(gold);
+  label('FECHA E INGRESO', 60, 569, gold);
   value(`${formatDate(config.event_date)} · ${formatTime(config.event_entry_time || '15:30')}`, 60, 586, 420, 22, 15, light);
   value(config.event_location || 'Lugar por definir', 60, 609, 420, 30, 14, light);
 
-  label('HORARIOS', 60, 645, lavender);
+  label('HORARIOS', 60, 645, gold);
   value(`Conferencias · ${formatTime(config.conference_start || '16:00')} a ${formatTime(config.conference_end || '19:00')}`, 60, 662, 248, 35, 13, light);
   value(`Concierto · ${formatTime(config.concert_start || '19:00')}`, 320, 662, 160, 35, 13, light);
 
-  doc.save().fillOpacity(0.14).roundedRect(59, 704, 422, 175, 11).fill('#fff').restore();
-  label('TITULAR', 75, 720, lavender);
+  doc.save().fillOpacity(0.4).roundedRect(59, 704, 422, 175, 11).fill(night).restore();
+  label('TITULAR', 75, 720, gold);
   doc.font('Helvetica-Bold').fillColor(light);
   fitText(doc, order.buyer_name, 75, 737, 390, 42, 24, 12);
-  label('IDENTIDAD', 75, 787, lavender);
-  label('TELÉFONO', 270, 787, lavender);
+  label('IDENTIDAD', 75, 787, gold);
+  label('TELÉFONO', 270, 787, gold);
   value(order.buyer_cedula, 75, 804, 175, 20, 14, light);
   value(order.buyer_phone, 270, 804, 195, 20, 14, light);
-  label('CORREO', 75, 833, lavender);
+  label('CORREO', 75, 833, gold);
   value(order.buyer_email, 75, 850, 390, 24, 13, light);
-  if (sourceName) value(`Página de origen: ${sourceName}`, 60, 892, 420, 16, 11, lavender);
+  if (sourceName) value(`Página de origen: ${sourceName}`, 60, 892, 420, 16, 11, light);
 
   const credit = 'Desarrollado por Espressivo Venezuela';
-  doc.font('Helvetica').fontSize(10).fillColor(muted);
+  doc.font('Helvetica').fontSize(10).fillColor(gold);
   doc.text(credit, 510 - doc.widthOfString(credit), 934, { lineBreak: false });
   return doc;
 }
