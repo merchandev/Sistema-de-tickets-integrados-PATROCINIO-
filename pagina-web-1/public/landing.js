@@ -29,6 +29,40 @@
     $('#video-frame').innerHTML = '<video controls playsinline preload="metadata" poster="/media/poster.jpg"><source src="/media/promo.mp4" type="video/mp4"></video>';
   }).catch(() => {});
 
+  /* ---- Reels: se reproducen en silencio solo mientras se ven; al salir de pantalla se pausan ----
+     Si la persona los pausa a mano (o prefiere menos movimiento) no se reanudan solos. */
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  $$('.reel').forEach((reel) => {
+    const video = $('video', reel);
+    const playback = $('.reel-playback', reel);
+    const sound = $('.reel-sound', reel);
+    let userPaused = reduceMotion;
+    const play = () => video.play().catch(() => {});
+    const sync = () => {
+      reel.classList.toggle('is-paused', video.paused);
+      reel.classList.toggle('is-unmuted', !video.muted);
+      playback.setAttribute('aria-label', video.paused ? 'Reproducir video' : 'Pausar video');
+      sound.setAttribute('aria-label', video.muted ? 'Activar sonido' : 'Silenciar');
+      sound.setAttribute('aria-pressed', String(!video.muted));
+    };
+    const toggle = () => {
+      userPaused = !video.paused;
+      if (userPaused) video.pause(); else play();
+    };
+    ['play', 'pause', 'volumechange'].forEach((ev) => video.addEventListener(ev, sync));
+    video.addEventListener('click', toggle);
+    playback.addEventListener('click', toggle);
+    sound.addEventListener('click', () => {
+      video.muted = !video.muted;
+      if (!video.muted && video.paused) { userPaused = false; play(); }
+    });
+    new IntersectionObserver(([entry]) => {
+      if (!entry.isIntersecting) video.pause();
+      else if (!userPaused) play();
+    }, { threshold: 0.5 }).observe(video);
+    sync();
+  });
+
   /* ---- Formato ---- */
   const fmtDate = (d) => {
     const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(d || ''));

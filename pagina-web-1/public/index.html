@@ -90,13 +90,20 @@
           </div>
         </div>
 
-        <!-- ESCENARIO DERECHO: REEL OFICIAL DE LA CAMPAÑA EN MARCO DE ARCO -->
+        <!-- ESCENARIO DERECHO: VIDEO DE LA CAMPAÑA (SE REPRODUCE SOLO MIENTRAS ESTÁ EN PANTALLA) -->
         <div class="hero-stage hero-stage-enter" id="hero-stage">
-          <figure class="reel-frame">
-            <figcaption class="poster-arch-top"><span>✦ EDICIÓN MMXXVI · MATURÍN ✦</span></figcaption>
-            <blockquote class="instagram-media" data-instgrm-permalink="https://www.instagram.com/reel/DfNJCvCJ4wF/" data-instgrm-version="14">
-              <a href="https://www.instagram.com/reel/DfNJCvCJ4wF/" target="_blank" rel="noopener">Ver el video de la campaña en Instagram ↗</a>
-            </blockquote>
+          <figure class="reel is-paused">
+            <video src="/media/reel-campana.mp4" muted loop playsinline preload="metadata" aria-label="Video de la campaña Iluminando Caminos"></video>
+            <div class="reel-controls">
+              <button type="button" class="reel-btn reel-playback" aria-label="Reproducir video">
+                <svg class="icon-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z" fill="currentColor"/></svg>
+                <svg class="icon-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" fill="currentColor"/></svg>
+              </button>
+              <button type="button" class="reel-btn reel-sound" aria-pressed="false" aria-label="Activar sonido">
+                <svg class="icon-sound-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5v5h3.5L12 18V6L7.5 9.5z" fill="currentColor"/><path d="M15.5 9.5l5 5m0-5l-5 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+                <svg class="icon-sound-on" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5v5h3.5L12 18V6L7.5 9.5z" fill="currentColor"/><path d="M15.5 9a4.5 4.5 0 0 1 0 6M18 6.5a8 8 0 0 1 0 11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+              </button>
+            </div>
           </figure>
         </div>
       </div>
@@ -205,11 +212,18 @@
             <cite>— Estudiantes de Publicidad y Mercadeo · IUTIRLA</cite>
           </div>
         </div>
-        <figure class="reel-frame reveal" style="--d: 0.1s">
-          <figcaption class="poster-arch-top"><span>✦ VOCES DE LA CAMPAÑA ✦</span></figcaption>
-          <blockquote class="instagram-media" data-instgrm-permalink="https://www.instagram.com/reel/DeaJn65JY_K/" data-instgrm-version="14">
-            <a href="https://www.instagram.com/reel/DeaJn65JY_K/" target="_blank" rel="noopener">Ver las entrevistas en Instagram ↗</a>
-          </blockquote>
+        <figure class="reel is-paused reveal" style="--d: 0.1s">
+          <video src="/media/reel-voces.mp4" muted loop playsinline preload="metadata" aria-label="Entrevistas a los estudiantes de Publicidad y Mercadeo"></video>
+          <div class="reel-controls">
+            <button type="button" class="reel-btn reel-playback" aria-label="Reproducir video">
+              <svg class="icon-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z" fill="currentColor"/></svg>
+              <svg class="icon-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" fill="currentColor"/></svg>
+            </button>
+            <button type="button" class="reel-btn reel-sound" aria-pressed="false" aria-label="Activar sonido">
+              <svg class="icon-sound-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5v5h3.5L12 18V6L7.5 9.5z" fill="currentColor"/><path d="M15.5 9.5l5 5m0-5l-5 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+              <svg class="icon-sound-on" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5v5h3.5L12 18V6L7.5 9.5z" fill="currentColor"/><path d="M15.5 9a4.5 4.5 0 0 1 0 6M18 6.5a8 8 0 0 1 0 11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+            </button>
+          </div>
         </figure>
       </div>
     </section>
@@ -386,7 +400,6 @@
     </div>
   </div>
 
-  <script async src="https://www.instagram.com/embed.js"></script>
   <script src="/landing.js"></script>
   <script src="/design.js"></script>
 </body>
