@@ -309,14 +309,19 @@ async function sendPaymentSubmittedEmail(order) {
  * 2. Sent when the administrator approves the payment: confirms it and carries the ticket PDF
  * (buyer data + QR) in a single message.
  */
-async function sendTicketEmail(order, pdfFullPath, pdfRelativeUrl) {
+async function sendTicketEmail(order, pdfFullPath, pdfRelativeUrl, { correctedTime = false } = {}) {
   const cfg = getPublicConfig();
   const brand = brandFor(order.source_web);
+  const entryTime = formatTime(cfg.event_entry_time || '15:00');
   const html = layout(brand, {
-    preheader: `Pago confirmado. Descarga tu entrada #${order.ticket_number} y ten el QR a mano para el ingreso.`,
-    title: 'Tu pago fue aprobado y tu entrada está lista',
+    preheader: correctedTime
+      ? `El acceso y registro con QR comienzan a las ${entryTime}. Adjuntamos tu entrada actualizada.`
+      : `Pago confirmado. Descarga tu entrada #${order.ticket_number} y ten el QR a mano para el ingreso.`,
+    title: correctedTime ? 'Actualizamos el horario de tu entrada' : 'Tu pago fue aprobado y tu entrada está lista',
     paragraphs: [
-      `Hola ${escapeHtml(firstName(order))}, gracias por apoyar <strong>${escapeHtml(cfg.event_title)}</strong>. Confirmamos tu pago y adjuntamos la entrada en PDF a nombre de <strong>${escapeHtml(order.buyer_name)}</strong>.`,
+      correctedTime
+        ? `Hola ${escapeHtml(firstName(order))}. El acceso y registro con QR comienzan a las <strong>${escapeHtml(entryTime)}</strong>. Te adjuntamos la entrada actualizada con el mismo código QR. Usa este PDF al llegar al evento.`
+        : `Hola ${escapeHtml(firstName(order))}, gracias por apoyar <strong>${escapeHtml(cfg.event_title)}</strong>. Confirmamos tu pago y adjuntamos la entrada en PDF a nombre de <strong>${escapeHtml(order.buyer_name)}</strong>.`,
       fullEventAccess,
       'Descarga el PDF antes de salir para tenerlo a mano aunque no tengas conexión. En la puerta puedes mostrar el QR en tu teléfono o llevarlo impreso. Ten también a mano tu cédula de identidad.'
     ],
@@ -328,9 +333,9 @@ async function sendTicketEmail(order, pdfFullPath, pdfRelativeUrl) {
   return sendSystemEmail({
     toEmail: order.buyer_email,
     toName: order.buyer_name,
-    subject: 'Muchas gracias por su apoyo, tu entrada está disponible',
+    subject: correctedTime ? 'Entrada actualizada: nuevo horario de acceso' : 'Muchas gracias por su apoyo, tu entrada está disponible',
     html,
-    type: 'TICKET_APPROVED',
+    type: correctedTime ? 'TICKET_TIME_CORRECTION' : 'TICKET_APPROVED',
     orderId: order.id,
     ticketNumber: order.ticket_number,
     attachments: pdfFullPath
@@ -511,6 +516,7 @@ const pendingRetries = new Set();
 const orderEmailStates = {
   PAYMENT_RECEIVED: 'PENDING',
   TICKET_APPROVED: 'APPROVED',
+  TICKET_TIME_CORRECTION: 'APPROVED',
   PAYMENT_REJECTED: 'REJECTED'
 };
 
@@ -541,13 +547,14 @@ async function retryOrderEmail(logId) {
       case 'PAYMENT_REJECTED':
         result = await sendPaymentRejectedEmail(order, order.admin_notes);
         break;
-      case 'TICKET_APPROVED': {
+      case 'TICKET_APPROVED':
+      case 'TICKET_TIME_CORRECTION': {
         const filename = /^\/storage\/tickets\/([\w-]+\.pdf)$/.exec(order.pdf_path || '')?.[1];
         const pdfPath = filename && path.join(__dirname, '..', 'storage', 'tickets', filename);
         if (!pdfPath || !fs.existsSync(pdfPath)) {
           return { ok: false, message: 'No se encontró el PDF de la entrada.' };
         }
-        result = await sendTicketEmail(order, pdfPath, order.pdf_path);
+        result = await sendTicketEmail(order, pdfPath, order.pdf_path, { correctedTime: log.type === 'TICKET_TIME_CORRECTION' });
         break;
       }
     }

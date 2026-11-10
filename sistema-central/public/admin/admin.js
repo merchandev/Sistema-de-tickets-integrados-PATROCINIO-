@@ -1059,7 +1059,7 @@ function renderEmailLogs() {
 
   const logs = state.emailLogs || [];
   const latest = new Set();
-  const emailStates = { PAYMENT_RECEIVED: 'PENDING', TICKET_APPROVED: 'APPROVED', PAYMENT_REJECTED: 'REJECTED' };
+  const emailStates = { PAYMENT_RECEIVED: 'PENDING', TICKET_APPROVED: 'APPROVED', TICKET_TIME_CORRECTION: 'APPROVED', PAYMENT_REJECTED: 'REJECTED' };
   const canRetry = logs.map(log => {
     const key = `${log.order_id}:${log.type}`;
     const isLatest = !latest.has(key);

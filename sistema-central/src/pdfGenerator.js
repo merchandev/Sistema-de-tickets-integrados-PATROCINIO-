@@ -165,13 +165,13 @@ function createTicketDocument(order, config, qrBuffer, demo) {
 
 const qrOptions = { errorCorrectionLevel: 'H', margin: 4, width: 360 };
 
-async function generateTicketPdf(order, eventConfig, baseUrl = 'http://localhost:4000') {
+async function generateTicketPdf(order, eventConfig, baseUrl = 'http://localhost:4000', outputDir = ticketsDir) {
   const filename = `ENTRADA-${order.ticket_number}-ORD${order.id}.pdf`;
-  const pdfFullPath = path.join(ticketsDir, filename);
+  const pdfFullPath = path.join(outputDir, filename);
   const verificationUrl = `${baseUrl.replace(/\/$/, '')}/verify/${encodeURIComponent(order.verification_token)}`;
   const qrBuffer = await QRCode.toBuffer(verificationUrl, qrOptions);
   const doc = createTicketDocument(order, eventConfig, qrBuffer, false);
-  fs.mkdirSync(ticketsDir, { recursive: true });
+  fs.mkdirSync(outputDir, { recursive: true });
   const write = pipeline(doc, fs.createWriteStream(pdfFullPath));
   doc.end();
   await write;
