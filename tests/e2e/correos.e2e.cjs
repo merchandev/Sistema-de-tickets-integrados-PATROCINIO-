@@ -54,14 +54,21 @@ async function api(method, url, { json, form, admin = false, cookie } = {}) {
   const data = type.includes('json') ? await res.json() : Buffer.from(await res.arrayBuffer());
   return { status: res.status, data, headers: res.headers, ms: Date.now() - started };
 }
+// Every field of the popup is required, the capture included; pass null to leave one out
+const CAPTURE_PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
 const buyerForm = (fields = {}) => {
   const form = new FormData();
   const values = {
     buyer_first_name: 'Ana', buyer_last_name: 'Rodríguez', buyer_cedula: 'V-21456789', buyer_phone: '0414-5550101',
     buyer_email: 'ana@prueba.test', payment_bank: 'Banesco (0134)', payment_reference: String(Date.now()).slice(-8),
-    source_web: 'pagina-web-1', ...fields
+    source_web: 'pagina-web-1', requested_ticket: '200', buyer_comment: 'La reserva expiró antes de enviar el pago',
+    screenshot: true, ...fields
   };
-  for (const [k, v] of Object.entries(values)) form.append(k, v);
+  for (const [k, v] of Object.entries(values)) {
+    if (v === null) continue;
+    if (k === 'screenshot') form.append('screenshot', new Blob([CAPTURE_PNG], { type: 'image/png' }), 'captura.png');
+    else form.append(k, v);
+  }
   return form;
 };
 
@@ -123,6 +130,8 @@ function parseMail(file) {
     check('Reservar entrada #210', lock.status === 200 && /10 minutos/.test(lock.data.message), lock.data.message);
     const badOrder = await api('POST', '/api/public/orders', { form: buyerForm({ ticket_number: '210', session_id: 'sess_e2e_checkout_1', buyer_cedula: 'abc' }) });
     check('Validación de cédula', badOrder.status === 400 && badOrder.data.field === 'buyer_cedula');
+    const noCapture = await api('POST', '/api/public/orders', { form: buyerForm({ ticket_number: '210', session_id: 'sess_e2e_checkout_1', screenshot: null }) });
+    check('La captura del pago es obligatoria', noCapture.status === 400 && noCapture.data.field === 'screenshot', noCapture.data.message);
     const order = await api('POST', '/api/public/orders', { form: buyerForm({ ticket_number: '210', session_id: 'sess_e2e_checkout_1' }) });
     check('Enviar pago desde el popup', order.status === 201, `respuesta en ${order.ms} ms`);
     check('Respuesta rápida (correo en segundo plano)', order.ms < 1500, `${order.ms} ms`);
@@ -146,6 +155,10 @@ function parseMail(file) {
     check('Enlace del QR lleva al verificador', qrLink.status === 302 && qrLink.headers.get('location').includes('verifyToken='));
 
     // --- 2. Payment report from Hablemos de Marketing, approved with an assigned ticket ---
+    for (const [field, label] of [['requested_ticket', 'el número de entrada'], ['buyer_comment', 'qué pasó con el pago'], ['screenshot', 'la captura']]) {
+      const incomplete = await api('POST', '/api/public/payment-reports', { form: buyerForm({ source_web: 'pagina-web-2', [field]: null }) });
+      check(`El reporte exige ${label}`, incomplete.status === 400 && incomplete.data.field === field, incomplete.data.message);
+    }
     const report = await api('POST', '/api/public/payment-reports', { form: buyerForm({ source_web: 'pagina-web-2', buyer_first_name: 'Luis', buyer_last_name: 'Martínez', buyer_email: 'luis@prueba.test', requested_ticket: '210', buyer_comment: 'Mi reserva expiró' }) });
     check('Enviar reporte de pago', report.status === 201, `respuesta en ${report.ms} ms`);
     await waitMails(4);

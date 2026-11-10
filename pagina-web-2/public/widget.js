@@ -26,6 +26,11 @@
   const $ = (id) => document.getElementById(id);
   const dialog = $('pay-dialog');
   const form = $('payment-form');
+  // Copy and "copied" icons of the account data buttons (the CSS shows one or the other)
+  const icon = (cls, paths) => `<svg class="pay-icon ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${paths}</svg>`;
+  const COPY_ICONS = icon('i-copy', '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/>') +
+    icon('i-check', '<path d="M5 12.5l4.5 4.5L19 7.5"/>');
+  const MAX_CAPTURE_BYTES = 10 * 1024 * 1024;
 
   // Dynamically load Socket.IO client from Central Server
   const script = document.createElement('script');
@@ -95,7 +100,7 @@
 
   function renderConfig() {
     const salesClosed = eventConfig.sales_enabled === false;
-    if (salesClosed) showAlert("Venta de entradas proximamente. Puedes consultar el evento; aun no debes realizar pagos.", "info");
+    if (salesClosed) showAlert("Venta de entradas próximamente. Puedes consultar el evento; aún no debes realizar pagos.", "info");
     $('open-report').disabled = salesClosed;
 
     const usd = Number(eventConfig.ticket_price_usd || 5).toFixed(2);
@@ -129,7 +134,7 @@
       <div class="pay-row">
         <dt>${label}</dt>
         <dd>${escapeHtml(shown)}</dd>
-        <button type="button" class="pay-copy" data-copy="${escapeHtml(copy)}" aria-label="Copiar ${label.toLowerCase()}">Copiar</button>
+        <button type="button" class="pay-copy" data-copy="${escapeHtml(copy)}" aria-label="Copiar ${label.toLowerCase()}">${COPY_ICONS}<span>Copiar</span></button>
       </div>`).join('') : '<p class="pay-fine">Los datos de pago estarán disponibles pronto.</p>';
 
     // Schedule
@@ -191,7 +196,7 @@
       return `
         <button
           type="button"
-          ${eventConfig.sales_enabled === false ? 'disabled aria-disabled="true" title="Venta disponible proximamente"' : ''}
+          ${eventConfig.sales_enabled === false ? 'disabled aria-disabled="true" title="Venta disponible próximamente"' : ''}
           onclick="window.selectTicket('${t.ticket_number}')"
           class="tk ${cls}"
         >
@@ -260,7 +265,11 @@
     $('pay-notice').hidden = !notice;
     $('pay-notice').textContent = notice;
     $('pay-step-pay').textContent = isReport ? 'Datos de la cuenta' : 'Paga por Pago Móvil';
-    form.querySelectorAll('.report-only').forEach(el => { el.hidden = !isReport; });
+    // The report asks for the ticket number and what happened; both are required, but only in that mode
+    form.querySelectorAll('.report-only').forEach(el => {
+      el.hidden = !isReport;
+      el.querySelectorAll('input, textarea').forEach(field => { field.required = isReport; });
+    });
     $('btn-submit-order').textContent = isReport ? 'Enviar reporte de pago' : 'Enviar pago para verificación';
     $('pay-content').hidden = false;
     $('pay-done').hidden = true;
@@ -309,11 +318,27 @@
       document.execCommand('copy');
       temp.remove();
     }
-    const label = button.textContent;
-    button.textContent = 'Copiado';
+    const text = button.querySelector('span') || button;
+    clearTimeout(button.copyTimer);
+    text.textContent = 'Copiado';
     button.classList.add('is-copied');
-    setTimeout(() => { button.textContent = label; button.classList.remove('is-copied'); }, 1600);
+    button.copyTimer = setTimeout(() => { text.textContent = 'Copiar'; button.classList.remove('is-copied'); }, 1600);
   });
+
+  // Capture of the payment: show the chosen file and check it before sending
+  const captureInput = form.elements.screenshot;
+  const captureBox = captureInput.closest('.pay-file');
+  function showCapture() {
+    const file = captureInput.files && captureInput.files[0];
+    captureBox.classList.toggle('has-file', Boolean(file));
+    $('pay-file-name').textContent = file ? file.name : 'Elegir la captura del comprobante';
+    $('pay-file-hint').textContent = file ? `${(file.size / 1024 / 1024).toFixed(1)} MB · toca para cambiarla` : 'Toca aquí para seleccionar la imagen';
+  }
+  captureInput.addEventListener('change', () => {
+    showCapture();
+    if (captureInput.files[0]) captureInput.removeAttribute('aria-invalid');
+  });
+  form.addEventListener('reset', () => setTimeout(showCapture));
 
   function showFormError(message, field) {
     const box = $('pay-error');
@@ -335,6 +360,10 @@
     event.preventDefault();
     hideFormError();
     if (!form.reportValidity()) return;
+    const capture = captureInput.files[0];
+    if (!capture) return showFormError('Adjunta la captura del pago.', 'screenshot');
+    if (!/^image\/(png|jpeg|webp)$/.test(capture.type)) return showFormError('La captura debe ser una imagen PNG, JPG o WebP.', 'screenshot');
+    if (capture.size > MAX_CAPTURE_BYTES) return showFormError('La captura pesa más de 10 MB. Envía una imagen más liviana.', 'screenshot');
     const isReport = payMode === 'report';
     if (!isReport && !myLockedTicket) {
       switchToReportAfterExpiry('');

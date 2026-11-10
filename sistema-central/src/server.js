@@ -168,7 +168,7 @@ function broadcastConfigUpdate() {
 // ============================================================================
 
 function requireSalesOpen(_req, res, next) {
-  if (process.env.SALES_ENABLED === 'false') return res.status(503).json({ok:false, code:'SALES_NOT_OPEN', message:'La venta de entradas estara disponible proximamente. Aun no debes realizar pagos.'});
+  if (process.env.SALES_ENABLED === 'false') return res.status(503).json({ok:false, code:'SALES_NOT_OPEN', message:'La venta de entradas estará disponible próximamente. Aún no debes realizar pagos.'});
   return next();
 }
 
@@ -214,7 +214,7 @@ app.post('/api/public/tickets/lock', requireSalesOpen, ticketRoute(async (req, r
 
     const paddedNumber = String(ticket_number).padStart(3, '0');
     const source = resolveSalesSource(req);
-    if (!source) return res.status(403).json({ok:false, code:'INVALID_SOURCE', message:'Selecciona la entrada desde una de las paginas de venta.'});
+    if (!source) return res.status(403).json({ok:false, code:'INVALID_SOURCE', message:'Selecciona la entrada desde una de las páginas de venta.'});
     await scrapeBcvRate({maxAgeMs:5 * 60 * 1000});
     const current = getPublicConfig();
     if (current.bcv_mode !== 'manual' && (!current.bcv_is_official || Date.now() - Date.parse(current.bcv_last_updated) > 24*60*60*1000)) return res.status(503).json({ok:false, code:'BCV_UNAVAILABLE', message:'No hay una tasa oficial BCV reciente confirmada. Intenta nuevamente mas tarde.'});
@@ -285,7 +285,7 @@ function sendInBackground(send) {
   }).catch((err) => console.error('[Mail] Error inesperado al enviar el correo:', err.message));
 }
 
-// Optional proof of payment: kept only when the buyer attaches it.
+// Proof of payment, required in both forms (an image file, or a PNG data URL from older clients).
 function saveScreenshot(req, label) {
   if (req.file) return `/storage/uploads/${req.file.filename}`;
   if (!req.body.screenshot_base64) return '';
@@ -294,13 +294,15 @@ function saveScreenshot(req, label) {
   return `/storage/uploads/${filename}`;
 }
 const validScreenshot = (req) => !req.body.screenshot_base64 || /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(req.body.screenshot_base64);
+const hasScreenshot = (req) => Boolean(req.file || req.body.screenshot_base64);
+const MISSING_SCREENSHOT = { ok: false, field: 'screenshot', message: 'Adjunta la captura del pago (imagen PNG, JPG o WebP de hasta 10 MB).' };
 
 /**
  * Payment form of the checkout popup: buyer data + Pago Móvil reference for the ticket locked by this session.
  */
 app.post('/api/public/orders', requireSalesOpen, ticketRoute(async (req, res) => {
   try {
-    if (!resolveSalesSource(req)) return res.status(403).json({ok:false, code:'INVALID_SOURCE', message:'Reporta el pago desde una de las paginas de venta.'});
+    if (!resolveSalesSource(req)) return res.status(403).json({ok:false, code:'INVALID_SOURCE', message:'Reporta el pago desde una de las páginas de venta.'});
     const ticketNumber = parseTicketNumber(req.body.ticket_number);
     const sessionId = req.body.session_id;
     if (!ticketNumber || typeof sessionId !== 'string' || sessionId.length < 8 || sessionId.length > 254) {
@@ -308,7 +310,8 @@ app.post('/api/public/orders', requireSalesOpen, ticketRoute(async (req, res) =>
     }
     const form = parsePaymentForm(req.body);
     if (!form.ok) return res.status(400).json({ ok: false, field: form.field, message: form.message });
-    if (!validScreenshot(req)) return res.status(400).json({ ok: false, field: 'screenshot', message: 'Captura invalida' });
+    if (!validScreenshot(req)) return res.status(400).json({ ok: false, field: 'screenshot', message: 'La captura no es una imagen válida.' });
+    if (!hasScreenshot(req)) return res.status(400).json(MISSING_SCREENSHOT);
 
     const config = getPublicConfig();
     const submitResult = submitOrderAtomic({
@@ -356,12 +359,15 @@ app.post('/api/public/orders', requireSalesOpen, ticketRoute(async (req, res) =>
 app.post('/api/public/payment-reports', requireSalesOpen, ticketRoute(async (req, res) => {
   try {
     const source = resolveSalesSource(req);
-    if (!source) return res.status(403).json({ok:false, code:'INVALID_SOURCE', message:'Reporta el pago desde una de las paginas de venta.'});
+    if (!source) return res.status(403).json({ok:false, code:'INVALID_SOURCE', message:'Reporta el pago desde una de las páginas de venta.'});
     const form = parsePaymentForm(req.body);
     if (!form.ok) return res.status(400).json({ ok: false, field: form.field, message: form.message });
-    const requested = req.body.requested_ticket ? parseTicketNumber(req.body.requested_ticket) : null;
-    if (req.body.requested_ticket && !requested) return res.status(400).json({ ok: false, field: 'requested_ticket', message: 'El número de entrada va del 001 al 250.' });
-    if (!validScreenshot(req)) return res.status(400).json({ ok: false, field: 'screenshot', message: 'Captura invalida' });
+    const requested = parseTicketNumber(req.body.requested_ticket);
+    if (!requested) return res.status(400).json({ ok: false, field: 'requested_ticket', message: 'Indica el número de entrada que elegiste (del 001 al 250).' });
+    const comment = typeof req.body.buyer_comment === 'string' ? req.body.buyer_comment.trim().slice(0, 500) : '';
+    if (comment.length < 3) return res.status(400).json({ ok: false, field: 'buyer_comment', message: 'Cuéntanos brevemente qué pasó con tu pago.' });
+    if (!validScreenshot(req)) return res.status(400).json({ ok: false, field: 'screenshot', message: 'La captura no es una imagen válida.' });
+    if (!hasScreenshot(req)) return res.status(400).json(MISSING_SCREENSHOT);
 
     const config = getPublicConfig();
     const sessionId = typeof req.body.session_id === 'string' && req.body.session_id.length <= 254 ? req.body.session_id : '';
@@ -374,7 +380,7 @@ app.post('/api/public/payment-reports', requireSalesOpen, ticketRoute(async (req
       bcv_rate: config.bcv_rate,
       amount_ves: config.ticket_price_ves,
       requested_ticket: requested,
-      buyer_comment: typeof req.body.buyer_comment === 'string' ? req.body.buyer_comment.trim().slice(0, 500) : ''
+      buyer_comment: comment
     });
 
     io.emit('admin:order_created', { changed: true });
@@ -654,8 +660,8 @@ app.put('/api/admin/settings', superadminOnly, (req, res) => {
     // An empty password field means "keep the stored one" (the dashboard never receives it).
     for (const key of ['smtp_pass', 'imap_pass']) if (key in updates && !updates[key]) delete updates[key];
     const allowed = new Set(Object.keys(getAllSettings()).filter(k => k !== 'secret_hmac_key' && !k.startsWith('admin_') && (!k.startsWith('bcv_') || ['bcv_mode', 'bcv_manual_rate'].includes(k))));
-    if (Object.keys(updates).some(k => !allowed.has(k))) return res.status(400).json({ok:false, message:'Parametro no permitido'});
-    for (const key of ['ticket_price_usd', 'bcv_manual_rate', 'lock_duration_seconds', 'smtp_port', 'imap_port']) if (key in updates && (!Number.isFinite(Number(updates[key])) || Number(updates[key]) <= 0)) return res.status(400).json({ok:false, message:'Valor numerico invalido'});
+    if (Object.keys(updates).some(k => !allowed.has(k))) return res.status(400).json({ok:false, message:'Parámetro no permitido.'});
+    for (const key of ['ticket_price_usd', 'bcv_manual_rate', 'lock_duration_seconds', 'smtp_port', 'imap_port']) if (key in updates && (!Number.isFinite(Number(updates[key])) || Number(updates[key]) <= 0)) return res.status(400).json({ok:false, message:'Valor numérico no válido.'});
     updateSettings(updates);
     broadcastConfigUpdate();
     return res.json({
@@ -735,7 +741,7 @@ app.get('/api/admin/tickets/demo.pdf', async (req, res) => {
 app.post('/api/admin/mail/test', superadminOnly, ticketRoute(async (req, res) => {
   try {
     const to = typeof req.body?.to === 'string' ? req.body.to.trim() : '';
-    if (to && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) return res.status(400).json({ ok: false, message: 'Correo de prueba invalido' });
+    if (to && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) return res.status(400).json({ ok: false, message: 'El correo de prueba no es válido.' });
     const result = await testMailConnections(to);
     return res.json({ ok: result.smtp.ok && result.imap.ok !== false && (!result.sent || result.sent.ok), ...result });
   } catch (err) {

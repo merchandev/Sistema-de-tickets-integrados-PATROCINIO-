@@ -70,7 +70,7 @@
             <span>Reservada por</span>
             <strong id="countdown-timer">03:00</strong>
           </div>
-          <button type="button" id="pay-close" class="pay-x" aria-label="Cerrar">&times;</button>
+          <button type="button" id="pay-close" class="pay-x" aria-label="Cerrar"><svg class="pay-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
         </div>
 
         <div id="pay-content">
@@ -84,7 +84,7 @@
                 <strong id="checkout-amount-ves">Bs. 0,00</strong>
                 <small id="checkout-amount-usd">Equivale a $5.00 USD</small>
               </div>
-              <button type="button" id="copy-amount" class="pay-copy" data-copy="" aria-label="Copiar monto">Copiar</button>
+              <button type="button" id="copy-amount" class="pay-copy" data-copy="" aria-label="Copiar monto"><svg class="pay-icon i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg><svg class="pay-icon i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Copiar</span></button>
             </div>
             <dl id="bank-details-box" class="pay-account"></dl>
           </section>
@@ -113,14 +113,18 @@
               <label>Número de referencia
                 <input name="payment_reference" type="text" inputmode="numeric" required maxlength="30" placeholder="Ej: 123456789" pattern="[A-Za-z0-9-]{4,30}" title="Solo números y letras, como aparece en tu comprobante" />
               </label>
-              <label class="report-only" hidden>Número de entrada <small>opcional</small>
+              <label class="report-only" hidden>Número de entrada <small>la que elegiste, del 001 al 250</small>
                 <input id="requested_ticket" name="requested_ticket" type="text" inputmode="numeric" maxlength="3" placeholder="Ej: 042" pattern="[0-9]{1,3}" title="Número del 001 al 250" />
               </label>
-              <label class="report-only pay-wide" hidden>Comentario <small>opcional</small>
-                <textarea name="buyer_comment" rows="2" maxlength="500" placeholder="Cuéntanos cualquier detalle de tu pago"></textarea>
+              <label class="report-only pay-wide" hidden>¿Qué pasó con tu pago?
+                <textarea name="buyer_comment" rows="2" minlength="3" maxlength="500" placeholder="Ej: pagué a las 3:00 PM y la reserva expiró antes de enviar el formulario"></textarea>
               </label>
-              <label class="pay-wide">Captura del pago <small>opcional</small>
-                <input name="screenshot" type="file" accept="image/png,image/jpeg,image/webp" />
+              <label class="pay-wide pay-file">Captura del pago <small>PNG, JPG o WebP de hasta 10 MB</small>
+                <span class="pay-drop">
+                  <svg class="pay-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-8 8"/></svg>
+                  <span class="pay-drop-text"><strong id="pay-file-name">Elegir la captura del comprobante</strong><small id="pay-file-hint">Toca aquí para seleccionar la imagen</small></span>
+                  <input name="screenshot" type="file" accept="image/png,image/jpeg,image/webp" required />
+                </span>
               </label>
             </div>
             <p id="pay-error" class="pay-error" role="alert" hidden></p>
@@ -130,7 +134,7 @@
         </div>
 
         <section id="pay-done" class="pay-done" hidden>
-          <span class="pay-done-mark" aria-hidden="true">✓</span>
+          <span class="pay-done-mark" aria-hidden="true"><svg class="pay-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>
           <h3>Tu pago está en verificación</h3>
           <p id="pay-done-text"></p>
           <button type="button" id="pay-done-close" class="btn no-arrow">Entendido</button>

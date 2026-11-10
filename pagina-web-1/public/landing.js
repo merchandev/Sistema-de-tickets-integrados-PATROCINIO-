@@ -96,7 +96,7 @@
     let notice = document.getElementById('sales-notice');
     if (cfg.sales_enabled === false && !notice) {
       notice = document.createElement('p'); notice.id = 'sales-notice';
-      notice.textContent = 'Venta de entradas proximamente. Aun no debes realizar pagos.';
+      notice.textContent = 'Venta de entradas próximamente. Aún no debes realizar pagos.';
       notice.style.cssText = 'margin-top:18px;font-size:12px;line-height:1.7;color:inherit';
       document.querySelector('.hero-copy').appendChild(notice);
     }
