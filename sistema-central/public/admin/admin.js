@@ -1311,18 +1311,6 @@ function applySettingsPermission(canEdit) {
     for (const control of controls) control.disabled = !canEdit;
     area.classList.toggle('is-read-only', !canEdit);
   }
-  for (const id of ['tab-panel-cms', 'tab-panel-smtp']) {
-    const panel = document.getElementById(id);
-    let note = panel.querySelector('.read-only-note');
-    if (!canEdit && !note) {
-      note = document.createElement('p');
-      note.className = 'read-only-note';
-      note.setAttribute('role', 'note');
-      note.textContent = 'Solo el superadministrador puede editar esta sección. Puedes consultar los datos.';
-      panel.prepend(note);
-    }
-    if (note) note.hidden = canEdit;
-  }
 }
 
 function closeAccountMenu() {

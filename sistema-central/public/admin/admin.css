@@ -2206,17 +2206,6 @@ button.admin-avatar[aria-expanded="true"] {
 }
 
 /* Sections that only the superadmin can edit, as seen by an admin */
-.read-only-note {
-  margin: 0 0 16px;
-  padding: 12px 16px;
-  border: 1px solid #f0d9a8;
-  border-radius: 12px;
-  background: #fff8e8;
-  color: #6b4a0e;
-  font-size: 13px;
-  font-weight: 600;
-}
-.read-only-note[hidden] { display: none; }
 .is-read-only input:disabled,
 .is-read-only select:disabled,
 .is-read-only textarea:disabled {
