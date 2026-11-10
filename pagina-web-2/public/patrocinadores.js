@@ -1,16 +1,19 @@
-// «Juntos lo hacemos posible»: sponsor logos managed from the shared panel, the same on both sites.
-// Moves on its own when the logos do not fit, pauses while the cursor (or keyboard focus) is on it,
-// and stays still for visitors who prefer reduced motion. Identical file in pagina-web-1 and pagina-web-2.
+// «Juntos lo hacemos posible»: sponsor logos managed from the shared panel (Patrocinio).
+// Each site asks for its own list; the panel decides whether both lists are mixed. The section stays
+// hidden until there is at least one logo. The carousel moves on its own when the logos do not fit,
+// pauses on hover, keyboard focus or touch, rests while off screen, and stays still for visitors who
+// prefer reduced motion. Identical file in pagina-web-1 and pagina-web-2.
 (() => {
   const section = document.getElementById('patrocinadores');
   if (!section) return;
   const CFG = window.ENTRADAS_CONFIG || {};
   const api = CFG.CENTRAL_API_URL || '';
+  const site = CFG.SOURCE_WEB || '';
   const viewport = section.querySelector('.sponsors-viewport');
   const track = section.querySelector('.sponsors-track');
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-  const SPEED = 45; // pixels per second
   let sponsors = [];
+  let lastWidth = 0;
 
   function tile(sponsor, copy) {
     const li = document.createElement('li');
@@ -20,6 +23,7 @@
     img.src = api + sponsor.image_url;
     img.loading = 'lazy';
     img.decoding = 'async';
+    img.draggable = false;
     const name = sponsor.name || 'Patrocinador';
     if (sponsor.link_url) {
       const link = document.createElement('a');
@@ -41,17 +45,20 @@
   }
 
   function layout() {
+    lastWidth = viewport.clientWidth;
     track.replaceChildren(...sponsors.map(s => tile(s, false)));
     section.classList.remove('is-moving');
     // Width of one row of logos, measured without wrapping
     section.classList.add('is-measuring');
     const setWidth = Math.ceil(track.getBoundingClientRect().width);
     section.classList.remove('is-measuring');
-    if (reduceMotion.matches || setWidth <= viewport.clientWidth) return;
-    // A second copy of the logos makes the loop seamless; it moves by exactly one set
+    if (reduceMotion.matches || setWidth <= lastWidth) return;
+    // A second copy of the logos makes the loop seamless; it moves by exactly one set.
+    // About 14 seconds to cross the visible width, between 36 and 80 pixels per second.
     track.append(...sponsors.map(s => tile(s, true)));
+    const speed = Math.min(80, Math.max(36, lastWidth / 14));
     track.style.setProperty('--sponsors-shift', `-${setWidth}px`);
-    track.style.setProperty('--sponsors-duration', `${Math.max(12, setWidth / SPEED)}s`);
+    track.style.setProperty('--sponsors-duration', `${Math.max(10, setWidth / speed).toFixed(1)}s`);
     section.classList.add('is-moving');
   }
 
@@ -62,29 +69,33 @@
     clearTimeout(resumeTimer);
   }, { passive: true });
   viewport.addEventListener('touchend', () => {
+    clearTimeout(resumeTimer);
     resumeTimer = setTimeout(() => section.classList.remove('is-paused'), 2500);
   }, { passive: true });
 
+  // Re-measure when the available width changes (rotation, resize, zoom)
   let resizeTimer;
-  let lastWidth = 0;
-  window.addEventListener('resize', () => {
+  const relayout = () => {
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => {
-      if (sponsors.length && viewport.clientWidth !== lastWidth) {
-        lastWidth = viewport.clientWidth;
-        layout();
-      }
-    }, 200);
-  });
+      if (sponsors.length && Math.abs(viewport.clientWidth - lastWidth) > 1) layout();
+    }, 150);
+  };
+  if ('ResizeObserver' in window) new ResizeObserver(relayout).observe(viewport);
+  else window.addEventListener('resize', relayout);
   reduceMotion.addEventListener?.('change', () => sponsors.length && layout());
 
-  fetch(`${api}/api/public/sponsors`)
+  // No movement while the section is off screen
+  if ('IntersectionObserver' in window) {
+    new IntersectionObserver(([entry]) => section.classList.toggle('is-offscreen', !entry.isIntersecting)).observe(section);
+  }
+
+  fetch(`${api}/api/public/sponsors?site=${encodeURIComponent(site)}`)
     .then(res => (res.ok ? res.json() : null))
     .then(data => {
-      sponsors = (data && data.sponsors) || [];
+      sponsors = (data && Array.isArray(data.sponsors)) ? data.sponsors : [];
       if (!sponsors.length) return;
       section.hidden = false;
-      lastWidth = viewport.clientWidth;
       layout();
     })
     .catch(() => {});

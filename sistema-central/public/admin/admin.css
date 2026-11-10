@@ -1982,6 +1982,81 @@ button.admin-avatar[aria-expanded="true"] {
   line-height: 1.5;
 }
 /* Sponsors of the «Juntos lo hacemos posible» carousel */
+.sponsors-mode { margin-top: 22px; }
+.sponsors-switch {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  cursor: pointer;
+}
+.sponsors-switch input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+}
+.sponsors-switch-ui {
+  position: relative;
+  flex: 0 0 auto;
+  width: 46px;
+  height: 26px;
+  border-radius: 999px;
+  background: #c9d1dc;
+  transition: background .2s;
+}
+.sponsors-switch-ui::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px #0003;
+  transition: transform .2s;
+}
+.sponsors-switch input:checked + .sponsors-switch-ui { background: #1f7a4d; }
+.sponsors-switch input:checked + .sponsors-switch-ui::after { transform: translateX(20px); }
+.sponsors-switch input:focus-visible + .sponsors-switch-ui { outline: 3px solid #075dc455; outline-offset: 2px; }
+.sponsors-switch input:disabled + .sponsors-switch-ui { opacity: .6; }
+.sponsors-switch strong { display: block; font-size: 14px; }
+.sponsors-switch small { display: block; margin-top: 2px; color: var(--muted); font-size: 12px; }
+.sponsors-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 18px;
+  border-bottom: 1px solid var(--line);
+}
+.sponsors-tabs [role="tab"] {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  margin-bottom: -1px;
+  padding: 0 14px;
+  border: 1px solid transparent;
+  border-radius: 10px 10px 0 0;
+  background: none;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.sponsors-tabs [role="tab"][aria-selected="true"] {
+  border-color: var(--line);
+  border-bottom-color: var(--paper);
+  background: var(--paper);
+  color: var(--ink);
+}
+.sponsors-tab-count {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 11px;
+}
 .sponsors-upload {
   display: flex;
   align-items: center;
@@ -2092,3 +2167,25 @@ button.admin-avatar[aria-expanded="true"] {
     align-items: stretch;
   }
 }
+
+/* Sections that only the superadmin can edit, as seen by an admin */
+.read-only-note {
+  margin: 0 0 16px;
+  padding: 12px 16px;
+  border: 1px solid #f0d9a8;
+  border-radius: 12px;
+  background: #fff8e8;
+  color: #6b4a0e;
+  font-size: 13px;
+  font-weight: 600;
+}
+.read-only-note[hidden] { display: none; }
+.is-read-only input:disabled,
+.is-read-only select:disabled,
+.is-read-only textarea:disabled {
+  background: #f6f7f9;
+  color: var(--ink);
+  cursor: not-allowed;
+}
+.is-read-only button:disabled,
+button.is-read-only:disabled { opacity: .45; cursor: not-allowed; }

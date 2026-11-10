@@ -636,10 +636,19 @@ app.post('/api/admin/verify-qr/:rawToken/checkin', (req, res) => {
   }
 });
 
+// Sensitive configuration (event data, price, Pago Móvil, schedule, conditions, mail account and mass
+// notices) is changed only by the superadmin; admins can see it. The scripts' account and the initial
+// account, used before any user exists, keep that access.
+const canEditSettings = (req) => ['superadmin', 'service', 'initial'].includes(req.admin?.role);
+function superadminOnly(req, res, next) {
+  if (canEditSettings(req)) return next();
+  return res.status(403).json({ ok: false, message: 'Solo el superadministrador puede cambiar esta configuración.' });
+}
+
 /**
  * Update Event Settings, Terms, Conditions, Schedule, BCV & SMTP
  */
-app.put('/api/admin/settings', (req, res) => {
+app.put('/api/admin/settings', superadminOnly, (req, res) => {
   try {
     const updates = {...(req.body || {})};
     // An empty password field means "keep the stored one" (the dashboard never receives it).
@@ -671,7 +680,9 @@ function canResetTickets(req) {
 
 app.get('/api/admin/session', (req, res) => res.json({
   ok: true, user: req.adminUser, role: req.admin.role, named: Boolean(req.admin.id),
-  canResetTickets: canResetTickets(req)
+  canResetTickets: canResetTickets(req),
+  canEditSettings: canEditSettings(req),
+  canManageUsers: req.admin.role === 'superadmin'
 }));
 
 app.post('/api/admin/tickets/reset', (req, res) => {
@@ -721,7 +732,7 @@ app.get('/api/admin/tickets/demo.pdf', async (req, res) => {
 /**
  * Checks the saved SMTP and IMAP accounts and, with `to`, sends a test message.
  */
-app.post('/api/admin/mail/test', ticketRoute(async (req, res) => {
+app.post('/api/admin/mail/test', superadminOnly, ticketRoute(async (req, res) => {
   try {
     const to = typeof req.body?.to === 'string' ? req.body.to.trim() : '';
     if (to && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) return res.status(400).json({ ok: false, message: 'Correo de prueba invalido' });
@@ -786,7 +797,7 @@ app.post('/api/admin/bcv/refresh', async (_req, res) => {
 /**
  * Send Mass Event Notification ("Faltan 2 días", "Falta 1 día", "Falta hoy", "Ya comenzamos el evento")
  */
-app.post('/api/admin/notifications/send', ticketRoute(async (req, res) => {
+app.post('/api/admin/notifications/send', superadminOnly, ticketRoute(async (req, res) => {
   try {
     const { campaign_key } = req.body;
     const result = await sendEventCampaignNotification(campaign_key, 'MANUAL_ADMIN');

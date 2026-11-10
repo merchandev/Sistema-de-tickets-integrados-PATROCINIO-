@@ -131,40 +131,47 @@ test("there is a single superadmin and it cannot be deleted or demoted", () => {
   assert.equal(auth.checkCredentials("jefe@ejemplo.test", "clave-super-789"), true);
 });
 
-test("admins create, reset and delete other admins, never themselves", () => {
+test("only the superadmin creates, resets and deletes admins; admins only read the list", () => {
   const adminCookie = signIn("admin@ejemplo.test", "clave-admin-123", "192.0.2.3").cookie;
+  const superCookie = signIn("jefe@ejemplo.test", "clave-super-789", "192.0.2.3").cookie;
   const me = auth.sessionFrom({ headers: { cookie: adminCookie } }).admin;
   let res = fakeRes();
-  auth.createUserRoute(as(adminCookie, { body: { email: "nuevo@ejemplo.test", password: "corta" } }), res);
+  auth.createUserRoute(as(adminCookie, { body: { email: "nuevo@ejemplo.test", password: "clave-nuevo-123" } }), res);
+  assert.equal(res.statusCode, 403);
+  res = fakeRes();
+  auth.createUserRoute(as(superCookie, { body: { email: "nuevo@ejemplo.test", password: "corta" } }), res);
   assert.equal(res.statusCode, 400);
   res = fakeRes();
-  auth.createUserRoute(as(adminCookie, { body: { email: "nuevo@ejemplo.test", password: "clave-nuevo-123", role: "superadmin" } }), res);
+  auth.createUserRoute(as(superCookie, { body: { email: "nuevo@ejemplo.test", password: "clave-nuevo-123", role: "superadmin" } }), res);
   assert.equal(res.statusCode, 201);
   assert.equal(res.body.user.role, "admin");
   res = fakeRes();
-  auth.createUserRoute(as(adminCookie, { body: { email: "NUEVO@ejemplo.test", password: "clave-nuevo-123" } }), res);
+  auth.createUserRoute(as(superCookie, { body: { email: "NUEVO@ejemplo.test", password: "clave-nuevo-123" } }), res);
   assert.equal(res.statusCode, 409);
 
-  const newId = res.statusCode && db.prepare("SELECT id FROM admin_users WHERE email = 'nuevo@ejemplo.test'").get().id;
+  const newId = db.prepare("SELECT id FROM admin_users WHERE email = 'nuevo@ejemplo.test'").get().id;
+  for (const route of [auth.deleteUserRoute, auth.resetPasswordRoute]) {
+    res = fakeRes();
+    route(as(adminCookie, { params: { id: String(newId) }, body: { password: "clave-ajena-1" } }), res);
+    assert.equal(res.statusCode, 403);
+  }
   const newCookie = signIn("nuevo@ejemplo.test", "clave-nuevo-123", "192.0.2.3").cookie;
   res = fakeRes();
-  auth.resetPasswordRoute(as(adminCookie, { params: { id: String(newId) }, body: { password: "clave-cambiada-1" } }), res);
+  auth.resetPasswordRoute(as(superCookie, { params: { id: String(newId) }, body: { password: "clave-cambiada-1" } }), res);
   assert.equal(res.body.ok, true);
   assert.equal(auth.sessionFrom({ headers: { cookie: newCookie } }), null);
   assert.equal(auth.checkCredentials("nuevo@ejemplo.test", "clave-cambiada-1"), true);
 
-  for (const route of [auth.deleteUserRoute, auth.resetPasswordRoute]) {
-    res = fakeRes();
-    route(as(adminCookie, { params: { id: String(me.id) }, body: { password: "clave-propia-1" } }), res);
-    assert.equal(res.statusCode, 400);
-  }
   const lateCookie = signIn("nuevo@ejemplo.test", "clave-cambiada-1", "192.0.2.3").cookie;
   res = fakeRes();
-  auth.deleteUserRoute(as(adminCookie, { params: { id: String(newId) } }), res);
+  auth.deleteUserRoute(as(superCookie, { params: { id: String(newId) } }), res);
   assert.equal(res.body.ok, true);
   assert.equal(auth.sessionFrom({ headers: { cookie: lateCookie } }), null);
   assert.equal(auth.checkCredentials("nuevo@ejemplo.test", "clave-cambiada-1"), false);
 
+  res = fakeRes();
+  auth.deleteUserRoute(as(adminCookie, { params: { id: String(me.id) } }), res);
+  assert.equal(res.statusCode, 403);
   res = fakeRes();
   auth.listUsersRoute(as(adminCookie), res);
   assert.deepEqual(res.body.users.map(u => [u.email, u.role]), [["jefe@ejemplo.test", "superadmin"], ["admin@ejemplo.test", "admin"]]);

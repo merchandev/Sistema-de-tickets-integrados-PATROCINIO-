@@ -1,6 +1,8 @@
 // Sign-in for the dashboard shared by both sites.
-// Named users (admin_users): one superadmin, who cannot be deleted, and any number of admins. Every
-// user has full access to the panel. Passwords are salted scrypt hashes.
+// Named users (admin_users): one superadmin, who cannot be deleted, and any number of admins. Admins run
+// the daily work (payments, access control, blog, sponsors) and change their own password; the
+// superadmin also manages users and the sensitive configuration (see server.js). Passwords are salted
+// scrypt hashes.
 // Until the first user exists, the initial account still signs in: the one saved from the panel or,
 // until one is saved, ADMIN_USER / ADMIN_PASSWORD. Once users exist, ADMIN_USER / ADMIN_PASSWORD only
 // work over HTTP Basic, for the verification scripts, and never on the sign-in page.
@@ -251,10 +253,10 @@ function listAllUsers() {
 }
 
 const fail = (res, { status, ...body }) => res.status(status).json(body);
-// Changes to users need a named user, so each change has an author
+// Only the superadmin creates, resets or deletes users; admins only change their own password
 function namedUser(req, res) {
-  if (req.admin?.id) return true;
-  fail(res, { status: 403, ok: false, message: 'Inicia sesión con tu usuario para administrar los usuarios del panel.' });
+  if (req.admin?.id && req.admin.role === 'superadmin') return true;
+  fail(res, { status: 403, ok: false, message: 'Solo el superadministrador puede administrar los usuarios del panel.' });
   return false;
 }
 // Target of a change: any admin other than yourself. The superadmin is only changed from its own account.

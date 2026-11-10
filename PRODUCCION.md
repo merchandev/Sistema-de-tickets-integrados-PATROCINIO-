@@ -36,7 +36,12 @@ El panel es uno solo para las dos webs: `https://hablemosdemarketingmaturin.com/
 
 ### Usuarios
 
-El panel tiene un **superadministrador**, que no se puede eliminar ni perder su rol, y los **administradores** que se quieran. Todos tienen acceso completo a las dos webs. En la sección «Usuarios» cualquier usuario crea administradores, les pone una contraseña nueva o los elimina; nadie se elimina a sí mismo y la contraseña del superadministrador solo se cambia desde su propia cuenta («Cambiar contraseña» en el menú del avatar, pidiendo la actual). Las contraseñas se guardan con scrypt y cambiarlas cierra las demás sesiones de ese usuario.
+El panel tiene un **superadministrador**, que no se puede eliminar ni perder su rol, y los **administradores** que se quieran.
+
+- **Administradores:** gestionan pagos, control de acceso, blog y patrocinio, y cambian su propia contraseña («Cambiar contraseña» en el menú del avatar, pidiendo la actual). Ven «Evento y contenido» y «Correos y avisos» en solo lectura y la lista de usuarios sin acciones.
+- **Superadministrador:** además crea, cambia la contraseña o elimina administradores, edita la configuración sensible (datos del evento, precio, Pago Móvil, cronograma, condiciones y cuenta de correo), prueba el correo y envía los avisos masivos.
+
+El servidor aplica estas reglas (responde 403), no solo el panel. La cuenta de los scripts (`ADMIN_USER` por HTTP Basic) conserva el acceso completo. Las contraseñas se guardan con scrypt y cambiarlas cierra las demás sesiones de ese usuario.
 
 Desde la consola del VPS (las contraseñas se escriben en un aviso oculto o llegan por la entrada estándar, nunca como argumento):
 
@@ -103,3 +108,11 @@ Los estilos de utilidades se compilan localmente, sin Tailwind en CDN. Después 
 La validación de interfaz cubre las cinco secciones a 320, 768 y 1440 píxeles, filtros combinados con operaciones de prueba de ambas webs, búsqueda, apertura/cierre del detalle y verificación de un QR de prueba. No se registra ningún ingreso ni se aprueban pagos durante estas comprobaciones.
 
 `scripts/desplegar-dashboard.sh` respalda los archivos del dashboard y una copia consistente de SQLite, y recrea únicamente el servicio central. Comprueba que los otros contenedores conserven sus identificadores, arranque y puertos. La publicación conserva `SALES_ENABLED=false` y los volúmenes existentes.
+
+## Patrocinio · «Juntos lo hacemos posible»
+
+Sección «Patrocinio» del panel: una pestaña por página, con hasta 30 logos cada una (PNG, JPG o WebP de hasta 5 MB) y un enlace opcional por logo (web, Instagram, TikTok, WhatsApp o contacto) que se abre en otra pestaña. Con «Mezclar los patrocinantes» activado (por defecto), las dos webs muestran los logos de ambas pestañas intercalados; desactivado, cada web muestra solo los suyos. Una web sin logos no muestra la sección. El carrusel se mueve solo cuando los logos no caben, se detiene al pasar el cursor, con el teclado o al tocarlo, y adapta el tamaño de las tarjetas a cualquier pantalla. Las imágenes se guardan en el volumen de almacenamiento (`storage/patrocinadores`).
+
+## Entrega de correos (antispam)
+
+El dominio del remitente, `merchan.cloud`, tiene SPF (`include:_spf.mail.hostinger.com`), DKIM de Hostinger (`hostingermail-a/b/c._domainkey`) y DMARC (`p=none`); se comprobó el 9 de noviembre de 2026. Cada correo sale por el SMTP de Hostinger con versión HTML y texto, Message-ID y Reply-To del dominio, EHLO con el dominio y la cabecera `Auto-Submitted: auto-generated`. Los avisos masivos llevan además `List-Unsubscribe`. Para comprobar un envío: en Gmail, «Mostrar original» debe indicar PASS en SPF, DKIM y DMARC. Cuando los informes lo confirmen, se puede endurecer DMARC a `p=quarantine` en el DNS.

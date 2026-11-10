@@ -3015,14 +3015,19 @@ body:has(.pay-dialog[open]) {
 
 /* ==========================================================================
    Patrocinadores · «Juntos lo hacemos posible» (patrocinadores.js)
+   Fluid sizes: from small phones to wide screens without breakpoints jumps.
    ========================================================================== */
 .sponsors-sec {
   --sponsor-accent: var(--lime);
+  --sponsor-w: clamp(112px, 30vw, 184px);
+  --sponsor-h: clamp(70px, 18.5vw, 112px);
+  --sponsor-gap: clamp(10px, 2.4vw, 18px);
+  padding: clamp(56px, 10vw, 112px) 0;
   border-top: 1px solid var(--line);
 }
 .sponsors-sec[hidden] { display: none; }
 .sponsors-head {
-  margin-bottom: 44px;
+  margin-bottom: clamp(26px, 5vw, 44px);
   text-align: center;
 }
 .sponsors-head h2 { margin-top: 0; }
@@ -3031,37 +3036,43 @@ body:has(.pay-dialog[open]) {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  row-gap: 18px;
+  row-gap: var(--sponsor-gap);
   margin: 0;
-  padding: 8px 0;
+  padding: 8px 0 12px;
   list-style: none;
 }
 .sponsor {
   flex: 0 0 auto;
-  padding: 0 9px;
+  padding: 0 calc(var(--sponsor-gap) / 2);
 }
 .sponsor > a,
 .sponsor > span {
   display: grid;
   place-items: center;
-  width: 184px;
-  height: 112px;
-  padding: 18px;
-  border-radius: 18px;
+  width: var(--sponsor-w);
+  height: var(--sponsor-h);
+  padding: clamp(10px, 2.6vw, 18px);
+  border-radius: clamp(12px, 3vw, 18px);
   background: #fff;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
   transition: transform 0.3s var(--ease-out), box-shadow 0.3s var(--ease-out);
+  -webkit-tap-highlight-color: transparent;
 }
 .sponsor img {
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
+  user-select: none;
 }
-.sponsor > a:hover,
 .sponsor > a:focus-visible {
   outline: none;
-  transform: translateY(-4px);
   box-shadow: 0 0 0 3px var(--sponsor-accent), 0 14px 34px rgba(0, 0, 0, 0.26);
+}
+@media (hover: hover) {
+  .sponsor > a:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 0 0 3px var(--sponsor-accent), 0 14px 34px rgba(0, 0, 0, 0.26);
+  }
 }
 .sponsors-sec.is-measuring .sponsors-track,
 .sponsors-sec.is-moving .sponsors-track {
@@ -3070,24 +3081,21 @@ body:has(.pay-dialog[open]) {
   width: max-content;
 }
 .sponsors-sec.is-moving .sponsors-viewport {
-  -webkit-mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
-  mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 clamp(16px, 6%, 72px), #000 calc(100% - clamp(16px, 6%, 72px)), transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 clamp(16px, 6%, 72px), #000 calc(100% - clamp(16px, 6%, 72px)), transparent);
 }
 .sponsors-sec.is-moving .sponsors-track {
   animation: sponsors-loop var(--sponsors-duration, 40s) linear infinite;
+  will-change: transform;
 }
 .sponsors-sec.is-moving .sponsors-viewport:hover .sponsors-track,
 .sponsors-sec.is-moving .sponsors-viewport:focus-within .sponsors-track,
-.sponsors-sec.is-paused .sponsors-track {
+.sponsors-sec.is-paused .sponsors-track,
+.sponsors-sec.is-offscreen .sponsors-track {
   animation-play-state: paused;
 }
 @keyframes sponsors-loop {
   to { transform: translateX(var(--sponsors-shift, -50%)); }
-}
-@media (max-width: 640px) {
-  .sponsors-head { margin-bottom: 30px; }
-  .sponsor > a,
-  .sponsor > span { width: 148px; height: 92px; padding: 14px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .sponsors-sec .sponsors-track { animation: none !important; }

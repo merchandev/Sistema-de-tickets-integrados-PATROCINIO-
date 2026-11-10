@@ -1056,7 +1056,7 @@ const sectionTitles = {
   cms: 'Evento y contenido',
   smtp: 'Correos y avisos',
   blog: 'Blog · Marketing',
-  sponsors: 'Patrocinadores',
+  sponsors: 'Patrocinio',
   users: 'Usuarios'
 };
 
@@ -1212,7 +1212,34 @@ async function loadSession() {
     document.getElementById('account-btn').textContent = (data.user || 'A').charAt(0).toUpperCase();
     // The initial account can still change its user name as well; named users change their password
     document.getElementById('account-change').textContent = data.named ? 'Cambiar contraseña' : 'Cambiar usuario y contraseña';
+    applySettingsPermission(Boolean(data.canEditSettings));
   } catch (_) {}
+}
+
+// Event data, Pago Móvil, schedule, conditions, mail account and mass notices: admins can only read them
+function applySettingsPermission(canEdit) {
+  const readOnlyAreas = [
+    document.getElementById('form-cms-settings'),
+    document.getElementById('mail-settings-form'),
+    ...document.querySelectorAll('#tab-panel-smtp button[onclick^="triggerCampaign"]')
+  ].filter(Boolean);
+  for (const area of readOnlyAreas) {
+    const controls = area.matches('button') ? [area] : area.querySelectorAll('input, select, textarea, button');
+    for (const control of controls) control.disabled = !canEdit;
+    area.classList.toggle('is-read-only', !canEdit);
+  }
+  for (const id of ['tab-panel-cms', 'tab-panel-smtp']) {
+    const panel = document.getElementById(id);
+    let note = panel.querySelector('.read-only-note');
+    if (!canEdit && !note) {
+      note = document.createElement('p');
+      note.className = 'read-only-note';
+      note.setAttribute('role', 'note');
+      note.textContent = 'Solo el superadministrador puede editar esta sección. Puedes consultar los datos.';
+      panel.prepend(note);
+    }
+    if (note) note.hidden = canEdit;
+  }
 }
 
 function closeAccountMenu() {
@@ -1340,10 +1367,11 @@ async function loadUsers() {
     const res = await fetch('/api/admin/users');
     const data = await res.json();
     if (!data.ok) throw new Error(data.message);
-    const named = Boolean(data.me?.id);
+    // Only the superadmin creates, resets or deletes users; admins see the list
+    const named = Boolean(data.me?.id) && data.me.role === 'superadmin';
     panelUsers = new Map(data.users.map(user => [user.id, user]));
     document.getElementById('user-create-form').hidden = !named;
-    document.getElementById('users-initial-note').hidden = named || data.users.length > 0;
+    document.getElementById('users-initial-note').hidden = Boolean(data.me?.id) || data.users.length > 0;
     if (!data.users.length) {
       list.innerHTML = '<li class="users-empty">Todavía no hay usuarios.</li>';
       return;

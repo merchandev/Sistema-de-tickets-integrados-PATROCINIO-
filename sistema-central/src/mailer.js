@@ -116,10 +116,15 @@ async function sendSystemEmail({
   orderId = null,
   ticketNumber = null,
   attachments = [],
-  attachmentUrl = null
+  attachmentUrl = null,
+  bulk = false
 }) {
   const settings = getAllSettings();
   const { isLiveSmtp, from, transporter } = getTransporter(settings);
+  // Automatic messages say so (no out-of-office replies back); the reminders sent to every buyer carry
+  // a List-Unsubscribe address, which Gmail and Outlook expect from messages sent in bulk.
+  const headers = { 'Auto-Submitted': 'auto-generated', 'X-Auto-Response-Suppress': 'OOF, AutoReply' };
+  if (bulk) headers['List-Unsubscribe'] = `<mailto:${senderAddress(from)}?subject=${encodeURIComponent('Baja de avisos del evento')}>`;
   let status = isLiveSmtp ? 'SENT_SMTP' : 'SIMULATED_OUTBOX';
   let errorMessage = null;
   let imapSaved = false;
@@ -131,6 +136,7 @@ async function sendSystemEmail({
     html,
     text: htmlToText(html),
     attachments,
+    headers,
     messageId: `<${crypto.randomUUID()}@${senderDomain(from)}>`,
     date: new Date()
   };
@@ -427,7 +433,8 @@ async function sendEventCampaignNotification(campaignKey, triggeredBy = 'MANUAL_
       type: campaignKey,
       orderId: order.id,
       ticketNumber: order.ticket_number,
-      attachmentUrl: order.pdf_path || null
+      attachmentUrl: order.pdf_path || null,
+      bulk: true
     });
     sentCount++;
   }
