@@ -53,6 +53,13 @@
         </button>
         <div id="notif-panel" class="notif-panel" hidden>
           <div class="notif-head"><strong>Pagos por verificar</strong><button type="button" id="notif-sound" class="notif-link" aria-pressed="true">Sonido: activado</button></div>
+          <div id="notif-permission" class="notif-permission" hidden>
+            <p id="notif-permission-text"></p>
+            <div class="notif-permission-actions">
+              <button type="button" id="notif-permission-btn" class="notif-permission-btn">Activar avisos</button>
+              <button type="button" id="notif-test" class="notif-link">Probar aviso</button>
+            </div>
+          </div>
           <div id="notif-list" class="notif-list"></div>
           <button type="button" class="notif-all" onclick="showPendingOrders()">Ver todos los pagos pendientes</button>
         </div>

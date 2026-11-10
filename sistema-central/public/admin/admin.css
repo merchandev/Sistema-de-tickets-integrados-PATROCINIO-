@@ -1434,6 +1434,43 @@ button.bg-emerald-600:hover {
 .notif-head strong {
   font-size: 13px;
 }
+/* Browser notifications: state and the button that asks for permission */
+.notif-permission {
+  display: grid;
+  gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+  background: #f6f8fb;
+}
+.notif-permission[hidden],
+.notif-permission-btn[hidden] { display: none; }
+.notif-permission p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.notif-permission[data-state="granted"] { background: #eef8f2; }
+.notif-permission[data-state="granted"] p { color: #1f6b45; }
+.notif-permission[data-state="denied"] { background: #fff6e8; }
+.notif-permission[data-state="denied"] p { color: #7a4a0d; }
+.notif-permission-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.notif-permission-btn {
+  min-height: 34px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.notif-permission-btn:hover { background: #004d9f; }
 .notif-link {
   border: 0;
   background: none;

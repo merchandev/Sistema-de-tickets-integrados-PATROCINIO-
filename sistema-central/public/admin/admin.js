@@ -49,7 +49,16 @@ const socket = io({
   query: { source: 'admin-dashboard' }
 });
 
-socket.on('connect', () => connectionStatus('En vivo'));
+// After a dropped connection (sleep, network change), reload so payments that arrived meanwhile still ring
+let socketConnectedBefore = false;
+socket.on('connect', () => {
+  connectionStatus('En vivo');
+  if (socketConnectedBefore) fetchAdminOverview();
+  socketConnectedBefore = true;
+});
+// Safety net while the live connection is down, and when coming back to the tab
+setInterval(() => { if (!socket.connected) fetchAdminOverview(); }, 30000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) fetchAdminOverview(); });
 socket.on('disconnect', () => connectionStatus('Sin conexión en vivo', true));
 socket.on('connect_error', () => connectionStatus('Reconectando…', true));
 
@@ -508,6 +517,7 @@ const readStore = (key, fallback) => { try { return localStorage.getItem(key) ??
 const writeStore = (key, value) => { try { localStorage.setItem(key, value); } catch (_) {} };
 let lastSeenOrderId = Number(readStore('admin_seen_order_id', '0')) || 0;
 let knownMaxOrderId = null; // set after the first load, so only later arrivals ring
+const baseTitle = document.title;
 let notifSoundOn = readStore('admin_notif_sound', 'on') !== 'off';
 
 // Short tones made with Web Audio: a chime for new orders, and distinct "valid" / "invalid" tones for the scanner.
@@ -538,6 +548,77 @@ function playTone(kind) {
   if (kind !== 'order' && navigator.vibrate) navigator.vibrate(kind === 'valid' ? 120 : [220, 90, 220]);
 }
 
+// Browsers keep audio muted until the page is touched once: unlock it on the first interaction, so the
+// chime of a later payment plays even if nobody is clicking at that moment.
+function unlockAudio() {
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+  } catch (_) {}
+}
+for (const type of ['pointerdown', 'keydown', 'touchstart']) document.addEventListener(type, unlockAudio, { capture: true, passive: true });
+
+// System notifications (outside the browser), shown through the panel's service worker when possible
+let noticeWorker = null;
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/admin/avisos-sw.js', { scope: '/admin/' }).then(reg => { noticeWorker = reg; }).catch(() => {});
+  navigator.serviceWorker.addEventListener('message', (event) => {
+    if (event.data?.type === 'open-order' && event.data.id) openOrderDetail(event.data.id);
+  });
+}
+const notificationsSupported = () => 'Notification' in window;
+
+async function systemNotify(title, body, orderId = null) {
+  if (!notificationsSupported() || Notification.permission !== 'granted') return false;
+  const options = { body, tag: orderId ? `order-${orderId}` : 'aviso-prueba', renotify: true, icon: '/admin/brands/espressivo-venezuela.png', badge: '/admin/brands/espressivo-venezuela.png', data: { orderId } };
+  try {
+    const reg = noticeWorker || await navigator.serviceWorker?.getRegistration('/admin/');
+    if (reg) {
+      await reg.showNotification(title, options);
+      return true;
+    }
+  } catch (_) {}
+  try {
+    const notice = new Notification(title, options);
+    notice.onclick = () => { window.focus(); if (orderId) openOrderDetail(orderId); notice.close(); };
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+function renderNotifPermission() {
+  const box = document.getElementById('notif-permission');
+  if (!notificationsSupported()) { box.hidden = true; return; }
+  box.hidden = false;
+  const text = document.getElementById('notif-permission-text');
+  const button = document.getElementById('notif-permission-btn');
+  const permission = Notification.permission;
+  box.dataset.state = permission;
+  button.hidden = permission !== 'default';
+  text.textContent = {
+    granted: 'Avisos del navegador activados: te avisamos aunque estés en otra pestaña o programa.',
+    default: 'Activa los avisos del navegador para enterarte de cada pago aunque estés en otra pestaña o programa.',
+    denied: 'Los avisos están bloqueados en este navegador. Permítelos desde el candado de la barra de direcciones y recarga el panel.'
+  }[permission] || '';
+}
+
+document.getElementById('notif-permission-btn').addEventListener('click', async (event) => {
+  event.stopPropagation();
+  unlockAudio();
+  try { await Notification.requestPermission(); } catch (_) {}
+  renderNotifPermission();
+  if (Notification.permission === 'granted') systemNotify('Avisos activados', 'Así te avisaremos cuando llegue un pago por verificar.');
+});
+document.getElementById('notif-test').addEventListener('click', async (event) => {
+  event.stopPropagation();
+  unlockAudio();
+  if (notifSoundOn) playTone('order');
+  const shown = await systemNotify('Prueba de aviso', 'Así se ve el aviso de un pago nuevo por verificar.');
+  showToast(shown ? 'Aviso de prueba enviado. Revisa la esquina de tu pantalla.' : 'Sonó el aviso en el panel. Activa los avisos del navegador para verlos fuera del panel.');
+});
+renderNotifPermission();
+
 let toastTimer = null;
 function showToast(message, onClick = null) {
   const toast = document.getElementById('admin-toast');
@@ -565,6 +646,9 @@ function renderNotifications() {
       </button>`).join('')
     : '<p class="notif-empty">No hay pagos por verificar.</p>';
 
+  // Pending count in the browser tab, visible from other tabs
+  document.title = (pending.length ? `(${pending.length}) ` : '') + baseTitle;
+
   const maxId = Math.max(0, ...(state.orders || []).map(o => o.id));
   if (knownMaxOrderId !== null && maxId > knownMaxOrderId) {
     const fresh = pending.filter(o => o.id > knownMaxOrderId);
@@ -578,9 +662,8 @@ function announceOrders(orders) {
   const text = orders.length > 1 ? `${orders.length} pedidos nuevos de entradas` : `${orderTitle(first)} · ${first.buyer_name}`;
   showToast(`Nuevo pedido: ${text}. Toca para revisarlo.`, () => openOrderDetail(first.id));
   if (notifSoundOn) playTone('order');
-  if ('Notification' in window && Notification.permission === 'granted' && document.hidden) {
-    new Notification('Nuevo pedido de entrada', { body: text, tag: `order-${first.id}` });
-  }
+  // Outside the browser whenever the panel is not in front: another tab, another program or minimized
+  if (document.hidden || !document.hasFocus()) systemNotify('Nuevo pago por verificar', text, first.id);
 }
 
 function closeNotifPanel() {
@@ -600,7 +683,7 @@ document.getElementById('notif-bell').addEventListener('click', (event) => {
     lastSeenOrderId = Math.max(lastSeenOrderId, ...pendingIds);
     writeStore('admin_seen_order_id', String(lastSeenOrderId));
   }
-  if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission().catch(() => {});
+  renderNotifPermission();
   renderNotifications();
 });
 document.getElementById('notif-sound').addEventListener('click', (event) => {

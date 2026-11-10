@@ -332,6 +332,8 @@ function parseMail(file) {
     check('Un administrador sí ve la configuración', (await api('GET', '/api/admin/overview', { cookie: adm.cookie })).data.settings?.smtp_host === '127.0.0.1');
     check('El superadministrador cambia la configuración', (await api('PUT', '/api/admin/settings', { cookie: sup.cookie, json: { event_title: 'Conferencias y concierto benéfico' } })).status === 200);
     check('El panel muestra la sección Usuarios', /id="tab-panel-users"/.test((await api('GET', '/admin/', { cookie: sup.cookie })).data.toString()));
+    const noticeWorker = await api('GET', '/admin/avisos-sw.js', { cookie: sup.cookie });
+    check('Service worker de los avisos del panel', noticeWorker.status === 200 && /javascript/.test(noticeWorker.headers.get('content-type') || '') && /notificationclick/.test(noticeWorker.data.toString()));
 
     // --- 8. Sponsors carousel: one list per site, mixed on both or shown separately ---
     const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
