@@ -1,12 +1,12 @@
 (() => {
   const signature = [
-    "  __  __               _                  ____             _ ",
-    " |  \\/  | ___ _ __ ___| |__   __ _ _ __  |  _ \\  _____   _| |",
-    " | |\\/| |/ _ \\ '__/ __| '_ \\ / _` | '_ \\ | | | |/ _ \\ \\ / / |",
-    " | |  | |  __/ | | (__| | | | (_| | | | || |_| |  __/\\ V /|_|",
-    " |_|  |_|\\___|_|  \\___|_| |_|\\__,_|_| |_||____/ \\___| \\_/ (_)",
+    "  __  __               _                   ____             _",
+    " |  \\/  | ___ _ __ ___| |__   __ _ _ __   |  _ \\  _____   _| |",
+    " | |\\/| |/ _ \\ '__/ __| '_ \\ / _` | '_ \\  | | | |/ _ \\ \\ / / |",
+    " | |  | |  __/ | | (__| | | | (_| | | | |_| |_| |  __/\\ V /|_|",
+    " |_|  |_|\\___|_|  \\___|_| |_|\\__,_|_| |_(_)____/ \\___| \\_/ (_)",
     "",
-    "                  < Programmer Full-Stack />"
+    "                  < Programmer Full-Stack />",
   ].join("\n");
 
   const notice = [
@@ -17,7 +17,7 @@
     "Toda infracción será sujeta a las acciones civiles y penales correspondientes."
   ].join("\n");
 
-  console.log("%c%s", "background:#1b2421;color:#43f5a3;font-weight:bold;padding:8px", signature);
+  console.log("%c%s", "color:#00a875;font-family:monospace;white-space:pre", signature);
   console.log("%c%s", "background:#26313b;color:#fff;font-weight:bold;padding:4px 8px", "MERCHAN.DEV  ×  EPRESSIVO VENEZUELA, C.A.");
   console.log("%c%s", "background:#1f2933;color:#d2e2ef;padding:4px 8px", notice);
 })();
