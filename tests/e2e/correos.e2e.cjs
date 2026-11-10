@@ -242,7 +242,7 @@ function parseMail(file) {
     const htmlOf = (m) => (m?.raw.split(/\r\n--[^\r\n]+\r\n/).find(p => /Content-Type: text\/html/.test(p)) || '')
       .replace(/=\r\n/g, '').replace(/=([0-9A-F]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
     const ticketHtml = Buffer.from(htmlOf(mails[2]), 'latin1').toString('utf8');
-    check('La confirmación explica cómo presentar la entrada', /Descarga el PDF antes de salir/.test(ticketHtml) && /Apertura de puertas/.test(ticketHtml));
+    check('La confirmación explica cómo presentar la entrada y la hora de registro', /Descarga el PDF antes de salir/.test(ticketHtml) && /Acceso y registro con QR[\s\S]*?3:00\s*PM/i.test(ticketHtml));
     check('El rechazo enlaza al formulario de la página de compra', htmlOf(mails[6]).includes('https://iluminandocaminos.com/comprar.html#reportar-pago'));
     check('Correos con los dos logos en la cabecera', mails.every(m => htmlOf(m).includes(`${BASE}/api/public/email/cabecera.jpg`)));
     check('Pie con los enlaces de las dos webs', /Sistema de entradas de <a href="https:\/\/hablemosdemarketingmaturin\.com"[^>]*>Hablemos de Marketing<\/a> e <a href="https:\/\/iluminandocaminos\.com"[^>]*>Iluminando Caminos<\/a>\./.test(ticketHtml));
@@ -274,7 +274,7 @@ function parseMail(file) {
       const reminders = mailFiles().slice(before).map(file => htmlOf(parseMail(file)));
       check(`Recordatorio ${campaignKey} con acceso completo y horario de ingreso`,
         campaign.status === 200 && reminders.length === 2 &&
-        reminders.every(html => html.includes('acceso a todo el evento') && html.includes('Apertura de puertas')));
+        reminders.every(html => html.includes('acceso a todo el evento') && /Acceso y registro con QR[\s\S]*?3:00\s*PM/i.test(html)));
     }
 
     // --- 7. Users: superadmin from the console, admins from the panel ---

@@ -235,7 +235,7 @@ function eventRows(cfg) {
   const concert = /^\d{1,2}:\d{2}$/.test(cfg.concert_end || '') ? `${formatTime(cfg.concert_start)} a ${formatTime(cfg.concert_end)}` : `Desde las ${formatTime(cfg.concert_start || '19:00')}`;
   return [
     ['Fecha', formatDate(cfg.event_date)],
-    ['Apertura de puertas', formatTime(cfg.event_entry_time || '15:00')],
+    ['Acceso y registro con QR', formatTime(cfg.event_entry_time || '15:00')],
     ['Lugar', cfg.event_location],
     ['Conferencias', `${formatTime(cfg.conference_start || '16:00')} a ${formatTime(cfg.conference_end || '19:00')}`],
     ['Concierto', concert]
@@ -396,7 +396,7 @@ async function sendEventCampaignNotification(campaignKey, triggeredBy = 'MANUAL_
     REMINDER_TODAY: {
       subjectPrefix: 'Es hoy',
       headline: 'Hoy es el evento',
-      intro: `Te esperamos en <strong>${escapeHtml(cfg.event_location)}</strong>. Las puertas abren a las ${escapeHtml(formatTime(cfg.event_entry_time || '15:00'))}. Al llegar, muestra el QR de tu entrada y tu cédula.`
+      intro: `Te esperamos en <strong>${escapeHtml(cfg.event_location)}</strong>. El acceso y registro comienzan a las ${escapeHtml(formatTime(cfg.event_entry_time || '15:00'))}. Al llegar, muestra el QR de tu entrada y tu cédula.`
     },
     EVENT_STARTED: {
       subjectPrefix: 'Ya comenzamos',
@@ -414,7 +414,7 @@ async function sendEventCampaignNotification(campaignKey, triggeredBy = 'MANUAL_
   for (const order of approvedOrders) {
     const brand = brandFor(order.source_web);
     const html = layout(brand, {
-      preheader: 'Consulta el lugar, la apertura de puertas y los horarios de las actividades.',
+      preheader: 'Consulta el lugar, la hora de registro y los horarios de las actividades.',
       title: tpl.headline,
       paragraphs: [
         `Hola ${escapeHtml(firstName(order))}, tienes confirmada la entrada <strong>#${escapeHtml(order.ticket_number)}</strong> para <strong>${escapeHtml(cfg.event_title)}</strong>.`,

@@ -148,7 +148,7 @@ const defaultSettings = {
     {
       time: '3:00 PM - 4:00 PM',
       phase: 'Ingreso y acreditación',
-      title: 'Apertura de puertas y escaneo del QR',
+      title: 'Acceso y registro con QR',
       description: 'Recepción de asistentes y validación del código QR único de cada entrada.'
     },
     {
@@ -230,7 +230,9 @@ try {
   // Spanish sentence case for the default wording (headings and labels only capitalize the first word)
   for (const [key, before, after] of [
     ['event_schedule_json', '"Ingreso y Acreditación"', '"Ingreso y acreditación"'],
-    ['event_schedule_json', '"Apertura de Puertas y Escaneo de QR"', '"Apertura de puertas y escaneo del QR"'],
+    ['event_schedule_json', '"Apertura de Puertas y Escaneo de QR"', '"Acceso y registro con QR"'],
+    ['event_schedule_json', '"Apertura de puertas y escaneo del QR"', '"Acceso y registro con QR"'],
+    ['event_schedule_json', '"Apertura de puertas y validación del QR"', '"Acceso y registro con QR"'],
     ['event_schedule_json', '"Ciclo de Conferencias"', '"Ciclo de conferencias"'],
     ['event_schedule_json', '"Conferencias con Propósito Social"', '"Conferencias con propósito social"'],
     ['event_schedule_json', '"Concierto en Vivo"', '"Concierto en vivo"'],

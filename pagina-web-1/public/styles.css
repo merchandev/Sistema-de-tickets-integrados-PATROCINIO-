@@ -3240,9 +3240,9 @@ footer::before {
 .foot-bottom {
   display: flex;
   flex-wrap: wrap;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
-  gap: 6px 24px;
+  text-align: center;
   width: 100%;
   margin-top: clamp(4px, 1.4vw, 10px);
   padding-top: clamp(16px, 3vw, 22px);
@@ -3251,33 +3251,14 @@ footer::before {
   line-height: 1.7;
 }
 .foot-bottom p { margin: 0; }
-.foot-item,
-.foot-dev { white-space: nowrap; }
-.foot-sep {
-  margin: 0 5px;
-  opacity: 0.5;
-}
-.foot-dev strong {
+.foot-copy strong {
   color: var(--fg);
   font-weight: 600;
-}
-/* Tablets: the credits stack centred instead of wrapping to the left */
-@media (max-width: 900px) {
-  .foot-bottom {
-    flex-direction: column;
-    justify-content: center;
-    gap: 2px;
-    text-align: center;
-  }
 }
 @media (max-width: 760px) {
   .foot { align-items: center; }
   .foot-nav { gap: 0 4px; }
   .foot-nav a { padding: 12px 10px; }
-}
-@media (max-width: 560px) {
-  .foot-copy .foot-item { display: block; }
-  .foot-copy .foot-sep { display: none; }
 }
 /* Phones: the sections form a tidy two-column grid with full-width touch targets */
 @media (max-width: 420px) {
@@ -3287,8 +3268,6 @@ footer::before {
     width: 100%;
   }
   .foot-nav a:last-child:nth-child(odd) { grid-column: 1 / -1; }
-  .foot-item,
-  .foot-dev { white-space: normal; }
 }
 @media (max-width: 360px) {
   .foot-nav a { padding: 12px 2px; font-size: 13px; }
