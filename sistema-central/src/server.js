@@ -66,6 +66,9 @@ app.get(['/admin/login', '/admin/login/'], (req, res) => {
 });
 app.post('/admin/login', loginBody, adminAuth.login);
 app.post('/admin/logout', adminAuth.logout);
+app.get('/admin/console-credit.js', (_req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'public', 'console-credit.js'));
+});
 app.get('/admin/brands/espressivo-venezuela.png', (_req, res) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'admin', 'brands', 'espressivo-venezuela.png'));
 });
