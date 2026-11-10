@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/styles.css?v=sticky-countdown-layout" />
+  <link rel="stylesheet" href="/styles.css?v=countdown-aligned" />
   <script src="/config-client.js"></script>
 </head>
 <body data-theme="purple">
@@ -264,7 +264,7 @@
             <div class="rate" id="cta-rate">Tasa BCV: Bs. --</div>
 
             <div class="event-countdown" id="event-countdown">
-              <p class="event-countdown-phase" aria-live="polite">El registro abre a las 3:00 p. m.</p>
+              <p class="event-countdown-phase" aria-live="polite">Nos vemos el 21 de noviembre</p>
               <div class="event-countdown-clock" role="timer" aria-label="Tiempo para la próxima actividad" hidden>
                 <span><b data-countdown-days>00</b><small>Días</small></span>
                 <span><b data-countdown-hours>00</b><small>Horas</small></span>
@@ -338,14 +338,12 @@
   <!-- BARRA DE COMPRA: acompaña el recorrido y al final queda sobre el pie, sin taparlo -->
   <div id="sticky-buy" class="sticky-buy" role="region" aria-label="Compra rápida de entradas">
     <div class="container sticky-inner">
-      <div class="sticky-countdown">
-        <strong id="sticky-countdown-phase">El registro abre a las 3:00 p. m.</strong>
-        <div id="sticky-countdown-clock" role="timer" aria-label="Tiempo para la próxima actividad" hidden>
-          <span><b data-sticky-days>00</b><small>Días</small></span>
-          <span><b data-sticky-hours>00</b><small>Horas</small></span>
-          <span><b data-sticky-minutes>00</b><small>Min</small></span>
-          <span><b data-sticky-seconds>00</b><small>Seg</small></span>
-        </div>
+      <strong id="sticky-countdown-phase">Nos vemos el 21 de noviembre</strong>
+      <div id="sticky-countdown-clock" role="timer" aria-label="Tiempo para la próxima actividad" hidden>
+        <span><b data-sticky-days>00</b><small>Días</small></span>
+        <span><b data-sticky-hours>00</b><small>Horas</small></span>
+        <span><b data-sticky-minutes>00</b><small>Min</small></span>
+        <span><b data-sticky-seconds>00</b><small>Seg</small></span>
       </div>
       <a href="/comprar" class="btn btn-lime magnetic">Elegir mi número</a>
     </div>
@@ -373,7 +371,7 @@
     </div>
   </footer>
 
-  <script src="/landing.js?v=sticky-countdown-layout"></script>
+  <script src="/landing.js?v=countdown-aligned"></script>
   <script src="/patrocinadores.js" defer></script>
   <script src="/design.js"></script>
 </body>

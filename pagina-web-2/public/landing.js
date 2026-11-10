@@ -128,7 +128,7 @@
   const clock = $('.event-countdown-clock', countdown);
   const digits = ['days', 'hours', 'minutes', 'seconds'].map((unit) => $(`[data-countdown-${unit}]`, countdown));
   const stages = [
-    { key: 'event_entry_time', time: '15:00', label: 'El registro abre en' },
+    { key: 'event_entry_time', time: '15:00', label: 'Nos vemos en' },
     { key: 'conference_start', time: '16:00', label: 'Las conferencias comienzan en' },
     { key: 'concert_start', time: '19:00', label: 'El concierto comienza en' }
   ];
