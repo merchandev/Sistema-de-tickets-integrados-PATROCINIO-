@@ -3220,3 +3220,15 @@ body:has(.pay-dialog[open]) {
   border-color: #c0261b;
   background: #fff5f4;
 }
+
+/* ==========================================================================
+   Barra de compra: acompaña el recorrido pegada al borde inferior y, al llegar
+   al final, queda en su sitio sobre el pie de página, sin taparlo.
+   ========================================================================== */
+.sticky-buy {
+  position: sticky;
+  bottom: 0;
+}
+@media (max-width: 600px) {
+  body { padding-bottom: 0; }
+}
