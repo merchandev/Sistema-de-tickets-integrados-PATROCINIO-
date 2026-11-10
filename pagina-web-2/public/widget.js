@@ -8,12 +8,13 @@
   // Unique session ID per browser tab
   let sessionId = sessionStorage.getItem('entradas_session_id');
   if (!sessionId) {
-    sessionId = 'sess_' + Math.random().toString(36).slice(2) + '_' + Date.now();
+    sessionId = crypto.randomUUID?.() || ('sess_' + Math.random().toString(36).slice(2) + '_' + Date.now());
     sessionStorage.setItem('entradas_session_id', sessionId);
   }
 
   let eventConfig = {};
-  let tickets = [];
+  let assigning = false;
+  let latestReservationTime = 0;
   let myLockedTicket = null;
   let myLockRemainingSec = 0;
   let myQuote = null;
@@ -26,6 +27,8 @@
   const $ = (id) => document.getElementById(id);
   const dialog = $('pay-dialog');
   const form = $('payment-form');
+  const assignmentButton = $('assign-ticket');
+  const assignmentResult = $('assignment-result');
   // Copy and "copied" icons of the account data buttons (the CSS shows one or the other)
   const icon = (cls, paths) => `<svg class="pay-icon ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${paths}</svg>`;
   const COPY_ICONS = icon('i-copy', '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/>') +
@@ -45,20 +48,10 @@
         eventConfig = data.config;
         renderConfig();
       }
-      if (data.tickets) {
-        tickets = data.tickets;
-        syncMyLockFromServer();
-        renderTicketsGrid();
-      }
+      syncMyLockFromServer(data);
     });
 
-    socket.on('tickets:updated', (data) => {
-      if (data.tickets) {
-        tickets = data.tickets;
-        syncMyLockFromServer();
-        renderTicketsGrid();
-      }
-    });
+    socket.on('reservation:updated', syncMyLockFromServer);
 
     socket.on('config:updated', (newCfg) => {
       eventConfig = newCfg;
@@ -74,10 +67,8 @@
       const data = await res.json();
       if (data.ok) {
         eventConfig = data.config;
-        tickets = data.tickets;
         renderConfig();
-        syncMyLockFromServer();
-        renderTicketsGrid();
+        syncMyLockFromServer(data);
       }
     } catch (err) {
       showAlert('Error conectando con el servidor central de entradas.', 'error');
@@ -102,6 +93,7 @@
     const salesClosed = eventConfig.sales_enabled === false;
     if (salesClosed) showAlert("Venta de entradas próximamente. Puedes consultar el evento; aún no debes realizar pagos.", "info");
     $('open-report').disabled = salesClosed;
+    assignmentButton.disabled = salesClosed || assigning;
 
     const usd = Number(eventConfig.ticket_price_usd || 5).toFixed(2);
     const ves = Number(eventConfig.ticket_price_ves || 0);
@@ -150,94 +142,70 @@
     $('terms-box').textContent = eventConfig.terms_and_conditions || '';
   }
 
-  function syncMyLockFromServer() {
-    const mine = tickets.find(t => t.status === 'LOCKED' && t.locked_by_session === sessionId);
+  function showAssignment(ticketNumber) {
+    $('assignment-number').textContent = '#' + ticketNumber;
+    assignmentResult.hidden = false;
+  }
 
-    if (mine) {
-      myLockedTicket = mine.ticket_number;
-      myQuote = mine.pricing || myQuote;
-      myLockRemainingSec = mine.remaining_seconds || 180;
-      // Reopen the popup after a reload while the reservation is still running
-      if (payMode !== 'checkout') openPayDialog('checkout');
-      renderConfig();
+  function syncMyLockFromServer({reservation, serverTime}) {
+    if (assigning || serverTime < latestReservationTime) return;
+    latestReservationTime = serverTime;
+    if (reservation) {
+      myLockedTicket = reservation.ticket_number;
+      myQuote = reservation.pricing;
+      myLockRemainingSec = Math.max(0, Math.ceil((reservation.locked_until - serverTime) / 1000));
+      showAssignment(myLockedTicket);
+      if (payMode !== 'checkout' && !paySubmitting) openPayDialog('checkout');
       updateTimerDisplay();
     } else if (myLockedTicket) {
-      // The reservation ended (expired or released from another tab)
       const lost = myLockedTicket;
       myLockedTicket = null;
       myLockRemainingSec = 0;
+      assignmentResult.hidden = true;
       if (payMode === 'checkout' && !payDone && !paySubmitting) switchToReportAfterExpiry(lost);
     }
   }
 
-  function renderTicketsGrid() {
-    const grid = $('tickets-grid');
-    if (!grid) return;
-
-    grid.innerHTML = tickets.map(t => {
-      const isMine = t.status === 'LOCKED' && t.locked_by_session === sessionId;
-      let cls = 'free';
-      let sub = 'Libre';
-
-      if (isMine) {
-        cls = 'mine';
-        sub = 'Tu reserva';
-      } else if (t.status === 'LOCKED') {
-        cls = 'locked';
-        sub = `${t.remaining_seconds}s`;
-      } else if (t.status === 'PENDING') {
-        cls = 'pending';
-        sub = 'Verif.';
-      } else if (t.status === 'SOLD') {
-        cls = 'sold';
-        sub = 'Vendida';
-      }
-
-      return `
-        <button
-          type="button"
-          ${eventConfig.sales_enabled === false ? 'disabled aria-disabled="true" title="Venta disponible próximamente"' : ''}
-          onclick="window.selectTicket('${t.ticket_number}')"
-          class="tk ${cls}"
-        >
-          <div class="n">${t.ticket_number}</div>
-          <div class="s">${sub}</div>
-        </button>
-      `;
-    }).join('');
-  }
-
-  window.selectTicket = async function (ticketNumber) {
+  assignmentButton.addEventListener('click', async () => {
+    if (assigning) return;
+    assigning = true;
+    assignmentButton.disabled = true;
+    assignmentButton.textContent = 'Asignando…';
+    $('alert-banner').className = 'alert hidden';
     try {
-      const res = await fetch(`${CFG.CENTRAL_API_URL}/api/public/tickets/lock`, {
+      const res = await fetch(CFG.CENTRAL_API_URL + '/api/public/tickets/lock', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ticket_number: ticketNumber,
-          session_id: sessionId,
-          source_web: CFG.SOURCE_WEB
-        })
+        body: JSON.stringify({ session_id: sessionId, source_web: CFG.SOURCE_WEB })
       });
       const data = await res.json();
-
       if (!res.ok || !data.ok) {
-        showAlert(data.message || `La entrada #${ticketNumber} no está disponible.`, 'warning');
+        showAlert(data.message || 'No pudimos asignarte una entrada. Intenta nuevamente.', 'warning');
         return;
       }
-
-      myLockedTicket = ticketNumber;
+      latestReservationTime = data.serverTime;
+      myLockedTicket = data.ticket.ticket_number;
       myQuote = data.pricing;
       myLockRemainingSec = Math.max(0, Math.ceil((data.ticket.locked_until - data.serverTime) / 1000));
-      openPayDialog('checkout');
-      updateTimerDisplay();
-    } catch (err) {
-      showAlert('Error de conexión al intentar reservar la entrada.', 'error');
+      showAssignment(myLockedTicket);
+      if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) await new Promise(resolve => setTimeout(resolve, 550));
+      if (myLockedTicket) {
+        openPayDialog('checkout');
+        updateTimerDisplay();
+      }
+    } catch (_) {
+      showAlert('No pudimos conectar con el servidor para asignarte una entrada.', 'error');
+    } finally {
+      assigning = false;
+      assignmentButton.disabled = eventConfig.sales_enabled === false;
+      assignmentButton.textContent = 'Asignar entrada';
     }
-  };
+  });
 
   async function releaseMyTicket() {
     if (!myLockedTicket) return;
     const num = myLockedTicket;
+    assignmentResult.hidden = true;
     myLockedTicket = null;
     myLockRemainingSec = 0;
     try {
@@ -393,6 +361,7 @@
       if (!isReport && res.status === 409) {
         // The reservation was lost before sending: keep the data and offer the payment report.
         myLockedTicket = null;
+        assignmentResult.hidden = true;
         switchToReportAfterExpiry(ticketNumber);
         return;
       }
@@ -402,6 +371,7 @@
       }
 
       payDone = true;
+      assignmentResult.hidden = true;
       myLockedTicket = null;
       myLockRemainingSec = 0;
       form.reset();
@@ -444,24 +414,15 @@
 
   // 1-second local countdown
   setInterval(() => {
-    let changed = false;
-    for (const t of tickets) {
-      if (t.status === 'LOCKED' && t.remaining_seconds > 0) {
-        t.remaining_seconds = Math.max(0, t.remaining_seconds - 1);
-        changed = true;
-      }
-    }
     if (myLockedTicket && myLockRemainingSec > 0) {
       myLockRemainingSec = Math.max(0, myLockRemainingSec - 1);
       updateTimerDisplay();
       if (myLockRemainingSec === 0) {
         const expired = myLockedTicket;
+        assignmentResult.hidden = true;
         myLockedTicket = null;
         if (payMode === 'checkout' && !payDone && !paySubmitting) switchToReportAfterExpiry(expired);
       }
-    }
-    if (changed) {
-      renderTicketsGrid();
     }
   }, 1000);
 

@@ -68,14 +68,13 @@ test("payment reports hold no ticket until approved with an available one", () =
   const pending = report("99887766", { requested_ticket: "010", buyer_comment: "Pagué antes de que expirara" });
   assert.equal(pending.ticket_number, "");
   assert.equal(pending.report_kind, "REPORT");
-  assert.match(store.approveOrderAtomic(pending.id, "", null).message, /número de entrada/);
   // 010 is already in verification for the checkout order above
   assert.match(store.approveOrderAtomic(pending.id, "", "010").message, /no está disponible/);
-  const approved = store.approveOrderAtomic(pending.id, "ok", "011");
+  const approved = store.approveOrderAtomic(pending.id, "ok");
   assert.equal(approved.success, true);
-  assert.equal(approved.order.ticket_number, "011");
-  assert.match(approved.order.verification_token, /^Espressivo-011-[0-9A-F]{8}-[0-9A-F]{12}$/);
-  const ticket = store.db.prepare("SELECT status, current_order_id FROM tickets WHERE ticket_number = ?").get("011");
+  assert.equal(approved.order.ticket_number, "001");
+  assert.match(approved.order.verification_token, /^Espressivo-001-[0-9A-F]{8}-[0-9A-F]{12}$/);
+  const ticket = store.db.prepare("SELECT status, current_order_id FROM tickets WHERE ticket_number = ?").get("001");
   assert.equal(ticket.status, "SOLD");
   assert.equal(ticket.current_order_id, pending.id);
   assert.equal(store.approveOrderAtomic(pending.id, "", "012").success, false);

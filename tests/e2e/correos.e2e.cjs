@@ -41,10 +41,11 @@ let serverLog = '';
 server.stdout.on('data', d => { serverLog += d; });
 server.stderr.on('data', d => { serverLog += d; });
 
-async function api(method, url, { json, form, admin = false, cookie } = {}) {
+async function api(method, url, { json, form, admin = false, cookie, sessionId } = {}) {
   const headers = {};
   if (admin) headers.authorization = basic;
   if (cookie) headers.cookie = cookie;
+  if (sessionId) headers['X-Session-Id'] = sessionId;
   let body;
   if (json !== undefined) { headers['content-type'] = 'application/json'; body = JSON.stringify(json); }
   if (form) body = form;
@@ -126,13 +127,21 @@ function parseMail(file) {
     await waitMails(1);
 
     // --- 1. Checkout from Iluminando Caminos, then approval ---
-    const lock = await api('POST', '/api/public/tickets/lock', { json: { ticket_number: '210', session_id: 'sess_e2e_checkout_1', source_web: 'pagina-web-1' } });
-    check('Reservar entrada #210', lock.status === 200 && /10 minutos/.test(lock.data.message), lock.data.message);
-    const badOrder = await api('POST', '/api/public/orders', { form: buyerForm({ ticket_number: '210', session_id: 'sess_e2e_checkout_1', buyer_cedula: 'abc' }) });
+    const lock = await api('POST', '/api/public/tickets/lock', { json: { ticket_number: '250', session_id: 'sess_e2e_checkout_1', source_web: 'pagina-web-1' } });
+    check('Asignar la primera entrada sin aceptar números elegidos', lock.status === 200 && lock.data.ticket.ticket_number === '001' && /10 minutos/.test(lock.data.message), lock.data.message);
+    const candidates = ['pagina-web-1', 'pagina-web-2'];
+    const parallel = await Promise.all(candidates.map((source, i) => api('POST', '/api/public/tickets/lock', { json: { source_web: source, session_id: 'sess_e2e_parallel_' + i } })));
+    check('Asignaciones simultáneas entre ambas webs son consecutivas y únicas', parallel.every(res => res.status === 200) && parallel.map(res => res.data.ticket.ticket_number).sort().join(',') === '002,003');
+    const repeated = await api('POST', '/api/public/tickets/lock', { json: { source_web: 'pagina-web-1', session_id: 'sess_e2e_checkout_1' } });
+    check('Reintentar conserva el número y el plazo', JSON.stringify(repeated.data.ticket) === JSON.stringify(lock.data.ticket));
+    const own = await api('GET', '/api/public/state', { sessionId: 'sess_e2e_checkout_1' });
+    check('El público solo ve su reserva, sin inventario', state.data.reservation === null && !('tickets' in state.data) && own.data.reservation.ticket_number === '001' && !('tickets' in own.data));
+    await Promise.all(parallel.map((res, i) => api('POST', '/api/public/tickets/unlock', { json: { ticket_number: res.data.ticket.ticket_number, session_id: 'sess_e2e_parallel_' + i } })));
+    const badOrder = await api('POST', '/api/public/orders', { form: buyerForm({ ticket_number: '001', session_id: 'sess_e2e_checkout_1', buyer_cedula: 'abc' }) });
     check('Validación de cédula', badOrder.status === 400 && badOrder.data.field === 'buyer_cedula');
-    const noCapture = await api('POST', '/api/public/orders', { form: buyerForm({ ticket_number: '210', session_id: 'sess_e2e_checkout_1', screenshot: null }) });
+    const noCapture = await api('POST', '/api/public/orders', { form: buyerForm({ ticket_number: '001', session_id: 'sess_e2e_checkout_1', screenshot: null }) });
     check('La captura del pago es obligatoria', noCapture.status === 400 && noCapture.data.field === 'screenshot', noCapture.data.message);
-    const order = await api('POST', '/api/public/orders', { form: buyerForm({ ticket_number: '210', session_id: 'sess_e2e_checkout_1' }) });
+    const order = await api('POST', '/api/public/orders', { form: buyerForm({ ticket_number: '001', session_id: 'sess_e2e_checkout_1' }) });
     check('Enviar pago desde el popup', order.status === 201, `respuesta en ${order.ms} ms`);
     check('Respuesta rápida (correo en segundo plano)', order.ms < 1500, `${order.ms} ms`);
     await waitMails(2);
@@ -145,7 +154,7 @@ function parseMail(file) {
     // --- QR at the door ---
     const verify = await api('GET', `/api/admin/verify-qr/${encodeURIComponent(token)}`, { admin: true });
     check('QR válido', verify.data.valid === true);
-    check('El QR nuevo usa el prefijo Espressivo', /^Espressivo-210-/.test(token));
+    check('El QR nuevo usa el prefijo Espressivo', /^Espressivo-001-/.test(token));
     check('QR falso rechazado', (await api('GET', '/api/admin/verify-qr/TK-999-FALSO', { admin: true })).data.valid === false);
     const checkInUrl = `/api/admin/verify-qr/${encodeURIComponent(token)}/checkin`;
     const arrivals = await Promise.all([api('POST', checkInUrl, { admin: true }), api('POST', checkInUrl, { admin: true })]);
@@ -159,16 +168,15 @@ function parseMail(file) {
       const incomplete = await api('POST', '/api/public/payment-reports', { form: buyerForm({ source_web: 'pagina-web-2', [field]: null }) });
       check(`El reporte exige ${label}`, incomplete.status === 400 && incomplete.data.field === field, incomplete.data.message);
     }
-    const report = await api('POST', '/api/public/payment-reports', { form: buyerForm({ source_web: 'pagina-web-2', buyer_first_name: 'Luis', buyer_last_name: 'Martínez', buyer_email: 'luis@prueba.test', requested_ticket: '210', buyer_comment: 'Mi reserva expiró' }) });
+    const report = await api('POST', '/api/public/payment-reports', { form: buyerForm({ source_web: 'pagina-web-2', buyer_first_name: 'Luis', buyer_last_name: 'Martínez', buyer_email: 'luis@prueba.test', requested_ticket: '001', buyer_comment: 'Mi reserva expiró' }) });
     check('Enviar reporte de pago', report.status === 201, `respuesta en ${report.ms} ms`);
     await waitMails(4);
-    check('Aprobar reporte exige entrada', (await api('POST', `/api/admin/orders/${report.data.order.id}/approve`, { admin: true, json: {} })).status === 400);
-    check('No asigna una entrada vendida', (await api('POST', `/api/admin/orders/${report.data.order.id}/approve`, { admin: true, json: { ticket_number: '210' } })).status === 400);
-    const approveReport = await api('POST', `/api/admin/orders/${report.data.order.id}/approve`, { admin: true, json: { ticket_number: '211' } });
-    check('Aprobar reporte asignando #211', approveReport.status === 200 && approveReport.data.order.ticket_number === '211');
+    check('No asigna una entrada vendida', (await api('POST', `/api/admin/orders/${report.data.order.id}/approve`, { admin: true, json: { ticket_number: '001' } })).status === 400);
+    const approveReport = await api('POST', `/api/admin/orders/${report.data.order.id}/approve`, { admin: true, json: {} });
+    check('Aprobar reporte asigna automáticamente la primera libre', approveReport.status === 200 && approveReport.data.order.ticket_number === '002');
     await waitMails(5);
 
-    const legacyToken = 'TK-211-12345678-ABCDEF012345';
+    const legacyToken = 'TK-002-12345678-ABCDEF012345';
     const legacyDb = new DatabaseSync(path.join(dataDir, 'entradas.sqlite'));
     try {
       legacyDb.prepare("UPDATE orders SET verification_token = ?, checked_in_concert = 1, checked_in_concert_at = datetime('now') WHERE id = ?")
@@ -179,14 +187,14 @@ function parseMail(file) {
     check('La asistencia anterior al concierto cuenta para todo el evento', (await api('POST', legacyUrl + '/checkin', { admin: true })).status === 409);
 
     // --- 3. Rejection ---
-    await api('POST', '/api/public/tickets/lock', { json: { ticket_number: '212', session_id: 'sess_e2e_checkout_3', source_web: 'pagina-web-1' } });
-    const toReject = await api('POST', '/api/public/orders', { form: buyerForm({ ticket_number: '212', session_id: 'sess_e2e_checkout_3', buyer_email: 'rechazo@prueba.test' }) });
+    await api('POST', '/api/public/tickets/lock', { json: { ticket_number: '003', session_id: 'sess_e2e_checkout_3', source_web: 'pagina-web-1' } });
+    const toReject = await api('POST', '/api/public/orders', { form: buyerForm({ ticket_number: '003', session_id: 'sess_e2e_checkout_3', buyer_email: 'rechazo@prueba.test' }) });
     await waitMails(6);
     const reject = await api('POST', `/api/admin/orders/${toReject.data.order.id}/reject`, { admin: true, json: { reason: '<b>Referencia</b> no encontrada' } });
     check('Rechazar pago', reject.status === 200 && /aceptó el aviso/.test(reject.data.message), reject.data.message);
     await waitMails(7);
-    const afterReject = await api('GET', '/api/public/state');
-    check('La entrada rechazada vuelve a estar libre', afterReject.data.tickets.find(t => t.ticket_number === '212').status === 'AVAILABLE');
+    const afterReject = await api('GET', '/api/admin/overview', { admin: true });
+    check('La entrada rechazada vuelve a estar libre', afterReject.data.tickets.find(t => t.ticket_number === '003').status === 'AVAILABLE');
 
     // --- 4. Mail server down, then retry from the panel ---
     await api('PUT', '/api/admin/settings', { admin: true, json: { smtp_port: '2599' } });
@@ -216,18 +224,18 @@ function parseMail(file) {
     check('Correos entregados al servidor SMTP', mails.length === 8, `${mails.length} de 8`);
     const expected = [
       ['Correo de prueba', /Correo de prueba/],
-      ['En verificación (#210)', /^Estamos verificando tu pago$/],
-      ['Entrada con PDF (#210)', /^Muchas gracias por su apoyo, tu entrada está disponible$/],
+      ['En verificación (#001)', /^Estamos verificando tu pago$/],
+      ['Entrada con PDF (#001)', /^Muchas gracias por su apoyo, tu entrada está disponible$/],
       ['En verificación (reporte)', /^Estamos verificando tu pago$/],
-      ['Entrada con PDF (#211)', /^Muchas gracias por su apoyo, tu entrada está disponible$/],
-      ['En verificación (#212)', /^Estamos verificando tu pago$/],
+      ['Entrada con PDF (#002)', /^Muchas gracias por su apoyo, tu entrada está disponible$/],
+      ['En verificación (#003)', /^Estamos verificando tu pago$/],
       ['Pago rechazado', /^Pago rechazado$/],
       ['Reenvío tras fallo', /^Estamos verificando tu pago$/]
     ];
     expected.forEach(([label, pattern], i) => check(`Correo: ${label}`, mails[i] && pattern.test(mails[i].subject), mails[i]?.subject));
     check('Todos con versión HTML y texto', mails.every(m => m.alternative));
     check('Remitente «Sistema de envío Espressivo Venezuela»', mails.every(m => /^"?Sistema de envío Espressivo Venezuela"? <soporte@merchan\.dev>$/.test(m.from)), mails[0]?.from);
-    check('Correo de la entrada nombra el número', /#210/.test(mails[2]?.raw.replace(/=\r\n/g, '') || ''));
+    check('Correo de la entrada nombra el número', /#001/.test(mails[2]?.raw.replace(/=\r\n/g, '') || ''));
     check('Los correos de pago y confirmación explican el acceso a todo el evento', [1, 2, 3, 4].every(i =>
       /acceso a todo el evento|acceder a todo el evento/.test(mails[i]?.raw.replace(/=\r\n/g, '') || '')
     ));

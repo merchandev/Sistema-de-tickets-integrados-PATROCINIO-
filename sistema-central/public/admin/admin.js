@@ -335,9 +335,6 @@ function openOrderDetail(orderId) {
   if (!o) return;
   closeNotifPanel();
   const isReport = !o.ticket_number;
-  const freeTickets = (state.tickets || []).filter(t => t.status === 'AVAILABLE').map(t => t.ticket_number);
-  const requestedFree = o.requested_ticket && freeTickets.includes(o.requested_ticket);
-  const suggested = requestedFree ? o.requested_ticket : (freeTickets[0] || '');
   const duplicates = (state.orders || []).filter(other => other.id !== o.id && other.status !== 'REJECTED' && other.payment_reference === o.payment_reference);
   const field = (label, value, mono = false) => `<div class="od-field"><span>${label}</span><strong class="${mono ? 'mono' : ''}">${escapeHtml(value || '—')}</strong></div>`;
   const statusText = { PENDING: 'Por verificar', APPROVED: 'Aprobado', REJECTED: 'Rechazado' }[o.status] || o.status;
@@ -346,13 +343,8 @@ function openOrderDetail(orderId) {
   if (o.status === 'PENDING') {
     actions = `
       <div class="od-actions">
-        ${isReport ? `
-          <label class="od-assign">Entrada que se asignará
-            <input id="od-ticket" inputmode="numeric" maxlength="3" value="${suggested}" list="od-free-tickets" />
-            <datalist id="od-free-tickets">${freeTickets.map(n => `<option value="${n}"></option>`).join('')}</datalist>
-            <small>${o.requested_ticket ? (requestedFree ? `Pidió la #${o.requested_ticket} y está libre.` : `Pidió la #${o.requested_ticket}, que ya no está libre.`) : 'Sin preferencia: sugerimos la primera libre.'}</small>
-          </label>` : ''}
-        <button type="button" class="od-approve" id="od-approve-btn" onclick="approveOrder(${o.id}, ${isReport})">Aprobar pago y enviar entrada</button>
+        ${isReport ? '<p class="od-muted">Al aprobar el pago, se asignará automáticamente la primera entrada libre.</p>' : ''}
+        <button type="button" class="od-approve" id="od-approve-btn" onclick="approveOrder(${o.id})">Aprobar pago y enviar entrada</button>
         <button type="button" class="od-reject" onclick="document.getElementById('od-reject-form').hidden = false; document.getElementById('od-reject-reason').focus()">Rechazar</button>
       </div>
       <form id="od-reject-form" class="od-reject-form" hidden onsubmit="rejectOrder(event, ${o.id})">
@@ -377,7 +369,7 @@ function openOrderDetail(orderId) {
     <div class="order-detail">
       <div class="od-head">
         <div>
-          <span class="od-kind">${isReport ? 'Reporte de pago' : 'Compra desde el mapa'} · ${escapeHtml(formatDateTime(o.created_at))}</span>
+          <span class="od-kind">${isReport ? 'Reporte de pago' : 'Compra con reserva'} · ${escapeHtml(formatDateTime(o.created_at))}</span>
           <h4>${isReport ? 'Entrada por asignar' : `Entrada #${o.ticket_number}`}</h4>
           ${sourceBadge(o.source_web)}
         </div>
@@ -407,16 +399,8 @@ function openOrderDetail(orderId) {
   `);
 }
 
-async function approveOrder(orderId, needsTicket = false) {
+async function approveOrder(orderId) {
   const body = { admin_notes: 'Pago verificado en el panel de administración' };
-  if (needsTicket) {
-    const value = document.getElementById('od-ticket')?.value.trim() || '';
-    if (!/^\d{1,3}$/.test(value) || Number(value) < 1 || Number(value) > 250) {
-      alert('Indica un número de entrada libre entre 001 y 250.');
-      return;
-    }
-    body.ticket_number = value.padStart(3, '0');
-  }
   const button = document.getElementById('od-approve-btn');
   if (button) { button.disabled = true; button.textContent = 'Aprobando y enviando correos…'; }
   try {

@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/styles.css?v=20261110" />
+  <link rel="stylesheet" href="/styles.css?v=assignment" />
   <script src="/config-client.js"></script>
   <script defer src="/console-credit.js?v=merchan-dev"></script>
 </head>
@@ -58,14 +58,14 @@
         </div>
       </section>
 
-      <div id="alert-banner" class="alert hidden"></div>
+      <div id="alert-banner" class="alert hidden" role="status"></div>
 
       <!-- Popup de compra: datos del Pago Móvil y formulario para reportar el pago -->
       <dialog id="pay-dialog" class="pay-dialog" aria-labelledby="pay-title">
         <div class="pay-head">
           <div>
             <span id="pay-kicker" class="pay-kicker">Entrada reservada para ti</span>
-            <h2 id="pay-title">Entrada #<span id="selected-ticket-label">001</span></h2>
+            <h2 id="pay-title">Entrada reservada</h2>
           </div>
           <div id="pay-timer-box" class="pay-timer" role="timer" aria-label="Tiempo restante de la reserva">
             <span>Reservada por</span>
@@ -114,8 +114,8 @@
               <label>Número de referencia
                 <input name="payment_reference" type="text" inputmode="numeric" required maxlength="30" placeholder="Ej: 123456789" pattern="[A-Za-z0-9-]{4,30}" title="Solo números y letras, como aparece en tu comprobante" />
               </label>
-              <label class="report-only" hidden>Número de entrada <small>la que elegiste, del 001 al 250</small>
-                <input id="requested_ticket" name="requested_ticket" type="text" inputmode="numeric" maxlength="3" placeholder="Ej: 042" pattern="[0-9]{1,3}" title="Número del 001 al 250" />
+              <label class="report-only" hidden>Número de entrada <small>la que se te asignó</small>
+                <input id="requested_ticket" name="requested_ticket" type="text" inputmode="numeric" maxlength="3" placeholder="Ej: 042" pattern="[0-9]{1,3}" title="Número de la entrada asignada" />
               </label>
               <label class="report-only pay-wide" hidden>¿Qué pasó con tu pago?
                 <textarea name="buyer_comment" rows="2" minlength="3" maxlength="500" placeholder="Ej: pagué a las 3:00 PM y la reserva expiró antes de enviar el formulario"></textarea>
@@ -168,41 +168,17 @@
         <option value="DelSur (0157)"></option>
       </datalist>
 
-      <!-- Mapa de entradas con explorador inteligente -->
-      <section>
-        <div class="map-head">
-          <div>
-            <h2>Elige tu número <span class="serif hl">(001 al 250)</span></h2>
-            <p>Haz clic en una entrada disponible. Al seleccionarla se bloqueará por 3 minutos para que nadie más pueda tomarla.</p>
-          </div>
-          <div class="legend">
-            <span><i class="lg-free"></i> Disponible</span>
-            <span><i class="lg-lock"></i> Bloqueada (3 min)</span>
-            <span><i class="lg-pend"></i> En verificación</span>
-            <span><i class="lg-sold"></i> Vendida</span>
-          </div>
+      <section class="assignment-card" aria-labelledby="assignment-title">
+        <div class="assignment-copy">
+          <p class="assignment-kicker">Cupo total: 250 entradas</p>
+          <h2 id="assignment-title">Reserva tu entrada</h2>
+          <p>Te asignaremos una entrada por orden de solicitud y la reservaremos mientras reportas el pago.</p>
+          <button type="button" id="assign-ticket" class="btn no-arrow" disabled>Asignar entrada</button>
         </div>
-
-        <!-- Barra de herramientas rápida: filtro por bloque, búsqueda y selección aleatoria -->
-        <div class="ticket-toolbar" id="ticket-toolbar">
-          <div class="tt-filters" role="group" aria-label="Filtrar entradas">
-            <button type="button" class="tt-btn active" data-filter="all">Todas (250)</button>
-            <button type="button" class="tt-btn" data-filter="free">Solo disponibles</button>
-            <button type="button" class="tt-btn" data-range="1-50">001–050</button>
-            <button type="button" class="tt-btn" data-range="51-100">051–100</button>
-            <button type="button" class="tt-btn" data-range="101-150">101–150</button>
-            <button type="button" class="tt-btn" data-range="151-200">151–200</button>
-            <button type="button" class="tt-btn" data-range="201-250">201–250</button>
-          </div>
-          <div class="tt-actions">
-            <div class="tt-search-wrap">
-              <input type="text" id="ticket-search" class="tt-search" placeholder="Buscar # (ej. 077)" maxlength="3" inputmode="numeric" aria-label="Buscar número de entrada" />
-            </div>
-            <button type="button" id="btn-random-ticket" class="tt-random">● Elegir al azar</button>
-          </div>
+        <div id="assignment-result" class="assignment-result" role="status" hidden>
+          <span>Tu entrada asignada</span>
+          <strong id="assignment-number"></strong>
         </div>
-
-        <div id="tickets-grid" class="tickets-grid"></div>
       </section>
 
       <!-- Reporte de pago independiente: para quien pagó y no pudo terminar el popup -->
@@ -253,6 +229,6 @@
   </footer>
 
   <script src="/widget.js?v=20261110"></script>
-  <script src="/design.js"></script>
+  <script src="/design.js?v=assignment"></script>
 </body>
 </html>

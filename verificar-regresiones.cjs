@@ -28,15 +28,17 @@ async function run() {
   const attachments=inbox.messages.filter(m=>m.Attachments>0);
   assert(attachments.length>=2);
   console.log('OK: Mailpit recibio al menos dos correos con archivo PDF adjunto.');
-  for(const number of ['000','251','../../test']) assert.equal((await api('/api/public/tickets/lock',{ticket_number:number,session_id:'valid-test-session'})).status,400);
-  console.log('OK: Numeros de entrada invalidos rechazados.');
-  const ticket=overview.tickets.find(t=>t.status==='AVAILABLE').ticket_number;
-  const lock=(await api('/api/public/tickets/lock',{ticket_number:ticket,session_id:'quote-reload-session'})).data;
+  assert.equal((await api('/api/public/tickets/lock',{session_id:'short'})).status,400);
+  console.log('OK: Sesiones inválidas rechazadas.');
+  const lock=(await api('/api/public/tickets/lock',{session_id:'quote-reload-session'})).data;
   assert(lock.ok);
+  const ticket=lock.ticket.ticket_number;
   try {
     await api('/api/admin/settings',{ticket_price_usd:6},'PUT');
     const state=await api('/api/public/state',undefined,'GET',{'X-Session-Id':'quote-reload-session'});
-    const own=state.data.tickets.find(t=>t.ticket_number===ticket);
+    const own=state.data.reservation;
+    assert.equal(own.ticket_number,ticket);
+    assert(!('tickets' in state.data));
     assert.deepEqual(own.pricing,lock.pricing);
     assert.equal(own.pricing.amount_usd,5);
     assert.equal(state.data.config.ticket_price_usd,6);
@@ -47,6 +49,6 @@ async function run() {
   }
   assert(!('secret_hmac_key' in overview.settings));
   console.log('OK: Cotizacion se conserva al recargar; configuracion no expone ni permite sobrescribir el secreto.');
-  fs.writeFileSync('output/verificacion/regresiones.json',JSON.stringify({date:new Date().toISOString(),ok:true,checks:['persistence','pdf-rendered-qr','smtp-attachments','invalid-tickets','quote-reload','settings-secret','caracas-schedule-7-cases']},null,2));
+  fs.writeFileSync('output/verificacion/regresiones.json',JSON.stringify({date:new Date().toISOString(),ok:true,checks:['persistence','pdf-rendered-qr','smtp-attachments','invalid-sessions','quote-reload','settings-secret','caracas-schedule-7-cases']},null,2));
 }
 run().catch(e=>{console.error(e);process.exitCode=1;});

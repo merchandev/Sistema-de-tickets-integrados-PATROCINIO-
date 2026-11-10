@@ -19,7 +19,8 @@ const {
   submitPaymentReport,
   approveOrderAtomic,
   rejectOrderAtomic,
-  getAllTicketsPublic
+  getReservationState,
+  getAllTicketsForAdmin
 } = require('./db');
 const { scrapeBcvRate } = require('./bcvScraper');
 const { generateTicketPdf, generateDemoTicketPdf } = require('./pdfGenerator');
@@ -153,11 +154,18 @@ app.get('/verify/:token', (req, res) => {
   res.redirect(`/admin/?verifyToken=${token}#qr-scanner`);
 });
 
-// Helper to broadcast full synchronized state to all connected pages & dashboard
+// Only the dashboard receives inventory invalidations. Buyers receive updates to their own reservation.
 function broadcastTicketsUpdate(extraEvent = null) {
-  for (const socket of io.sockets.sockets.values()) socket.emit('tickets:updated', getAllTicketsPublic(socket.handshake.query?.sessionId));
-  if (extraEvent) {
-    io.emit(extraEvent.name, { changed: true });
+  io.to('admins').emit('tickets:updated', { changed: true });
+  if (extraEvent?.name.startsWith('admin:')) io.to('admins').emit(extraEvent.name, { changed: true });
+  for (const socket of io.sockets.sockets.values()) {
+    if (!socket.handshake.query?.sessionId) continue;
+    const state = getReservationState(socket.handshake.query.sessionId);
+    const key = state.reservation ? `${state.reservation.ticket_number}:${state.reservation.locked_until}` : null;
+    if (socket.data.reservationKey !== key) {
+      socket.data.reservationKey = key;
+      socket.emit('reservation:updated', state);
+    }
   }
 }
 
@@ -182,7 +190,8 @@ app.get('/api/public/email/cabecera.jpg', (_req, res) => {
 
 app.get('/api/public/state', (req, res) => {
   const config = getPublicConfig();
-  const ticketState = getAllTicketsPublic(req.headers['x-session-id']);
+  const ticketState = getReservationState(req.headers['x-session-id']);
+  res.set('Cache-Control', 'no-store');
   res.json({
     ok: true,
     config,
@@ -207,46 +216,36 @@ app.get('/api/public/bcv', async (_req, res) => {
  */
 app.post('/api/public/tickets/lock', requireSalesOpen, ticketRoute(async (req, res) => {
   try {
-    const { ticket_number, session_id, source_web } = req.body;
-    if (!/^\d{1,3}$/.test(String(ticket_number)) || Number(ticket_number) < 1 || Number(ticket_number) > 250 || typeof session_id !== 'string' || session_id.length < 8 || session_id.length > 254) {
+    const { session_id } = req.body;
+    if (typeof session_id !== 'string' || session_id.length < 8 || session_id.length > 254) {
       return res.status(400).json({
         ok: false,
-        message: 'Faltan parámetros requeridos (ticket_number, session_id).'
+        message: 'No encontramos tu sesión. Recarga la página e inténtalo de nuevo.'
       });
     }
 
-    const paddedNumber = String(ticket_number).padStart(3, '0');
     const source = resolveSalesSource(req);
-    if (!source) return res.status(403).json({ok:false, code:'INVALID_SOURCE', message:'Selecciona la entrada desde una de las páginas de venta.'});
+    if (!source) return res.status(403).json({ok:false, code:'INVALID_SOURCE', message:'Solicita tu entrada desde una de las páginas de venta.'});
     await scrapeBcvRate({maxAgeMs:5 * 60 * 1000});
     const current = getPublicConfig();
     if (current.bcv_mode !== 'manual' && (!current.bcv_is_official || Date.now() - Date.parse(current.bcv_last_updated) > 24*60*60*1000)) return res.status(503).json({ok:false, code:'BCV_UNAVAILABLE', message:'No hay una tasa oficial BCV reciente confirmada. Intenta nuevamente mas tarde.'});
 
-    const result = lockTicketAtomic(paddedNumber, session_id, source);
+    const result = lockTicketAtomic(null, session_id, source);
     if (!result.success) {
       return res.status(409).json({
         ok: false,
         code: result.code,
-        remainingSeconds: result.remainingSeconds || 0,
-        lockedBySource: result.lockedBySource || null,
         message: result.message
       });
     }
 
-    broadcastTicketsUpdate({
-      name: 'ticket:locked',
-      payload: {
-        ticket_number: paddedNumber,
-        locked_by_source: source,
-        locked_until: result.ticket.locked_until
-      }
-    });
+    broadcastTicketsUpdate();
 
     const config = getPublicConfig();
     return res.json({
       ok: true,
-      message: `Entrada #${paddedNumber} reservada temporalmente por ${Math.round(config.lock_duration_seconds / 60)} minutos.`,
-      ticket: result.ticket,
+      message: `Entrada #${result.ticket.ticket_number} reservada temporalmente por ${Math.round(config.lock_duration_seconds / 60)} minutos.`,
+      ticket: { ticket_number: result.ticket.ticket_number, locked_until: result.ticket.locked_until },
       serverTime: result.serverTime,
       lockDurationSeconds: config.lock_duration_seconds,
       pricing: {
@@ -309,7 +308,7 @@ app.post('/api/public/orders', requireSalesOpen, ticketRoute(async (req, res) =>
     const ticketNumber = parseTicketNumber(req.body.ticket_number);
     const sessionId = req.body.session_id;
     if (!ticketNumber || typeof sessionId !== 'string' || sessionId.length < 8 || sessionId.length > 254) {
-      return res.status(400).json({ ok: false, message: 'Selecciona una entrada antes de reportar el pago.' });
+      return res.status(400).json({ ok: false, message: 'Solicita que te asignemos una entrada antes de reportar el pago.' });
     }
     const form = parsePaymentForm(req.body);
     if (!form.ok) return res.status(400).json({ ok: false, field: form.field, message: form.message });
@@ -366,7 +365,7 @@ app.post('/api/public/payment-reports', requireSalesOpen, ticketRoute(async (req
     const form = parsePaymentForm(req.body);
     if (!form.ok) return res.status(400).json({ ok: false, field: form.field, message: form.message });
     const requested = parseTicketNumber(req.body.requested_ticket);
-    if (!requested) return res.status(400).json({ ok: false, field: 'requested_ticket', message: 'Indica el número de entrada que elegiste (del 001 al 250).' });
+    if (!requested) return res.status(400).json({ ok: false, field: 'requested_ticket', message: 'Indica el número de entrada que se te asignó.' });
     const comment = typeof req.body.buyer_comment === 'string' ? req.body.buyer_comment.trim().slice(0, 500) : '';
     if (comment.length < 3) return res.status(400).json({ ok: false, field: 'buyer_comment', message: 'Cuéntanos brevemente qué pasó con tu pago.' });
     if (!validScreenshot(req)) return res.status(400).json({ ok: false, field: 'screenshot', message: 'La captura no es una imagen válida.' });
@@ -386,7 +385,7 @@ app.post('/api/public/payment-reports', requireSalesOpen, ticketRoute(async (req
       buyer_comment: comment
     });
 
-    io.emit('admin:order_created', { changed: true });
+    io.to('admins').emit('admin:order_created', { changed: true });
     sendInBackground(() => sendPaymentSubmittedEmail(order));
 
     return res.status(201).json({
@@ -420,7 +419,7 @@ function adminSettings() {
 
 app.get('/api/admin/overview', (_req, res) => {
   releaseExpiredLocks();
-  const ticketsState = getAllTicketsPublic();
+  const ticketsState = getAllTicketsForAdmin();
   const orders = db.prepare('SELECT * FROM orders ORDER BY id DESC').all();
   const emailLogs = db.prepare('SELECT * FROM email_logs ORDER BY id DESC LIMIT 100').all();
   const campaigns = db.prepare('SELECT * FROM notification_campaigns ORDER BY id DESC LIMIT 50').all();
@@ -485,7 +484,7 @@ app.post('/api/admin/orders/:id/approve', ticketRoute(async (req, res) => {
     const orderId = parseInt(req.params.id, 10);
     const { admin_notes, ticket_number } = req.body || {};
     const assignTicket = ticket_number ? parseTicketNumber(ticket_number) : null;
-    if (ticket_number && !assignTicket) return res.status(400).json({ ok: false, message: 'El número de entrada va del 001 al 250.' });
+    if (ticket_number && !assignTicket) return res.status(400).json({ ok: false, message: 'El número de entrada no es válido.' });
 
     const result = approveOrderAtomic(orderId, admin_notes, assignTicket);
     if (!result.success) {
@@ -633,7 +632,7 @@ app.post('/api/admin/verify-qr/:rawToken/checkin', (req, res) => {
       });
     }
 
-    io.emit('admin:order_updated', { changed: true });
+    io.to('admins').emit('admin:order_updated', { changed: true });
 
     return res.json({
       ok: true,
@@ -825,10 +824,16 @@ app.post('/api/admin/notifications/send', superadminOnly, ticketRoute(async (req
 // ============================================================================
 
 io.on('connection', (socket) => {
-  const clientSource = socket.handshake.query?.source || 'client';
+  if (socket.handshake.query?.source === 'admin-dashboard') {
+    try {
+      if (adminAuth.sessionFrom(socket.request)) socket.join('admins');
+    } catch (_) { /* Invalid cookies do not grant access to dashboard updates. */ }
+  }
+  const state = getReservationState(socket.handshake.query?.sessionId);
+  socket.data.reservationKey = state.reservation ? `${state.reservation.ticket_number}:${state.reservation.locked_until}` : null;
   socket.emit('init:state', {
     config: getPublicConfig(),
-    ...getAllTicketsPublic(socket.handshake.query?.sessionId)
+    ...state
   });
 
   socket.on('disconnect', () => {
