@@ -104,7 +104,6 @@
     const usd = Number(cfg.ticket_price_usd || 5);
     const usdTxt = `$${Number.isInteger(usd) ? usd : usd.toFixed(2)}`;
     $('#cta-price').textContent = usdTxt;
-    $('#sticky-price').textContent = usdTxt;
     $$('.faq-price').forEach((e) => { e.textContent = `$${usd.toFixed(2)} USD`; });
 
     const ves = Number(cfg.ticket_price_ves || 0);
@@ -130,6 +129,7 @@
 
   const stickyPhase = $('#sticky-countdown-phase');
   const stickyClock = $('#sticky-countdown-clock');
+  const stickyDigits = ['days', 'hours', 'minutes', 'seconds'].map((unit) => $('[data-sticky-' + unit + ']', stickyClock));
   const countdown = $('#event-countdown');
   const phaseLabel = $('.event-countdown-phase', countdown);
   const countdownDate = $('.event-countdown-date', countdown);
@@ -173,9 +173,10 @@
     const remaining = Math.ceil((target - currentTime) / 1000);
     const units = [Math.floor(remaining / 86400), Math.floor(remaining / 3600) % 24, Math.floor(remaining / 60) % 60, remaining % 60]
       .map((value) => String(value).padStart(2, '0'));
-    units.forEach((value, i) => { digits[i].textContent = value; });
-    const [days, hours, minutes, seconds] = units;
-    stickyClock.textContent = days + " d · " + hours + " h · " + minutes + " min · " + seconds + " s";
+    units.forEach((value, i) => {
+      digits[i].textContent = value;
+      stickyDigits[i].textContent = value;
+    });
   }
 
   async function load() {

@@ -1873,27 +1873,44 @@ footer {
 }
 .sticky-inner {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
   gap: 20px;
 }
-.sticky-info {
-  font-size: 13.5px;
-  color: var(--muted);
-}
-.sticky-info b,
-.sticky-info strong {
-  color: var(--lime);
-}
 .sticky-countdown {
-  flex-shrink: 0;
-  text-align: center;
-  font-size: 12px;
-  line-height: 1.35;
+  text-align: left;
   color: var(--fg);
 }
-.sticky-countdown strong { display: block; color: var(--lime); }
-.sticky-countdown [role="timer"] { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.sticky-countdown strong {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--lime);
+  font-size: clamp(11px, 1.3vw, 14px);
+  line-height: 1.3;
+}
+#sticky-countdown-clock {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: clamp(4px, 1vw, 9px);
+  text-align: center;
+}
+#sticky-countdown-clock[hidden] { display: none; }
+#sticky-countdown-clock span {
+  min-width: 34px;
+  padding: 4px 5px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, .06);
+}
+#sticky-countdown-clock b {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: clamp(15px, 2vw, 22px);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+#sticky-countdown-clock small { display: block; font-size: 9px; color: var(--muted); }
 
 /* ==========================================================================
    11. PLATAFORMA DE COMPRA (/comprar) + EXPLORADOR INTELIGENTE DE ENTRADAS
@@ -2458,12 +2475,15 @@ footer {
   .form {
     grid-template-columns: 1fr;
   }
-  .sticky-inner {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 8px;
-    text-align: center;
-  }
+  .sticky-inner { gap: 8px 12px; }
+  .sticky-inner > .btn { padding-inline: 12px; font-size: 12px; }
+}
+@media (max-width: 380px) {
+  .sticky-inner { flex-wrap: nowrap; column-gap: 8px; }
+  .sticky-countdown { min-width: 0; }
+  .sticky-inner > .btn { flex-shrink: 0; padding-inline: 8px; font-size: 11px; }
+  .sticky-inner > .btn::after { display: none; }
+  #sticky-countdown-clock span { min-width: 30px; padding-inline: 3px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -2570,7 +2590,6 @@ body::before, .scroll-progress, .floating-seal, .hdm-sticker { display: none; }
   .tt-btn { padding: 9px 10px; }
   .foot { align-items: flex-start; }
   .back { max-width: 100px; text-align: right; font-size: 12px; }
-  .sticky-info { font-size: 11px; }
   body { padding-bottom: 100px; }
 }
 @media (prefers-reduced-motion: reduce) {
