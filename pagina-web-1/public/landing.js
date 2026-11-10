@@ -23,12 +23,6 @@
   const observeReveals = (root = document) => $$('.reveal:not(.in)', root).forEach((el) => io.observe(el));
   observeReveals();
 
-  /* ---- Video: si existe /media/promo.mp4 se muestra; si no, queda el marcador ---- */
-  fetch('/media/promo.mp4', { method: 'HEAD' }).then((r) => {
-    if (!r.ok || !(r.headers.get('content-type') || '').startsWith('video')) return;
-    $('#video-frame').innerHTML = '<video controls playsinline preload="metadata" poster="/media/poster.jpg"><source src="/media/promo.mp4" type="video/mp4"></video>';
-  }).catch(() => {});
-
   /* ---- Reels: se reproducen con sonido solo mientras se ven; al salir de pantalla se pausan ----
      Los navegadores no dejan iniciar audio hasta que la persona interactúa con la página: si lo
      bloquean, el video arranca en silencio y el sonido se activa con el primer clic, toque o tecla.

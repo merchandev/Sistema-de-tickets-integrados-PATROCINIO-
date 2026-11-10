@@ -24,6 +24,7 @@ const upstream = process.env.CENTRAL_INTERNAL_URL;
 const salesKey = process.env.WEB_PROXY_KEY_FILE ? require('node:fs').readFileSync(process.env.WEB_PROXY_KEY_FILE, 'utf8').trim() : '';
 function salesHeaders(req) { return {...req.headers, 'x-sales-source':SOURCE_WEB, 'x-sales-key':salesKey}; }
 app.get('/health', (_req, res) => res.json({ok:true}));
+app.get('/media/promo.mp4', (_req, res) => res.redirect(308, '/media/reel-campana.mp4'));
 // The blog belongs to Hablemos de Marketing, including its public API and images.
 app.use('/api/public/blog', (_req, res) => res.sendStatus(404));
 if (upstream) app.use(['/api/public', '/socket.io'], (req, res) => {
