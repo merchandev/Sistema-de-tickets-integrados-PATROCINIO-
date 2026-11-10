@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/styles.css?v=20261110" />
+  <link rel="stylesheet" href="/styles.css?v=event-countdown" />
   <script src="/config-client.js"></script>
 </head>
 <body data-theme="purple">
@@ -263,12 +263,15 @@
             <div class="ves" id="cta-ves">≈ Bs. --</div>
             <div class="rate" id="cta-rate">Tasa BCV: Bs. --</div>
 
-            <div class="avail">
-              <div class="avail-head">
-                <span class="avail-label">Entradas disponibles</span>
-                <b class="avail-count">-- / 250</b>
+            <div class="event-countdown" id="event-countdown">
+              <p class="event-countdown-phase" aria-live="polite">El registro abre a las 3:00 p. m.</p>
+              <div class="event-countdown-clock" role="timer" aria-label="Tiempo para la próxima actividad" hidden>
+                <span><b data-countdown-days>00</b><small>Días</small></span>
+                <span><b data-countdown-hours>00</b><small>Horas</small></span>
+                <span><b data-countdown-minutes>00</b><small>Min</small></span>
+                <span><b data-countdown-seconds>00</b><small>Seg</small></span>
               </div>
-              <div class="bar"><i class="avail-bar"></i></div>
+              <p class="event-countdown-date">21 de noviembre · Hora de Venezuela</p>
             </div>
 
             <a href="/comprar" class="btn btn-dark btn-lg magnetic" style="width:100%">Ver mapa de entradas</a>
@@ -336,7 +339,7 @@
   <div id="sticky-buy" class="sticky-buy" role="region" aria-label="Compra rápida de entradas">
     <div class="container sticky-inner">
       <div class="sticky-info">
-        <b>Hablemos de Marketing · Maturín</b> — Entrada general <span id="sticky-price">$5.00 USD</span> · Quedan <strong class="avail-count">-- / 250</strong>
+        <b>Hablemos de Marketing · Maturín</b> — Entrada general <span id="sticky-price">$5.00 USD</span>
       </div>
       <a href="/comprar" class="btn btn-lime magnetic">Elegir mi número</a>
     </div>
@@ -364,7 +367,7 @@
     </div>
   </footer>
 
-  <script src="/landing.js"></script>
+  <script src="/landing.js?v=event-countdown"></script>
   <script src="/patrocinadores.js" defer></script>
   <script src="/design.js"></script>
 </body>

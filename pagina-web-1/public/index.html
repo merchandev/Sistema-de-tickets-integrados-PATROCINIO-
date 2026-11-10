@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,400;1,600&family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/styles.css?v=20261110" />
+  <link rel="stylesheet" href="/styles.css?v=event-countdown" />
   <script src="/config-client.js"></script>
 </head>
 <body data-theme="caminos">
@@ -58,10 +58,9 @@
       <div class="container hero-grid">
         <div class="hero-copy">
 
-          <h1 aria-label="Sumemos pasos e iluminemos nuevos caminos.">
-            <span class="line-mask"><span class="line-inner" style="--d: 0.62s">Sumemos pasos</span></span>
-            <span class="line-mask"><span class="line-inner" style="--d: 0.74s">e <em class="serif hl">iluminemos</em></span></span>
-            <span class="line-mask"><span class="line-inner" style="--d: 0.86s">nuevos caminos.</span></span>
+          <h1 aria-label="Súmenos pasos e iluminemos vidas">
+            <span class="line-mask"><span class="line-inner" style="--d: 0.62s">Súmenos pasos</span></span>
+            <span class="line-mask"><span class="line-inner" style="--d: 0.74s">e <em class="serif hl">iluminemos</em> vidas</span></span>
           </h1>
 
           <p class="lead hero-enter" style="--d: 0.98s">
@@ -314,12 +313,15 @@
             <div class="ves" id="cta-ves">≈ Bs. --</div>
             <div class="rate" id="cta-rate">Tasa BCV: Bs. --</div>
 
-            <div class="avail">
-              <div class="avail-head">
-                <span class="avail-label">Entradas disponibles</span>
-                <b class="avail-count">-- / 250</b>
+            <div class="event-countdown" id="event-countdown">
+              <p class="event-countdown-phase" aria-live="polite">El registro abre a las 3:00 p. m.</p>
+              <div class="event-countdown-clock" role="timer" aria-label="Tiempo para la próxima actividad" hidden>
+                <span><b data-countdown-days>00</b><small>Días</small></span>
+                <span><b data-countdown-hours>00</b><small>Horas</small></span>
+                <span><b data-countdown-minutes>00</b><small>Min</small></span>
+                <span><b data-countdown-seconds>00</b><small>Seg</small></span>
               </div>
-              <div class="bar"><i class="avail-bar"></i></div>
+              <p class="event-countdown-date">21 de noviembre · Hora de Venezuela</p>
             </div>
 
             <a href="/comprar" class="btn btn-dark magnetic" style="width:100%">Seleccionar mi número</a>
@@ -395,7 +397,7 @@
   <div id="sticky-buy" class="sticky-buy" role="region" aria-label="Compra rápida de entradas">
     <div class="container sticky-inner">
       <div class="sticky-info">
-        <b>Iluminando Caminos · Maturín</b> — Entrada general <span id="sticky-price">$5.00 USD</span> · Quedan <strong class="avail-count">-- / 250</strong>
+        <b>Iluminando Caminos · Maturín</b> — Entrada general <span id="sticky-price">$5.00 USD</span>
       </div>
       <a href="/comprar" class="btn magnetic">Elegir mi número</a>
     </div>
@@ -422,7 +424,7 @@
     </div>
   </footer>
 
-  <script src="/landing.js"></script>
+  <script src="/landing.js?v=event-countdown"></script>
   <script src="/patrocinadores.js" defer></script>
   <script src="/design.js"></script>
 </body>

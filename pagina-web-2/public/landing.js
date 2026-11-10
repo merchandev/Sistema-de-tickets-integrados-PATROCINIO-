@@ -120,23 +120,62 @@
     }
   }
 
-  function applyTickets(tickets) {
-    if (!Array.isArray(tickets) || !tickets.length) return;
-    const total = tickets.length;
-    const free = tickets.filter((t) => t.status === 'AVAILABLE').length;
-    const takenPct = Math.round(((total - free) / total) * 100);
-    $$('.avail-count').forEach((e) => { e.textContent = `${free} / ${total}`; });
-    $$('.avail-bar').forEach((e) => { e.style.width = Math.max(3, takenPct) + '%'; });
-    $$('.avail-label').forEach((e) => { e.textContent = free <= 25 ? 'Últimas entradas' : 'Entradas disponibles'; });
+  const countdown = $('#event-countdown');
+  const phaseLabel = $('.event-countdown-phase', countdown);
+  const countdownDate = $('.event-countdown-date', countdown);
+  const clock = $('.event-countdown-clock', countdown);
+  const digits = ['days', 'hours', 'minutes', 'seconds'].map((unit) => $(`[data-countdown-${unit}]`, countdown));
+  const stages = [
+    { key: 'event_entry_time', time: '15:00', label: 'El registro abre en' },
+    { key: 'conference_start', time: '16:00', label: 'Las conferencias comienzan en' },
+    { key: 'concert_start', time: '19:00', label: 'El concierto comienza en' }
+  ];
+  const venueDate = new Intl.DateTimeFormat('es-VE', { timeZone: 'America/Caracas', day: 'numeric', month: 'long', hour: 'numeric', minute: '2-digit', hour12: true });
+  let stageTimes, now = () => Date.now();
+  let lastTarget;
+
+  function setCountdown(config, serverTime) {
+    const day = /^\d{4}-\d{2}-\d{2}$/.test(config?.event_date || '') ? config.event_date : '2026-11-21';
+    const toUtc = (time) => Date.parse(day + 'T' + time + ':00-04:00');
+    const configured = stages.map(({key, time}) => toUtc(/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(config?.[key] || '') ? config[key] : time));
+    stageTimes = configured[0] < configured[1] && configured[1] < configured[2]
+      ? configured : stages.map(({time}) => toUtc(time));
+    if (Number.isFinite(serverTime)) {
+      const received = performance.now();
+      now = () => serverTime + (performance.now() - received);
+    }
+    renderCountdown();
+  }
+
+  function renderCountdown() {
+    const currentTime = now();
+    const next = stageTimes.findIndex((time) => time > currentTime);
+    const target = next < 0 ? stageTimes[2] : stageTimes[next];
+    const state = next + '/' + target;
+    if (lastTarget !== state) {
+      phaseLabel.textContent = next < 0 ? 'El concierto ya comenzó' : stages[next].label;
+      countdownDate.textContent = Number.isFinite(target) ? venueDate.format(target) + ' · Hora de Venezuela' : 'Hora de Venezuela';
+      clock.hidden = next < 0;
+      lastTarget = state;
+    }
+    if (next < 0) return;
+    const remaining = Math.ceil((target - currentTime) / 1000);
+    [Math.floor(remaining / 86400), Math.floor(remaining / 3600) % 24, Math.floor(remaining / 60) % 60, remaining % 60]
+      .forEach((value, i) => { digits[i].textContent = String(value).padStart(2, '0'); });
   }
 
   async function load() {
     try {
-      const res = await fetch(`${CFG.CENTRAL_API_URL || ''}/api/public/state`);
+      const res = await fetch(`${CFG.CENTRAL_API_URL || ''}/api/public/state`, { cache: 'no-store' });
       const data = await res.json();
-      if (data && data.ok) { applyConfig(data.config); applyTickets(data.tickets); }
+      if (data && data.ok) {
+        setCountdown(data.config, data.serverTime);
+        applyConfig(data.config);
+      }
     } catch (_) { /* se mantienen los textos por defecto */ }
   }
+  setCountdown();
+  setInterval(renderCountdown, 250);
   load();
   setInterval(load, 20000);
 })();

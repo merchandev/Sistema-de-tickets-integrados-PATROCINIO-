@@ -957,37 +957,6 @@ button {
   font-weight: 600;
 }
 
-.avail {
-  margin-top: 8px;
-}
-.avail-head {
-  display: flex;
-  justify-content: space-between;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--muted);
-  margin-bottom: 8px;
-}
-.avail-head b {
-  color: var(--gold);
-}
-.bar {
-  height: 6px;
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 999px;
-  overflow: hidden;
-}
-.bar i {
-  display: block;
-  height: 100%;
-  width: 0%;
-  background: linear-gradient(90deg, var(--gold), #f5dfb0);
-  border-radius: 999px;
-  transition: width 0.9s var(--ease-out);
-}
-
 /* Cinta Marquee Editorial en la base del Hero */
 .marquee-band {
   border-top: 1px solid var(--line);
@@ -1700,24 +1669,20 @@ button {
   margin-top: 4px;
 }
 
-.ct-stub .avail {
+.ct-stub .event-countdown {
   margin: 22px 0;
-  padding: 16px 0;
-  border-top: 1px solid var(--paper-line);
-  border-bottom: 1px solid var(--paper-line);
-}
-.ct-stub .avail-head {
-  color: var(--paper-muted);
-}
-.ct-stub .avail-head b {
+  padding: 14px 0;
+  border-block: 1px solid var(--paper-line);
   color: var(--crimson);
 }
-.ct-stub .bar {
-  background: rgba(101, 11, 16, 0.12);
-}
-.ct-stub .bar i {
-  background: var(--crimson);
-}
+.event-countdown-phase { font-size: 14px; font-weight: 700; line-height: 1.3; }
+.event-countdown-clock { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; margin: 10px 0; text-align: center; }
+.event-countdown-clock[hidden] { display: none; }
+.event-countdown-clock > span { min-width: 0; padding: 5px 0; border: 1px solid var(--paper-line); border-radius: 6px; }
+.event-countdown-clock b { display: block; font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: clamp(13px, 2vw, 21px); line-height: 1.15; }
+.event-countdown-clock small { display: block; font-size: 10px; }
+.event-countdown-date { margin-top: 6px; font-size: 11px; line-height: 1.4; }
+
 
 .stub-barcode {
   margin-top: 18px;
