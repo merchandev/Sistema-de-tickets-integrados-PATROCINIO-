@@ -133,7 +133,7 @@ function createTicketDocument(order, config, qrBuffer, demo) {
 
   doc.moveTo(60, 553).lineTo(480, 553).lineWidth(0.8).stroke(gold);
   label('FECHA E INGRESO', 60, 569, gold);
-  value(`${formatDate(config.event_date)} · ${formatTime(config.event_entry_time || '15:30')}`, 60, 586, 420, 22, 15, light);
+  value(`${formatDate(config.event_date)} · ${formatTime(config.event_entry_time || '15:00')}`, 60, 586, 420, 22, 15, light);
   value(config.event_location || 'Lugar por definir', 60, 609, 420, 30, 14, light);
 
   label('HORARIOS', 60, 645, gold);

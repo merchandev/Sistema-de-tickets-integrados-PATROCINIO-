@@ -235,7 +235,7 @@ function eventRows(cfg) {
   const concert = /^\d{1,2}:\d{2}$/.test(cfg.concert_end || '') ? `${formatTime(cfg.concert_start)} a ${formatTime(cfg.concert_end)}` : `Desde las ${formatTime(cfg.concert_start || '19:00')}`;
   return [
     ['Fecha', formatDate(cfg.event_date)],
-    ['Apertura de puertas', formatTime(cfg.event_entry_time || '15:30')],
+    ['Apertura de puertas', formatTime(cfg.event_entry_time || '15:00')],
     ['Lugar', cfg.event_location],
     ['Conferencias', `${formatTime(cfg.conference_start || '16:00')} a ${formatTime(cfg.conference_end || '19:00')}`],
     ['Concierto', concert]
@@ -396,7 +396,7 @@ async function sendEventCampaignNotification(campaignKey, triggeredBy = 'MANUAL_
     REMINDER_TODAY: {
       subjectPrefix: 'Es hoy',
       headline: 'Hoy es el evento',
-      intro: `Te esperamos en <strong>${escapeHtml(cfg.event_location)}</strong>. Las puertas abren a las ${escapeHtml(formatTime(cfg.event_entry_time || '15:30'))}. Al llegar, muestra el QR de tu entrada y tu cédula.`
+      intro: `Te esperamos en <strong>${escapeHtml(cfg.event_location)}</strong>. Las puertas abren a las ${escapeHtml(formatTime(cfg.event_entry_time || '15:00'))}. Al llegar, muestra el QR de tu entrada y tu cédula.`
     },
     EVENT_STARTED: {
       subjectPrefix: 'Ya comenzamos',

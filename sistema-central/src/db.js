@@ -126,7 +126,7 @@ const defaultSettings = {
   event_title: 'Encuentro por una causa: conferencias y concierto benéfico',
   event_subtitle: 'Evento especial de recaudación para labor social (entradas 001 - 250)',
   event_date: '2026-11-15',
-  event_entry_time: '15:30',
+  event_entry_time: '15:00',
   conference_start: '16:00',
   conference_end: '19:00',
   concert_start: '19:00',
@@ -146,7 +146,7 @@ const defaultSettings = {
   payment_methods_json: EVENT_PAYMENT_METHODS,
   event_schedule_json: JSON.stringify([
     {
-      time: '3:30 PM - 4:00 PM',
+      time: '3:00 PM - 4:00 PM',
       phase: 'Ingreso y acreditación',
       title: 'Apertura de puertas y escaneo del QR',
       description: 'Recepción de asistentes y validación del código QR único de cada entrada.'
@@ -249,6 +249,11 @@ try {
     ['event_subtitle', 'para Labor Social (Entradas 001 - 250)', 'para labor social (entradas 001 - 250)']
   ]) {
     replaceSettingText.run(before, after, key, before);
+  }
+  // Doors open at 3:00 PM (the first default said 3:30 PM)
+  db.prepare("UPDATE settings SET value = '15:00', updated_at = datetime('now') WHERE key = 'event_entry_time' AND value = '15:30'").run();
+  for (const before of ['3:30 PM - 4:00 PM', '3:30 PM – 4:00 PM']) {
+    replaceSettingText.run(before, before.replace('3:30', '3:00'), 'event_schedule_json', before);
   }
 
   // Seed tickets 001 to 250
