@@ -1885,6 +1885,15 @@ footer {
 .sticky-info strong {
   color: var(--lime);
 }
+.sticky-countdown {
+  flex-shrink: 0;
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--fg);
+}
+.sticky-countdown strong { display: block; color: var(--lime); }
+.sticky-countdown [role="timer"] { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 
 /* ==========================================================================
    11. PLATAFORMA DE COMPRA (/comprar) + EXPLORADOR INTELIGENTE DE ENTRADAS
@@ -2452,6 +2461,7 @@ footer {
   .sticky-inner {
     flex-direction: column;
     align-items: stretch;
+    gap: 8px;
     text-align: center;
   }
 }

@@ -128,6 +128,8 @@
     }
   }
 
+  const stickyPhase = $('#sticky-countdown-phase');
+  const stickyClock = $('#sticky-countdown-clock');
   const countdown = $('#event-countdown');
   const phaseLabel = $('.event-countdown-phase', countdown);
   const countdownDate = $('.event-countdown-date', countdown);
@@ -163,13 +165,17 @@
     if (lastTarget !== state) {
       phaseLabel.textContent = next < 0 ? 'El concierto ya comenzó' : stages[next].label;
       countdownDate.textContent = Number.isFinite(target) ? venueDate.format(target) + ' · Hora de Venezuela' : 'Hora de Venezuela';
-      clock.hidden = next < 0;
+      stickyPhase.textContent = phaseLabel.textContent;
+      clock.hidden = stickyClock.hidden = next < 0;
       lastTarget = state;
     }
     if (next < 0) return;
     const remaining = Math.ceil((target - currentTime) / 1000);
-    [Math.floor(remaining / 86400), Math.floor(remaining / 3600) % 24, Math.floor(remaining / 60) % 60, remaining % 60]
-      .forEach((value, i) => { digits[i].textContent = String(value).padStart(2, '0'); });
+    const units = [Math.floor(remaining / 86400), Math.floor(remaining / 3600) % 24, Math.floor(remaining / 60) % 60, remaining % 60]
+      .map((value) => String(value).padStart(2, '0'));
+    units.forEach((value, i) => { digits[i].textContent = value; });
+    const [days, hours, minutes, seconds] = units;
+    stickyClock.textContent = days + " d · " + hours + " h · " + minutes + " min · " + seconds + " s";
   }
 
   async function load() {

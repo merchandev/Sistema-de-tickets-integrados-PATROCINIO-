@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,400;1,600&family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/styles.css?v=event-countdown" />
+  <link rel="stylesheet" href="/styles.css?v=sticky-countdown" />
   <script src="/config-client.js"></script>
 </head>
 <body data-theme="caminos">
@@ -399,6 +399,10 @@
       <div class="sticky-info">
         <b>Iluminando Caminos · Maturín</b> — Entrada general <span id="sticky-price">$5.00 USD</span>
       </div>
+      <div class="sticky-countdown">
+        <strong id="sticky-countdown-phase">El registro abre a las 3:00 p. m.</strong>
+        <span id="sticky-countdown-clock" role="timer" aria-label="Tiempo para la próxima actividad" hidden></span>
+      </div>
       <a href="/comprar" class="btn magnetic">Elegir mi número</a>
     </div>
   </div>
@@ -424,7 +428,7 @@
     </div>
   </footer>
 
-  <script src="/landing.js?v=event-countdown"></script>
+  <script src="/landing.js?v=sticky-countdown"></script>
   <script src="/patrocinadores.js" defer></script>
   <script src="/design.js"></script>
 </body>
