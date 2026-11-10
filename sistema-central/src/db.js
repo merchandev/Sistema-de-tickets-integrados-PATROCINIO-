@@ -123,8 +123,8 @@ const fullEventCondition = '2. Una sola entrada da acceso a todo el evento, incl
 
 // Seed default settings if not present
 const defaultSettings = {
-  event_title: 'Encuentro por una Causa: Conferencias & Concierto Benéfico',
-  event_subtitle: 'Evento especial de recaudación para Labor Social (Entradas 001 - 250)',
+  event_title: 'Encuentro por una causa: conferencias y concierto benéfico',
+  event_subtitle: 'Evento especial de recaudación para labor social (entradas 001 - 250)',
   event_date: '2026-11-15',
   event_entry_time: '15:30',
   conference_start: '16:00',
@@ -147,34 +147,34 @@ const defaultSettings = {
   event_schedule_json: JSON.stringify([
     {
       time: '3:30 PM - 4:00 PM',
-      phase: 'Ingreso y Acreditación',
-      title: 'Apertura de Puertas y Escaneo de QR',
+      phase: 'Ingreso y acreditación',
+      title: 'Apertura de puertas y escaneo del QR',
       description: 'Recepción de asistentes y validación del código QR único de cada entrada.'
     },
     {
       time: '4:00 PM - 7:00 PM',
-      phase: 'Ciclo de Conferencias',
-      title: 'Conferencias con Propósito Social',
+      phase: 'Ciclo de conferencias',
+      title: 'Conferencias con propósito social',
       description: 'Bloque completo de ponencias e invitados especiales. Comienza a las 4:00 PM y culmina a las 7:00 PM.'
     },
     {
       time: '7:00 PM en adelante',
-      phase: 'Concierto en Vivo',
-      title: 'Gran Concierto Benéfico',
+      phase: 'Concierto en vivo',
+      title: 'Gran concierto benéfico',
       description: 'Inicia a partir de las 7:00 PM (hora de finalización abierta). Una sola entrada incluye las conferencias y el concierto.'
     }
   ]),
   event_conditions: [
-    '1. La entrada tiene un valor único de $5.00 USD (calculados en Bolívares a la tasa oficial del BCV en tiempo real al momento del pago).',
+    '1. La entrada tiene un valor único de $5.00 USD (calculados en bolívares a la tasa oficial del BCV en tiempo real al momento del pago).',
     fullEventCondition,
-    '3. Es obligatorio presentar el PDF de la entrada con su código QR único y su Cédula de Identidad laminada al ingresar.',
-    '4. Los datos suministrados en el pago (Nombre, Apellido, Cédula, Teléfono y Referencia) son verificados por la administración para garantizar que quien realizó el pago sea quien reciba la entrada.'
+    '3. Es obligatorio presentar el PDF de la entrada con su código QR único y su cédula de identidad laminada al ingresar.',
+    '4. Los datos suministrados en el pago (nombre, apellido, cédula, teléfono y referencia) son verificados por la administración para garantizar que quien realizó el pago sea quien reciba la entrada.'
   ].join('\n'),
   terms_and_conditions: [
-    '1. Reserva temporal de 3 minutos: Al seleccionar una entrada (001 al 250), el sistema bloquea automáticamente el puesto por tres (3) minutos dándole prioridad exclusiva a la primera persona que lo seleccionó.',
+    '1. Reserva temporal de 3 minutos: al seleccionar una entrada (001 al 250), el sistema bloquea automáticamente el puesto por tres (3) minutos dándole prioridad exclusiva a la primera persona que lo seleccionó.',
     '2. Si transcurren los 3 minutos o se cierra la sesión sin enviar el soporte de pago, la entrada vuelve a estar disponible automáticamente para todas las páginas conectadas.',
-    '3. Verificación administrativa: Una vez enviado el formulario con la captura y referencia bancaria, la entrada pasa a estado "En Verificación" hasta que un administrador valide la transacción en el Dashboard.',
-    '4. Envío automático: Al aprobarse el pago, el sistema genera un PDF con un Token y Código QR criptográfico único y lo envía automáticamente al correo electrónico registrado.'
+    '3. Verificación administrativa: una vez enviado el formulario con la captura y referencia bancaria, la entrada pasa a estado "En verificación" hasta que un administrador valide la transacción en el panel de administración.',
+    '4. Envío automático: al aprobarse el pago, el sistema genera un PDF con un token y un código QR criptográfico únicos y lo envía automáticamente al correo electrónico registrado.'
   ].join('\n'),
   smtp_host: process.env.SMTP_HOST || '',
   smtp_port: process.env.SMTP_PORT || '587',
@@ -226,6 +226,29 @@ try {
     ['Todas las entradas incluyen acceso a ambas partes del evento.', 'Una sola entrada incluye las conferencias y el concierto.']
   ]) {
     replaceSettingText.run(before, after, 'event_schedule_json', before);
+  }
+  // Spanish sentence case for the default wording (headings and labels only capitalize the first word)
+  for (const [key, before, after] of [
+    ['event_schedule_json', '"Ingreso y Acreditación"', '"Ingreso y acreditación"'],
+    ['event_schedule_json', '"Apertura de Puertas y Escaneo de QR"', '"Apertura de puertas y escaneo del QR"'],
+    ['event_schedule_json', '"Ciclo de Conferencias"', '"Ciclo de conferencias"'],
+    ['event_schedule_json', '"Conferencias con Propósito Social"', '"Conferencias con propósito social"'],
+    ['event_schedule_json', '"Concierto en Vivo"', '"Concierto en vivo"'],
+    ['event_schedule_json', '"Gran Concierto Benéfico"', '"Gran concierto benéfico"'],
+    ['event_conditions', 'calculados en Bolívares', 'calculados en bolívares'],
+    ['event_conditions', 'su Cédula de Identidad laminada', 'su cédula de identidad laminada'],
+    ['event_conditions', '(Nombre, Apellido, Cédula, Teléfono y Referencia)', '(nombre, apellido, cédula, teléfono y referencia)'],
+    ['terms_and_conditions', 'Reserva temporal de 3 minutos: Al seleccionar', 'Reserva temporal de 3 minutos: al seleccionar'],
+    ['terms_and_conditions', 'Verificación administrativa: Una vez', 'Verificación administrativa: una vez'],
+    ['terms_and_conditions', 'estado "En Verificación"', 'estado "En verificación"'],
+    ['terms_and_conditions', 'valide la transacción en el Dashboard.', 'valide la transacción en el panel de administración.'],
+    ['terms_and_conditions', 'Envío automático: Al aprobarse', 'Envío automático: al aprobarse'],
+    ['terms_and_conditions', 'un PDF con un Token y Código QR criptográfico único', 'un PDF con un token y un código QR criptográfico únicos'],
+    ['event_title', 'Conferencias & Concierto Benéfico', 'Conferencias y concierto benéfico'],
+    ['event_title', 'Encuentro por una Causa: Conferencias y concierto benéfico', 'Encuentro por una causa: conferencias y concierto benéfico'],
+    ['event_subtitle', 'para Labor Social (Entradas 001 - 250)', 'para labor social (entradas 001 - 250)']
+  ]) {
+    replaceSettingText.run(before, after, key, before);
   }
 
   // Seed tickets 001 to 250

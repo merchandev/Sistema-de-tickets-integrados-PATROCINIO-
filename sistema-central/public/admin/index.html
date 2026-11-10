@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Dashboard Administrador | Sistema Central de Entradas (001-250)</title>
+  <title>Panel de administración | Sistema de entradas (001-250)</title>
   <link rel="icon" type="image/png" href="/admin/brands/espressivo-venezuela.png?v=3" />
   <link rel="stylesheet" href="/admin/utilities.css" />
   <link rel="stylesheet" href="/admin/admin.css" />
@@ -76,7 +76,7 @@
     <!-- KPI Cards -->
     <section class="kpi-grid" aria-label="Resumen de entradas">
       <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-        <div class="text-xs text-slate-500 font-medium">Total Entradas</div>
+        <div class="text-xs text-slate-500 font-medium">Total de entradas</div>
         <div class="text-2xl font-bold text-slate-900 mt-1">250</div>
         <div class="text-[11px] text-slate-400">Numeradas 001 al 250</div>
       </div>
@@ -91,17 +91,17 @@
         <div class="text-[11px] text-slate-400">En sesión activa</div>
       </div>
       <div class="bg-white p-4 rounded-xl border border-blue-200 shadow-sm">
-        <div class="text-xs text-blue-700 font-medium">Por Verificar Pago</div>
+        <div class="text-xs text-blue-700 font-medium">Pagos por verificar</div>
         <div id="kpi-pending" class="text-2xl font-bold text-blue-600 mt-1">0</div>
         <div class="text-[11px] text-slate-400">Requieren aprobación</div>
       </div>
       <div class="bg-white p-4 rounded-xl border border-indigo-200 shadow-sm">
-        <div class="text-xs text-indigo-700 font-medium">Vendidas y Verificadas</div>
+        <div class="text-xs text-indigo-700 font-medium">Vendidas y verificadas</div>
         <div id="kpi-sold" class="text-2xl font-bold text-indigo-600 mt-1">0</div>
         <div id="kpi-sold-breakdown" class="text-[11px] text-slate-500">Web 1: 0 | Web 2: 0</div>
       </div>
       <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-        <div class="text-xs text-slate-500 font-medium">Recaudación Verificada</div>
+        <div class="text-xs text-slate-500 font-medium">Recaudación verificada</div>
         <div id="kpi-revenue-usd" class="text-xl font-bold text-slate-900 mt-1">$0.00</div>
         <div id="kpi-revenue-ves" class="text-[11px] text-emerald-700 font-semibold">Bs. 0.00</div>
       </div>
@@ -161,13 +161,13 @@
             <thead>
               <tr class="border-b border-slate-200 text-xs uppercase text-slate-500 bg-slate-50">
                 <th class="py-3 px-3">Entrada / Origen</th>
-                <th class="py-3 px-3">Comprador (Nombre / Cédula)</th>
-                <th class="py-3 px-3">Contacto (Correo / Tel.)</th>
-                <th class="py-3 px-3">Datos Bancarios Reportados</th>
+                <th class="py-3 px-3">Comprador (nombre / cédula)</th>
+                <th class="py-3 px-3">Contacto (correo / tel.)</th>
+                <th class="py-3 px-3">Datos bancarios reportados</th>
                 <th class="py-3 px-3">Monto (USD / Bs. BCV)</th>
                 <th class="py-3 px-3">Captura</th>
                 <th class="py-3 px-3">Estado / Token QR</th>
-                <th class="py-3 px-3 text-right">Acción Administrativa</th>
+                <th class="py-3 px-3 text-right">Acción administrativa</th>
               </tr>
             </thead>
             <tbody id="orders-tbody" class="divide-y divide-slate-200">
@@ -191,7 +191,7 @@
           <div class="flex flex-wrap items-center gap-3 text-xs">
             <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-emerald-500 inline-block"></span> Disponible</span>
             <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-amber-500 inline-block"></span> Bloqueada (3 min)</span>
-            <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-blue-600 inline-block"></span> Pago en Verificación</span>
+            <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-blue-600 inline-block"></span> Pago en verificación</span>
             <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-slate-800 inline-block"></span> Vendida (PDF Emitido)</span>
           </div>
         </div>
@@ -203,9 +203,9 @@
     <section id="tab-panel-qr" class="hidden space-y-4">
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-4">
-          <h2 class="text-lg font-bold text-slate-900">Verificador de Entradas y Lector de Código QR</h2>
+          <h2 class="text-lg font-bold text-slate-900">Verificador de entradas y lector de código QR</h2>
           <p class="text-xs text-slate-500">
-            Escanea el código QR del PDF de la entrada con la cámara o introduce el Token único para comprobar que pertenece al sistema y verificar la identidad del comprador.
+            Escanea el código QR del PDF de la entrada con la cámara o introduce el token único para comprobar que pertenece al sistema y verificar la identidad del comprador.
           </p>
 
           <div class="flex gap-2">
@@ -219,19 +219,19 @@
               onclick="verifyQrTokenManual()"
               class="bg-slate-900 hover:bg-slate-800 text-white font-semibold px-4 py-2 rounded-lg text-sm"
             >
-              Verificar Token
+              Verificar token
             </button>
           </div>
 
           <div class="border-t border-slate-200 pt-4">
             <div class="flex items-center justify-between mb-2">
-              <span class="text-xs font-semibold text-slate-700 uppercase">Escáner por Cámara Web / Móvil</span>
+              <span class="text-xs font-semibold text-slate-700 uppercase">Escáner con la cámara (web o móvil)</span>
               <button
                 id="btn-toggle-camera"
                 onclick="toggleQrCamera()"
                 class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold"
               >
-                📷 Iniciar Cámara Escáner QR
+                📷 Iniciar escáner QR con la cámara
               </button>
             </div>
             <div id="qr-reader" class="w-full rounded-lg overflow-hidden bg-slate-100"></div>
@@ -240,7 +240,7 @@
 
         <!-- QR Verification Result Card -->
         <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
-          <h3 class="text-sm font-bold uppercase text-slate-500 mb-3">Resultado de la Verificación en Puerta</h3>
+          <h3 class="text-sm font-bold uppercase text-slate-500 mb-3">Resultado de la verificación en puerta</h3>
           <div id="qr-verification-result" class="p-6 rounded-xl border border-dashed border-slate-300 text-center text-slate-400 text-sm">
             Escanea el QR o escribe el código de la entrada para verificar al titular. Cada entrada da acceso a todo el evento, incluidas las conferencias y el concierto.
           </div>
@@ -254,22 +254,22 @@
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <!-- General Event Data -->
           <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-4">
-            <h2 class="text-base font-bold text-slate-900 border-b pb-2">Datos del Evento, Fecha y Horarios</h2>
+            <h2 class="text-base font-bold text-slate-900 border-b pb-2">Datos del evento, fecha y horarios</h2>
             <div>
-              <label class="block text-xs font-semibold text-slate-700 mb-1">Título del Evento</label>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">Título del evento</label>
               <input id="cms-event-title" type="text" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" required />
             </div>
             <div>
-              <label class="block text-xs font-semibold text-slate-700 mb-1">Subtítulo / Descripción Corta</label>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">Subtítulo / descripción corta</label>
               <input id="cms-event-subtitle" type="text" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
             </div>
             <div class="grid grid-cols-2 gap-3">
               <div>
-                <label class="block text-xs font-semibold text-slate-700 mb-1">Fecha de Ingreso del Evento</label>
+                <label class="block text-xs font-semibold text-slate-700 mb-1">Fecha de ingreso del evento</label>
                 <input id="cms-event-date" type="date" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
               </div>
               <div>
-                <label class="block text-xs font-semibold text-slate-700 mb-1">Hora de Ingreso / Puertas</label>
+                <label class="block text-xs font-semibold text-slate-700 mb-1">Hora de ingreso / puertas</label>
                 <input id="cms-event-entry-time" type="text" placeholder="15:30" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
               </div>
             </div>
@@ -297,14 +297,14 @@
 
           <!-- Pricing, Lock Time & BCV Scraper Config -->
           <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-4">
-            <h2 class="text-base font-bold text-slate-900 border-b pb-2">Precio ($5 USD), Bloqueo (3 Min) y Tasa BCV</h2>
+            <h2 class="text-base font-bold text-slate-900 border-b pb-2">Precio ($5 USD), bloqueo (3 min) y tasa BCV</h2>
             <div class="grid grid-cols-2 gap-3">
               <div>
-                <label class="block text-xs font-semibold text-slate-700 mb-1">Precio Entrada (USD)</label>
+                <label class="block text-xs font-semibold text-slate-700 mb-1">Precio de la entrada (USD)</label>
                 <input id="cms-price-usd" type="number" step="0.01" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" required />
               </div>
               <div>
-                <label class="block text-xs font-semibold text-slate-700 mb-1">Tiempo de Bloqueo (Segundos)</label>
+                <label class="block text-xs font-semibold text-slate-700 mb-1">Tiempo de bloqueo (segundos)</label>
                 <input id="cms-lock-seconds" type="number" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" required />
                 <span class="text-[11px] text-slate-400">180 segundos = 3 minutos exactos</span>
               </div>
@@ -313,17 +313,17 @@
               <div>
                 <label class="block text-xs font-semibold text-slate-700 mb-1">Modo de Tasa BCV</label>
                 <select id="cms-bcv-mode" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
-                  <option value="auto">Automático (Scraping BCV en Tiempo Real)</option>
-                  <option value="manual">Tasa Manual Fija</option>
+                  <option value="auto">Automático (consulta al BCV en tiempo real)</option>
+                  <option value="manual">Tasa manual fija</option>
                 </select>
               </div>
               <div>
-                <label class="block text-xs font-semibold text-slate-700 mb-1">Tasa Manual / Respaldo (Bs./USD)</label>
+                <label class="block text-xs font-semibold text-slate-700 mb-1">Tasa manual / respaldo (Bs./USD)</label>
                 <input id="cms-bcv-manual" type="number" step="0.0001" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
               </div>
             </div>
             <div>
-              <label class="block text-xs font-semibold text-slate-700 mb-1">Datos Bancarios (Pago Móvil / Transferencia en JSON)</label>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">Datos bancarios (Pago Móvil / transferencia en JSON)</label>
               <textarea id="cms-payment-methods" rows="5" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs font-mono"></textarea>
             </div>
           </div>
@@ -332,17 +332,17 @@
         <!-- Schedule, Conditions & Terms -->
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-2">
-            <label class="block text-sm font-bold text-slate-900">Cronograma de Actividades (JSON Editable)</label>
-            <p class="text-xs text-slate-500">Define las actividades de las Conferencias (4PM-7PM) y el Concierto (7PM+).</p>
+            <label class="block text-sm font-bold text-slate-900">Cronograma de actividades (JSON editable)</label>
+            <p class="text-xs text-slate-500">Define las actividades de las conferencias (4 PM a 7 PM) y del concierto (desde las 7 PM).</p>
             <textarea id="cms-schedule-json" rows="9" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs font-mono"></textarea>
           </div>
           <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-2">
-            <label class="block text-sm font-bold text-slate-900">Condiciones del Evento</label>
-            <p class="text-xs text-slate-500">Se sincroniza inmediatamente con Página Web 1 y Página Web 2.</p>
+            <label class="block text-sm font-bold text-slate-900">Condiciones del evento</label>
+            <p class="text-xs text-slate-500">Se sincroniza de inmediato con las dos páginas web.</p>
             <textarea id="cms-conditions" rows="9" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs"></textarea>
           </div>
           <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-2">
-            <label class="block text-sm font-bold text-slate-900">Términos y Condiciones de Compra</label>
+            <label class="block text-sm font-bold text-slate-900">Términos y condiciones de compra</label>
             <p class="text-xs text-slate-500">Reglas sobre el bloqueo de 3 minutos, verificación de pago y uso del QR.</p>
             <textarea id="cms-terms" rows="9" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs"></textarea>
           </div>
@@ -350,7 +350,7 @@
 
         <div class="flex justify-end">
           <button type="submit" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-6 py-2.5 rounded-xl text-sm shadow">
-            💾 Guardar y Sincronizar con Ambas Páginas Web
+            💾 Guardar y sincronizar con las dos páginas web
           </button>
         </div>
       </form>
@@ -366,7 +366,7 @@
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <!-- Mass Notification Triggers -->
         <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-4">
-          <h2 class="text-base font-bold text-slate-900">Envío de Notificaciones del Evento por Correo</h2>
+          <h2 class="text-base font-bold text-slate-900">Envío de notificaciones del evento por correo</h2>
           <p class="text-xs text-slate-500">
             Además del programador automático por fecha, puedes disparar en cualquier momento las notificaciones oficiales a todos los compradores con entrada verificada:
           </p>
@@ -385,7 +385,7 @@
             </button>
             <button onclick="triggerCampaign('EVENT_STARTED')" class="p-3 rounded-xl border border-slate-200 hover:border-indigo-500 hover:bg-indigo-50 text-left transition">
               <div class="font-bold text-sm text-slate-900">🚀 "¡Ya comenzamos el evento!"</div>
-              <div class="text-xs text-slate-500 mt-0.5">Aviso de puertas abiertas (Conferencias 4PM + Concierto 7PM)</div>
+              <div class="text-xs text-slate-500 mt-0.5">Aviso de puertas abiertas (conferencias 4 PM + concierto 7 PM)</div>
             </button>
           </div>
         </div>
@@ -470,7 +470,7 @@
 
       <!-- Email Outbox Log -->
       <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
-        <h3 class="text-base font-bold text-slate-900 mb-3">Bandeja de Salida y Registro de Correos Enviados (SMTP / Outbox)</h3>
+        <h3 class="text-base font-bold text-slate-900 mb-3">Bandeja de salida y registro de correos enviados (SMTP)</h3>
         <div class="overflow-x-auto">
           <table class="w-full text-left border-collapse text-xs">
             <thead>
@@ -481,7 +481,7 @@
                 <th class="py-2.5 px-3">Asunto</th>
                 <th class="py-2.5 px-3">Adjunto PDF</th>
                 <th class="py-2.5 px-3">Estado</th>
-                <th class="py-2.5 px-3 text-right">Vista Previa</th>
+                <th class="py-2.5 px-3 text-right">Vista previa</th>
               </tr>
             </thead>
             <tbody id="email-logs-tbody" class="divide-y divide-slate-200"></tbody>

@@ -261,7 +261,7 @@ function inspectSeat(ticketNumber) {
     <div class="space-y-3">
       <div class="p-3 rounded-lg bg-slate-100 flex justify-between items-center">
         <div>
-          <span class="text-xs text-slate-500 uppercase font-bold">Número de Entrada</span>
+          <span class="text-xs text-slate-500 uppercase font-bold">Número de entrada</span>
           <div class="text-2xl font-extrabold text-slate-900">#${ticket.ticket_number}</div>
         </div>
         <span class="px-3 py-1 rounded-full text-xs font-bold bg-slate-900 text-white">${ticket.status}</span>
@@ -280,13 +280,13 @@ function inspectSeat(ticketNumber) {
   if (order) {
     html += `
       <div class="p-4 rounded-lg border border-slate-200 space-y-1.5 text-xs">
-        <div class="font-bold text-sm text-slate-900 mb-1">Datos del Comprador Asociado</div>
-        <div><strong>Nombre y Apellido:</strong> ${escapeHtml(order.buyer_name)}</div>
+        <div class="font-bold text-sm text-slate-900 mb-1">Datos del comprador asociado</div>
+        <div><strong>Nombre y apellido:</strong> ${escapeHtml(order.buyer_name)}</div>
         <div><strong>Cédula:</strong> ${escapeHtml(order.buyer_cedula)}</div>
         <div><strong>Correo:</strong> ${escapeHtml(order.buyer_email)}</div>
-        <div><strong>Teléfono Contacto:</strong> ${escapeHtml(order.buyer_phone)}</div>
+        <div><strong>Teléfono de contacto:</strong> ${escapeHtml(order.buyer_phone)}</div>
         <div><strong>Banco de origen:</strong> ${escapeHtml(order.payment_bank || 'No indicado')}</div>
-        <div><strong>Referencia Bancaria:</strong> ${escapeHtml(order.payment_reference)}</div>
+        <div><strong>Referencia bancaria:</strong> ${escapeHtml(order.payment_reference)}</div>
         <div><strong>Origen:</strong> ${sourceBadge(order.source_web)}</div>
         ${order.verification_token ? `<div><strong>Token QR:</strong> <code>${order.verification_token}</code></div>` : ''}
       </div>
@@ -294,7 +294,7 @@ function inspectSeat(ticketNumber) {
   }
 
   html += `</div>`;
-  openModal(`Detalle de Entrada #${ticketNumber}`, html);
+  openModal(`Detalle de la entrada #${ticketNumber}`, html);
 }
 
 // ============================================================================
@@ -399,7 +399,7 @@ function openOrderDetail(orderId) {
 }
 
 async function approveOrder(orderId, needsTicket = false) {
-  const body = { admin_notes: 'Pago verificado en Dashboard Administrativo' };
+  const body = { admin_notes: 'Pago verificado en el panel de administración' };
   if (needsTicket) {
     const value = document.getElementById('od-ticket')?.value.trim() || '';
     if (!/^\d{1,3}$/.test(value) || Number(value) < 1 || Number(value) > 250) {
@@ -666,11 +666,11 @@ async function verifyQrToken(rawToken, { silent = false } = {}) {
 
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-white p-4 rounded-xl border border-emerald-200 text-xs">
         <div>
-          <span class="text-slate-400 uppercase font-bold block text-[10px]">Titular Verificado</span>
+          <span class="text-slate-400 uppercase font-bold block text-[10px]">Titular verificado</span>
           <strong class="text-sm text-slate-900">${escapeHtml(o.buyer_name)}</strong>
         </div>
         <div>
-          <span class="text-slate-400 uppercase font-bold block text-[10px]">Cédula de Identidad</span>
+          <span class="text-slate-400 uppercase font-bold block text-[10px]">Cédula de identidad</span>
           <strong class="text-sm font-mono text-slate-900">${escapeHtml(o.buyer_cedula)}</strong>
         </div>
         <div>
@@ -678,7 +678,7 @@ async function verifyQrToken(rawToken, { silent = false } = {}) {
           <span class="text-slate-800">${escapeHtml(o.buyer_phone)}<br/>${escapeHtml(o.buyer_email)}</span>
         </div>
         <div>
-          <span class="text-slate-400 uppercase font-bold block text-[10px]">Pago Verificado</span>
+          <span class="text-slate-400 uppercase font-bold block text-[10px]">Pago verificado</span>
           <span class="text-slate-800">Ref: <strong>${escapeHtml(o.payment_reference)}</strong><br/>Banco: ${escapeHtml(o.payment_bank || 'No indicado')}</span>
         </div>
       </div>
@@ -727,7 +727,7 @@ function toggleQrCamera() {
   if (qrCameraRunning && qrScannerInstance) {
     qrScannerInstance.stop().then(() => {
       qrCameraRunning = false;
-      btn.textContent = '📷 Iniciar Cámara Escáner QR';
+      btn.textContent = '📷 Iniciar escáner QR con la cámara';
     });
     return;
   }
@@ -748,9 +748,9 @@ function toggleQrCamera() {
     () => {}
   ).then(() => {
     qrCameraRunning = true;
-    btn.textContent = '⏹ Detener Cámara';
+    btn.textContent = '⏹ Detener cámara';
   }).catch((err) => {
-    alert('No se pudo acceder a la cámara en este navegador. Puedes usar el verificador de Token manual arriba.');
+    alert('No se pudo acceder a la cámara en este navegador. Puedes escribir el token en el verificador de arriba.');
   });
 }
 
@@ -1007,7 +1007,7 @@ function renderEmailLogs() {
       </td>
       <td class="py-2.5 px-3 text-right">
         <button onclick="previewEmailLog(${idx})" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 rounded text-xs font-semibold">
-          Ver Correo
+          Ver correo
         </button>
         ${canRetry[idx] ? `<button onclick="retryMailLog(${l.id}, this)" class="px-2.5 py-1 rounded text-xs font-semibold">Reenviar</button>` : ''}
       </td>
@@ -1036,7 +1036,7 @@ async function retryMailLog(id, button) {
 function previewEmailLog(index) {
   const log = (state.emailLogs || [])[index];
   if (!log) return;
-  openModal(`Vista Previa de Correo: ${log.subject}`, `
+  openModal(`Vista previa del correo: ${log.subject}`, `
     <div class="space-y-3">
       <div class="text-xs bg-slate-50 p-3 rounded border">
         <div><strong>Para:</strong> ${escapeHtml(log.recipient_name)} &lt;${escapeHtml(log.recipient_email)}&gt;</div>

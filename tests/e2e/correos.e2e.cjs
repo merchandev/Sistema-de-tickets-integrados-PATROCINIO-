@@ -317,7 +317,7 @@ function parseMail(file) {
     check('Un administrador no cambia el correo ni lo prueba', (await api('POST', '/api/admin/mail/test', { cookie: adm.cookie, json: {} })).status === 403);
     check('Un administrador no envía avisos masivos', (await api('POST', '/api/admin/notifications/send', { cookie: adm.cookie, json: { campaign_key: 'REMINDER_2_DAYS' } })).status === 403);
     check('Un administrador sí ve la configuración', (await api('GET', '/api/admin/overview', { cookie: adm.cookie })).data.settings?.smtp_host === '127.0.0.1');
-    check('El superadministrador cambia la configuración', (await api('PUT', '/api/admin/settings', { cookie: sup.cookie, json: { event_title: 'Conferencias & Concierto Benéfico' } })).status === 200);
+    check('El superadministrador cambia la configuración', (await api('PUT', '/api/admin/settings', { cookie: sup.cookie, json: { event_title: 'Conferencias y concierto benéfico' } })).status === 200);
     check('El panel muestra la sección Usuarios', /id="tab-panel-users"/.test((await api('GET', '/admin/', { cookie: sup.cookie })).data.toString()));
 
     // --- 8. Sponsors carousel: one list per site, mixed on both or shown separately ---

@@ -176,7 +176,7 @@
 
       if (isMine) {
         cls = 'mine';
-        sub = 'Tu Reserva';
+        sub = 'Tu reserva';
       } else if (t.status === 'LOCKED') {
         cls = 'locked';
         sub = `${t.remaining_seconds}s`;
