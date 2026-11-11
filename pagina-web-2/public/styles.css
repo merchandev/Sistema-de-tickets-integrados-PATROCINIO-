@@ -3373,6 +3373,12 @@ footer::before {
 .assignment-copy p { margin-block: 6px 14px; color: var(--muted); }
 .assignment-copy .assignment-kicker { color: var(--lime); font-size: 13px; font-weight: 700; }
 .assignment-copy .btn:disabled { cursor: wait; opacity: .65; }
+.assignment-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.assignment-actions [hidden] { display: none; }
 .assignment-result { min-width: 135px; padding: 12px 20px; border: 1px solid var(--line-strong); border-radius: 12px; text-align: center; }
 .assignment-result[hidden] { display: none; }
 .assignment-result span { display: block; font-size: 12px; }
@@ -3381,6 +3387,7 @@ footer::before {
 @keyframes reveal-ticket { from { opacity: 0; transform: translateY(8px) scale(.88); } to { opacity: 1; transform: none; } }
 @media (max-width: 560px) {
   .assignment-card { grid-template-columns: 1fr; }
+  .assignment-actions { flex-direction: column; }
   .assignment-copy .btn { width: 100%; }
 }
 @media (prefers-reduced-motion: reduce) { .assignment-result strong { animation: none; } }

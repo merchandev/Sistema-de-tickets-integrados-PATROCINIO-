@@ -51,7 +51,9 @@
   }
 
   function renderResume() {
-    $('purchase-resume').hidden = !purchaseIntent || Boolean(myLockedTicket);
+    const showResume = Boolean(purchaseIntent) && !myLockedTicket;
+    $('purchase-resume').hidden = !showResume;
+    $('discard-purchase').hidden = !showResume;
     if (!assigning) assignmentButton.textContent = purchaseIntent ? 'Continuar compra' : 'Asignar entrada';
   }
 
