@@ -3290,9 +3290,20 @@ footer::before {
 .assignment-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 16px;
 }
 .assignment-actions [hidden] { display: none; }
+.assignment-actions .assignment-discard {
+  border: 1px solid #b8f500;
+  background: transparent;
+  color: var(--fg);
+  box-shadow: none;
+}
+.assignment-actions .assignment-discard:hover {
+  border-color: #b8f500;
+  background: transparent;
+  box-shadow: none;
+}
 .assignment-result { min-width: 135px; padding: 12px 20px; border: 1px solid var(--line-strong); border-radius: 12px; text-align: center; }
 .assignment-result[hidden] { display: none; }
 .assignment-result span { display: block; font-size: 12px; }
