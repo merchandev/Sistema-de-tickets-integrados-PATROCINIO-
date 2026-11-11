@@ -362,7 +362,7 @@
           </button>
         </div>
       </form>
-      <section class="sheet-card" aria-labelledby="sheet-title">
+      <section class="sheet-card is-admin-view" aria-labelledby="sheet-title">
         <div class="sheet-head">
           <div>
             <h2 id="sheet-title">Hoja de control en Google Sheets</h2>
@@ -370,8 +370,8 @@
           </div>
           <a id="sheet-open" class="admin-secondary" href="#" target="_blank" rel="noopener">Abrir la hoja ↗</a>
         </div>
-        <p class="sheet-warning">La hoja contiene datos personales de los compradores (cédula, teléfono y correo). Compártela solo con las personas del equipo, no con «Cualquier usuario que tenga el vínculo».</p>
-        <form id="sheet-form" class="sheet-form" novalidate>
+        <p class="sheet-warning" hidden>La hoja contiene datos personales de los compradores (cédula, teléfono y correo). Compártela solo con las personas del equipo, no con «Cualquier usuario que tenga el vínculo».</p>
+        <form id="sheet-form" class="sheet-form" novalidate hidden>
           <label>Enlace de la hoja
             <input id="sheet-url" name="sheets_sheet_url" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://docs.google.com/spreadsheets/d/…" />
           </label>
@@ -388,7 +388,7 @@
           </div>
           <p id="sheet-status" class="sheet-status" role="status"></p>
         </form>
-        <p class="sheet-help">¿Primera vez? Instala el script de <code>integraciones/google-sheets/Codigo.gs</code> en la hoja (Extensiones → Apps Script), elige «Entradas → Configurar la hoja» e implementa como aplicación web con acceso «Cualquier usuario».</p>
+        <p class="sheet-help" hidden>¿Primera vez? Instala el script de <code>integraciones/google-sheets/Codigo.gs</code> en la hoja (Extensiones → Apps Script), elige «Entradas → Configurar la hoja» e implementa como aplicación web con acceso «Cualquier usuario».</p>
       </section>
       <section id="ticket-reset-panel" hidden class="bg-white rounded-xl border border-red-200 p-5 space-y-2" aria-labelledby="ticket-reset-title">
         <h2 id="ticket-reset-title" class="text-sm font-bold text-slate-900">Reinicio de entradas</h2>

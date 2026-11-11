@@ -2281,3 +2281,7 @@ button.is-read-only:disabled { opacity: .45; cursor: not-allowed; }
 }
 .sheet-status.is-error { color: #a12a2a; }
 .sheet-help code { font-size: 12px; }
+
+/* Admins see only the button that opens the sheet */
+.sheet-card [hidden] { display: none; }
+.sheet-card.is-admin-view .sheet-head p { display: none; }

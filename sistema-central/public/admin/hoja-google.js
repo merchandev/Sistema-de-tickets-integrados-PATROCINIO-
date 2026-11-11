@@ -31,10 +31,11 @@
     open.hidden = !settings.sheets_sheet_url;
     const connected = settings.sheets_webapp_url && settings.sheets_secret_set;
     say(connected ? (lastSync(settings) || 'Conexión configurada. Usa «Probar conexión» para comprobarla.') : 'Aún no está conectada: pega la URL de la aplicación web y la clave.');
-    // Read-only for admins, like the rest of this section
+    // Admins only get the button that opens the sheet; the connection settings are for the superadmin
     const canEdit = Boolean(adminSession?.canEditSettings);
     form.querySelectorAll('input, button').forEach(el => { el.disabled = !canEdit; });
-    form.classList.toggle('is-read-only', !canEdit);
+    document.querySelectorAll('.sheet-card .sheet-warning, .sheet-card .sheet-help, #sheet-form').forEach(el => { el.hidden = !canEdit; });
+    document.querySelector('.sheet-card').classList.toggle('is-admin-view', !canEdit);
   }
 
   // The panel loads its data asynchronously: fill the card once settings and permissions are known
