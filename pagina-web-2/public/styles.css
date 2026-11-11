@@ -2910,6 +2910,10 @@ body:has(.pay-dialog[open]) {
   opacity: 0.6;
   cursor: progress;
 }
+.pay-form .pay-cancel {
+  margin-top: 14px;
+  min-height: 44px;
+}
 .pay-fine {
   margin: 10px 0 0;
   font-size: 12px;
