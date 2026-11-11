@@ -116,3 +116,16 @@ Sección «Patrocinio» del panel: una pestaña por página, con hasta 30 logos 
 ## Entrega de correos (antispam)
 
 El dominio del remitente, `merchan.cloud`, tiene SPF (`include:_spf.mail.hostinger.com`), DKIM de Hostinger (`hostingermail-a/b/c._domainkey`) y DMARC (`p=none`); se comprobó el 9 de noviembre de 2026. Cada correo sale por el SMTP de Hostinger con versión HTML y texto, Message-ID y Reply-To del dominio, EHLO con el dominio y la cabecera `Auto-Submitted: auto-generated`. Los avisos masivos llevan además `List-Unsubscribe`. Para comprobar un envío: en Gmail, «Mostrar original» debe indicar PASS en SPF, DKIM y DMARC. Cuando los informes lo confirmen, se puede endurecer DMARC a `p=quarantine` en el DNS.
+
+## Hoja de control en Google Sheets
+
+Cada pago nuevo, aprobado o rechazado se copia en una hoja de Google para que el equipo lo revise por fuera de la web. La columna «Validación del equipo» es una lista desplegable (Por verificar, Verificado, Rechazado) y «Notas del equipo» es libre; el sistema nunca las sobrescribe, salvo cerrar en «Verificado» o «Rechazado» una validación que seguía «Por verificar» cuando la web decide. Cambiar el estado en la hoja **no** aprueba ni rechaza nada en la web.
+
+Instalación (una vez, en la cuenta dueña de la hoja):
+
+1. En la hoja: **Extensiones → Apps Script**. Borrar el contenido, pegar `integraciones/google-sheets/Codigo.gs` y guardar.
+2. Recargar la hoja. Menú **Entradas → Configurar la hoja**, autorizar y copiar la clave de conexión.
+3. En Apps Script: **Implementar → Nueva implementación → Aplicación web**, ejecutar como «Yo», acceso «Cualquier usuario». Copiar la URL `https://script.google.com/macros/s/…/exec`.
+4. Panel → **Evento y contenido → Hoja de control en Google Sheets** (superadministrador): pegar URL y clave, guardar, «Probar conexión» y «Enviar todos los pagos a la hoja».
+
+La clave solo se guarda en el servidor y no vuelve al navegador. Cada envío deja una línea `[Hoja] …` en el registro del contenedor; un fallo de la hoja nunca bloquea un pago. La hoja contiene datos personales: compartirla solo con las personas del equipo.

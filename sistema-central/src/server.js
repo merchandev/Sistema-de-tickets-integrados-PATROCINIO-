@@ -129,6 +129,7 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 require('./blog').registerBlogRoutes(app, {db, storageDir:process.env.BLOG_STORAGE_DIR || path.join(__dirname, '..', 'storage')});
 require('./sponsors').registerSponsorRoutes(app, {db, storageDir:process.env.BLOG_STORAGE_DIR || path.join(__dirname, '..', 'storage')});
+const googleSheets = require('./googleSheets');
 
 // Static assets
 app.use('/storage/uploads', express.static(uploadsDir));
@@ -341,6 +342,7 @@ app.post('/api/public/orders', requireSalesOpen, ticketRoute(async (req, res) =>
       payload: submitResult.order
     });
     sendInBackground(() => sendPaymentSubmittedEmail(submitResult.order));
+    googleSheets.syncOrder(submitResult.order);
 
     const { id, buyer_email: email, status } = submitResult.order;
     return res.status(201).json({
@@ -387,6 +389,7 @@ app.post('/api/public/payment-reports', requireSalesOpen, ticketRoute(async (req
 
     io.to('admins').emit('admin:order_created', { changed: true });
     sendInBackground(() => sendPaymentSubmittedEmail(order));
+    googleSheets.syncOrder(order);
 
     return res.status(201).json({
       ok: true,
@@ -410,7 +413,7 @@ function adminSettings() {
   delete settings.secret_hmac_key;
   delete settings.admin_user;
   delete settings.admin_password_hash;
-  for (const key of ['smtp_pass', 'imap_pass']) {
+  for (const key of ['smtp_pass', 'imap_pass', 'sheets_secret']) {
     settings[`${key}_set`] = Boolean(settings[key]);
     delete settings[key];
   }
@@ -504,6 +507,7 @@ app.post('/api/admin/orders/:id/approve', ticketRoute(async (req, res) => {
 
     // Payment confirmation and the ticket with the PDF attached, in a single email
     const emailResult = await sendTicketEmail(finalOrder, pdfFullPath, pdfRelativeUrl);
+    googleSheets.syncOrder(finalOrder);
 
     broadcastTicketsUpdate({
       name: 'admin:order_updated',
@@ -540,6 +544,7 @@ app.post('/api/admin/orders/:id/reject', ticketRoute(async (req, res) => {
     }
 
     const emailResult = await sendPaymentRejectedEmail(result.order, reason);
+    googleSheets.syncOrder(result.order);
 
     broadcastTicketsUpdate({
       name: 'admin:order_updated',
@@ -660,7 +665,11 @@ app.put('/api/admin/settings', superadminOnly, (req, res) => {
   try {
     const updates = {...(req.body || {})};
     // An empty password field means "keep the stored one" (the dashboard never receives it).
-    for (const key of ['smtp_pass', 'imap_pass']) if (key in updates && !updates[key]) delete updates[key];
+    for (const key of ['smtp_pass', 'imap_pass', 'sheets_secret']) if (key in updates && !updates[key]) delete updates[key];
+    delete updates.sheets_last_status;
+    for (const key of ['sheets_webapp_url', 'sheets_sheet_url']) if (typeof updates[key] === 'string') updates[key] = updates[key].trim();
+    if (updates.sheets_webapp_url && !googleSheets.validWebAppUrl(updates.sheets_webapp_url)) return res.status(400).json({ ok: false, field: 'sheets_webapp_url', message: 'La URL de la aplicación web debe ser como https://script.google.com/macros/s/…/exec.' });
+    if (updates.sheets_sheet_url && !googleSheets.validSheetUrl(updates.sheets_sheet_url)) return res.status(400).json({ ok: false, field: 'sheets_sheet_url', message: 'El enlace de la hoja debe ser como https://docs.google.com/spreadsheets/d/…' });
     const allowed = new Set(Object.keys(getAllSettings()).filter(k => k !== 'secret_hmac_key' && !k.startsWith('admin_') && (!k.startsWith('bcv_') || ['bcv_mode', 'bcv_manual_rate'].includes(k))));
     if (Object.keys(updates).some(k => !allowed.has(k))) return res.status(400).json({ok:false, message:'Parámetro no permitido.'});
     for (const key of ['ticket_price_usd', 'bcv_manual_rate', 'lock_duration_seconds', 'smtp_port', 'imap_port']) if (key in updates && (!Number.isFinite(Number(updates[key])) || Number(updates[key]) <= 0)) return res.status(400).json({ok:false, message:'Valor numérico no válido.'});
@@ -805,6 +814,16 @@ app.post('/api/admin/bcv/refresh', async (_req, res) => {
 /**
  * Send Mass Event Notification ("Faltan 2 días", "Falta 1 día", "Falta hoy", "Ya comenzamos el evento")
  */
+// Payment control sheet in Google Sheets: check the connection, or send every payment again
+app.post('/api/admin/sheets/test', superadminOnly, async (_req, res) => {
+  const result = await googleSheets.testConnection();
+  return res.status(result.ok ? 200 : 502).json(result);
+});
+app.post('/api/admin/sheets/sync-all', superadminOnly, async (_req, res) => {
+  const result = await googleSheets.syncAll();
+  return res.status(result.ok ? 200 : 502).json({ ...result, settings: adminSettings() });
+});
+
 app.post('/api/admin/notifications/send', superadminOnly, ticketRoute(async (req, res) => {
   try {
     const { campaign_key } = req.body;

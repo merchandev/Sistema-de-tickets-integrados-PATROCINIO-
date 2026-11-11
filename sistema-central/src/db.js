@@ -188,6 +188,12 @@ const defaultSettings = {
   imap_user: process.env.IMAP_USER || '',
   imap_pass: process.env.IMAP_PASS || '',
   imap_sent_folder: process.env.IMAP_SENT_FOLDER || '',
+  // Payment control sheet in Google Sheets (see src/googleSheets.js); the web app URL and key are set
+  // by the superadmin from the panel once the sheet's script is installed.
+  sheets_sheet_url: 'https://docs.google.com/spreadsheets/d/1-QwaXmGvrgs3RopcTrPnPhtp62gFX9J21NVxKSQLy6I/edit',
+  sheets_webapp_url: '',
+  sheets_secret: '',
+  sheets_last_status: '',
   secret_hmac_key: crypto.randomBytes(32).toString('hex')
 };
 

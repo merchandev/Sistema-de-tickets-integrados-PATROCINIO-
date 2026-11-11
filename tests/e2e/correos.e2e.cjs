@@ -34,7 +34,7 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 const sink = spawn(process.execPath, [path.join(__dirname, 'smtp-sink.cjs'), mailDir, String(SMTP_PORT)], { stdio: 'ignore' });
 const server = spawn(process.execPath, ['--no-warnings', 'src/server.js'], {
   cwd: central,
-  env: { ...process.env, PORT: String(PORT), DATA_DIR: dataDir, ADMIN_USER: 'admin', ADMIN_PASSWORD: password, PUBLIC_BASE_URL: BASE, SALES_ENABLED: 'true', BLOG_STORAGE_DIR: path.join(dataDir, 'storage') },
+  env: { ...process.env, PORT: String(PORT), DATA_DIR: dataDir, ADMIN_USER: 'admin', ADMIN_PASSWORD: password, PUBLIC_BASE_URL: BASE, SALES_ENABLED: 'true', BLOG_STORAGE_DIR: path.join(dataDir, 'storage'), SHEETS_TEST_URLS: '1' },
   stdio: ['ignore', 'pipe', 'pipe']
 });
 let serverLog = '';
@@ -387,6 +387,58 @@ function parseMail(file) {
     const removed = await api('DELETE', '/api/admin/sponsors/' + one.id, { admin: true });
     check('Eliminar un logo borra también su imagen', removed.status === 200 && removed.data.sites[W1].length === 29 && (await fetch(BASE + one.image_url)).status === 404);
     check('Las dos webs cargan el carrusel', /patrocinadores\.js/.test(fs.readFileSync(path.join(root, 'pagina-web-1', 'public', 'index.html'), 'utf8')) && /patrocinadores\.js/.test(fs.readFileSync(path.join(root, 'pagina-web-2', 'public', 'index.html'), 'utf8')));
+
+    // --- 9. Google Sheets control sheet, against a local imitation of the Apps Script web app ---
+    // Like Google, it answers the POST with a redirect to the result, which the server must follow.
+    const http = require('node:http');
+    const SHEET_KEY = crypto.randomBytes(12).toString('hex');
+    const sheetRows = new Map();
+    const sheetResults = new Map();
+    const sheetApp = http.createServer((req, res) => {
+      if (req.method === 'GET' && req.url.startsWith('/resultado/')) {
+        res.writeHead(200, { 'content-type': 'application/json' });
+        return res.end(sheetResults.get(req.url) || '{}');
+      }
+      let raw = '';
+      req.on('data', c => { raw += c; });
+      req.on('end', () => {
+        const body = JSON.parse(raw || '{}');
+        let result;
+        if (body.clave !== SHEET_KEY) result = { ok: false, error: 'Clave de conexión incorrecta' };
+        else if (body.accion === 'prueba') result = { ok: true, hoja: 'CONTROL DE ENTRADAS', filas: sheetRows.size };
+        else {
+          let nuevas = 0, actualizadas = 0;
+          for (const p of body.pedidos) { sheetRows.has(String(p.id)) ? actualizadas++ : nuevas++; sheetRows.set(String(p.id), p); }
+          result = { ok: true, nuevas, actualizadas };
+        }
+        const where = `/resultado/${sheetResults.size + 1}`;
+        sheetResults.set(where, JSON.stringify(result));
+        res.writeHead(302, { location: where });
+        res.end();
+      });
+    });
+    await new Promise(r => sheetApp.listen(0, '127.0.0.1', r));
+    const sheetUrl = `http://127.0.0.1:${sheetApp.address().port}/macros/s/PRUEBA/exec`;
+    const badSheet = await api('PUT', '/api/admin/settings', { cookie: sup.cookie, json: { sheets_webapp_url: 'https://ejemplo.test/hoja' } });
+    check('Hoja: rechaza una URL que no es de Apps Script', badSheet.status === 400 && badSheet.data.field === 'sheets_webapp_url');
+    check('Hoja: un administrador no la configura', (await api('PUT', '/api/admin/settings', { cookie: adm.cookie, json: { sheets_webapp_url: sheetUrl } })).status === 403);
+    const savedSheet = await api('PUT', '/api/admin/settings', { cookie: sup.cookie, json: { sheets_webapp_url: sheetUrl, sheets_secret: 'clave-equivocada' } });
+    check('Hoja: la clave no vuelve al navegador', savedSheet.status === 200 && savedSheet.data.settings.sheets_secret_set === true && !('sheets_secret' in savedSheet.data.settings));
+    const wrongKey = await api('POST', '/api/admin/sheets/test', { cookie: sup.cookie, json: {} });
+    check('Hoja: avisa si la clave es incorrecta', wrongKey.status === 502 && /Clave de conexión incorrecta/.test(wrongKey.data.message), wrongKey.data.message);
+    await api('PUT', '/api/admin/settings', { cookie: sup.cookie, json: { sheets_secret: SHEET_KEY } });
+    check('Hoja: un administrador no prueba ni envía', (await api('POST', '/api/admin/sheets/test', { cookie: adm.cookie, json: {} })).status === 403 && (await api('POST', '/api/admin/sheets/sync-all', { cookie: adm.cookie, json: {} })).status === 403);
+    const sheetTest = await api('POST', '/api/admin/sheets/test', { cookie: sup.cookie, json: {} });
+    check('Hoja: probar conexión sigue la redirección de Google', sheetTest.status === 200 && /CONTROL DE ENTRADAS/.test(sheetTest.data.message), sheetTest.data.message);
+    const totalOrders = (await api('GET', '/api/admin/overview', { admin: true })).data.orders.length;
+    const syncAll = await api('POST', '/api/admin/sheets/sync-all', { cookie: sup.cookie, json: {} });
+    check('Hoja: enviar todos los pagos', syncAll.status === 200 && sheetRows.size === totalOrders && totalOrders > 0, syncAll.data.message);
+    check('Hoja: estados de la web en la fila', [...sheetRows.values()].some(r => r.estadoWeb === 'Aprobado') && [...sheetRows.values()].some(r => r.estadoWeb === 'Rechazado'));
+    const sheetReport = await api('POST', '/api/public/payment-reports', { form: buyerForm({ buyer_email: 'hoja@prueba.test', buyer_first_name: 'Hoja', buyer_last_name: 'Prueba' }) });
+    let sheetRow;
+    for (let i = 0; i < 40 && !sheetRow; i++) { await sleep(150); sheetRow = sheetRows.get(String(sheetReport.data.order.id)); }
+    check('Hoja: un pago nuevo llega solo', Boolean(sheetRow) && sheetRow.estadoWeb === 'En verificación' && sheetRow.correo === 'hoja@prueba.test' && /^Por asignar/.test(sheetRow.entrada) && sheetRow.comprobante.startsWith(BASE + '/storage/uploads/'), JSON.stringify(sheetRow || {}).slice(0, 160));
+    sheetApp.close();
 
     check('Log del servidor sin errores inesperados', !/Error (approving|rejecting|submitting)|Unhandled|TypeError/.test(serverLog));
   } catch (err) {

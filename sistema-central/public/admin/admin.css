@@ -2215,3 +2215,69 @@ button.admin-avatar[aria-expanded="true"] {
 }
 .is-read-only button:disabled,
 button.is-read-only:disabled { opacity: .45; cursor: not-allowed; }
+
+/* Payment control sheet in Google Sheets (hoja-google.js) */
+.sheet-card {
+  display: grid;
+  gap: 14px;
+  padding: 20px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+.sheet-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+}
+.sheet-head > div { flex: 1 1 320px; }
+.sheet-head h2 { margin: 0 0 4px; font-size: 16px; font-weight: 700; }
+.sheet-head p,
+.sheet-help { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.sheet-head .admin-secondary[hidden] { display: none; }
+.sheet-warning {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #fff4e5;
+  color: #7a420d;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.sheet-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: 12px 16px;
+}
+.sheet-form label {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.sheet-form label small { font-weight: 400; color: var(--muted); }
+.sheet-form input {
+  padding: 10px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 14px;
+}
+.sheet-form input:disabled { background: #f6f7f9; color: var(--ink); cursor: not-allowed; }
+.sheet-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  grid-column: 1 / -1;
+}
+.sheet-actions button { border: 0; cursor: pointer; }
+.sheet-actions button:disabled { opacity: .5; cursor: not-allowed; }
+.sheet-status {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+.sheet-status.is-error { color: #a12a2a; }
+.sheet-help code { font-size: 12px; }
