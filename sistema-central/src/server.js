@@ -3,6 +3,7 @@ const express = require('express');
 const http = require('node:http');
 const path = require('node:path');
 const fs = require('node:fs');
+const { randomUUID } = require('node:crypto');
 const cors = require('cors');
 const multer = require('multer');
 const { Server } = require('socket.io');
@@ -106,7 +107,16 @@ function ticketRoute(handler, before) {
       await new Promise((resolve, reject) => before(req, res, err => err ? reject(err) : resolve()));
     }
     return handler(req, res);
-  }).catch(next);
+  }).catch(err => {
+    if (err instanceof multer.MulterError) {
+      const tooLarge = err.code === 'LIMIT_FILE_SIZE';
+      return res.status(tooLarge ? 413 : 400).json({
+        ok: false, field: 'screenshot',
+        message: tooLarge ? 'La captura pesa más de 10 MB. Envía una imagen más liviana.' : 'Revisa la captura del pago y vuelve a adjuntarla.'
+      });
+    }
+    return next(err);
+  });
 }
 
 // Configure Multer for payment screenshot uploads
@@ -115,7 +125,7 @@ const storage = multer.diskStorage({
   filename: (req, file, cb) => {
     const ext = path.extname(file.originalname || '.png') || '.png';
     const safeTicket = String(req.body.ticket_number || '000').replace(/[^0-9]/g, '');
-    cb(null, `pago-ticket-${safeTicket}-${Date.now()}${ext}`);
+    cb(null, `pago-ticket-${safeTicket}-${Date.now()}-${randomUUID()}${ext}`);
   }
 });
 const upload = multer({
@@ -211,13 +221,11 @@ app.get('/api/public/bcv', async (_req, res) => {
   });
 });
 
-/**
- * Atomic 3-minute seat lock endpoint.
- * Priority is strictly given to the first request that arrives.
- */
+const pendingAssignments = new Map();
 app.post('/api/public/tickets/lock', requireSalesOpen, ticketRoute(async (req, res) => {
+  const { session_id } = req.body || {};
+  let assignment;
   try {
-    const { session_id } = req.body;
     if (typeof session_id !== 'string' || session_id.length < 8 || session_id.length > 254) {
       return res.status(400).json({
         ok: false,
@@ -227,7 +235,12 @@ app.post('/api/public/tickets/lock', requireSalesOpen, ticketRoute(async (req, r
 
     const source = resolveSalesSource(req);
     if (!source) return res.status(403).json({ok:false, code:'INVALID_SOURCE', message:'Solicita tu entrada desde una de las páginas de venta.'});
+    assignment = pendingAssignments.get(session_id) || { requests: 0, cancelled: false };
+    assignment.requests++;
+    pendingAssignments.set(session_id, assignment);
     await scrapeBcvRate({maxAgeMs:5 * 60 * 1000});
+    if (res.destroyed) return;
+    if (assignment.cancelled) return res.status(409).json({ok:false, code:'RESERVATION_CANCELLED', message:'Se canceló la solicitud de entrada.'});
     const current = getPublicConfig();
     if (current.bcv_mode !== 'manual' && (!current.bcv_is_official || Date.now() - Date.parse(current.bcv_last_updated) > 24*60*60*1000)) return res.status(503).json({ok:false, code:'BCV_UNAVAILABLE', message:'No hay una tasa oficial BCV reciente confirmada. Intenta nuevamente mas tarde.'});
 
@@ -258,6 +271,8 @@ app.post('/api/public/tickets/lock', requireSalesOpen, ticketRoute(async (req, r
   } catch (err) {
     console.error('Error locking ticket:', err);
     return res.status(500).json({ ok: false, message: 'Error interno al bloquear la entrada.' });
+  } finally {
+    if (assignment && --assignment.requests === 0) pendingAssignments.delete(session_id);
   }
 }));
 
@@ -267,11 +282,13 @@ app.post('/api/public/tickets/lock', requireSalesOpen, ticketRoute(async (req, r
 app.post('/api/public/tickets/unlock', (req, res) => {
   try {
     const { ticket_number, session_id } = req.body;
-    if (!ticket_number || !session_id) {
+    const ticket = ticket_number == null ? null : parseTicketNumber(ticket_number);
+    if ((ticket_number != null && !ticket) || typeof session_id !== 'string' || session_id.length < 8 || session_id.length > 254) {
       return res.status(400).json({ ok: false, message: 'Faltan datos.' });
     }
-    const paddedNumber = String(ticket_number).padStart(3, '0');
-    const result = unlockTicketAtomic(paddedNumber, session_id);
+    const assignment = pendingAssignments.get(session_id);
+    if (assignment && !ticket) assignment.cancelled = true;
+    const result = unlockTicketAtomic(ticket, session_id);
     if (result.released) {
       broadcastTicketsUpdate();
     }
@@ -300,12 +317,29 @@ const validScreenshot = (req) => !req.body.screenshot_base64 || /^data:image\/pn
 const hasScreenshot = (req) => Boolean(req.file || req.body.screenshot_base64);
 const MISSING_SCREENSHOT = { ok: false, field: 'screenshot', message: 'Adjunta la captura del pago (imagen PNG, JPG o WebP de hasta 10 MB).' };
 
+function existingPayment(req, sessionId, source, payment) {
+  if (!sessionId) return null;
+  const order = db.prepare(`
+    SELECT id, ticket_number, status FROM orders
+    WHERE session_id = ? AND source_web = ? AND buyer_cedula = ? AND buyer_email = ?
+      AND payment_bank = ? AND payment_reference = ? AND status IN ('PENDING', 'APPROVED')
+    ORDER BY id DESC LIMIT 1
+  `).get(sessionId, source, payment.buyer_cedula, payment.buyer_email, payment.payment_bank, payment.payment_reference);
+  if (!order) return null;
+  if (req.file) fs.unlink(req.file.path, () => {});
+  return {
+    ok: true, order,
+    message: order.status === 'APPROVED' ? 'Este pago ya fue aprobado.' : 'Ya recibimos este pago. Está pendiente de verificación.'
+  };
+}
+
 /**
  * Payment form of the checkout popup: buyer data + Pago Móvil reference for the ticket locked by this session.
  */
 app.post('/api/public/orders', requireSalesOpen, ticketRoute(async (req, res) => {
   try {
-    if (!resolveSalesSource(req)) return res.status(403).json({ok:false, code:'INVALID_SOURCE', message:'Reporta el pago desde una de las páginas de venta.'});
+    const source = resolveSalesSource(req);
+    if (!source) return res.status(403).json({ok:false, code:'INVALID_SOURCE', message:'Reporta el pago desde una de las páginas de venta.'});
     const ticketNumber = parseTicketNumber(req.body.ticket_number);
     const sessionId = req.body.session_id;
     if (!ticketNumber || typeof sessionId !== 'string' || sessionId.length < 8 || sessionId.length > 254) {
@@ -315,6 +349,8 @@ app.post('/api/public/orders', requireSalesOpen, ticketRoute(async (req, res) =>
     if (!form.ok) return res.status(400).json({ ok: false, field: form.field, message: form.message });
     if (!validScreenshot(req)) return res.status(400).json({ ok: false, field: 'screenshot', message: 'La captura no es una imagen válida.' });
     if (!hasScreenshot(req)) return res.status(400).json(MISSING_SCREENSHOT);
+    const existing = existingPayment(req, sessionId, source, form.data);
+    if (existing) return res.json(existing);
 
     const config = getPublicConfig();
     const submitResult = submitOrderAtomic({
@@ -367,7 +403,7 @@ app.post('/api/public/payment-reports', requireSalesOpen, ticketRoute(async (req
     const form = parsePaymentForm(req.body);
     if (!form.ok) return res.status(400).json({ ok: false, field: form.field, message: form.message });
     const requested = parseTicketNumber(req.body.requested_ticket);
-    if (!requested) return res.status(400).json({ ok: false, field: 'requested_ticket', message: 'Indica el número de entrada que se te asignó.' });
+    if (String(req.body.requested_ticket ?? '').trim() && !requested) return res.status(400).json({ ok: false, field: 'requested_ticket', message: 'Revisa el número de entrada o deja el campo vacío si no lo tienes.' });
     const comment = typeof req.body.buyer_comment === 'string' ? req.body.buyer_comment.trim().slice(0, 500) : '';
     if (comment.length < 3) return res.status(400).json({ ok: false, field: 'buyer_comment', message: 'Cuéntanos brevemente qué pasó con tu pago.' });
     if (!validScreenshot(req)) return res.status(400).json({ ok: false, field: 'screenshot', message: 'La captura no es una imagen válida.' });
@@ -375,6 +411,8 @@ app.post('/api/public/payment-reports', requireSalesOpen, ticketRoute(async (req
 
     const config = getPublicConfig();
     const sessionId = typeof req.body.session_id === 'string' && req.body.session_id.length <= 254 ? req.body.session_id : '';
+    const existing = existingPayment(req, sessionId, source, form.data);
+    if (existing) return res.json(existing);
     const order = submitPaymentReport({
       source_web: source,
       session_id: sessionId || 'reporte',
@@ -387,7 +425,8 @@ app.post('/api/public/payment-reports', requireSalesOpen, ticketRoute(async (req
       buyer_comment: comment
     });
 
-    io.to('admins').emit('admin:order_created', { changed: true });
+    if (sessionId) unlockTicketAtomic(null, sessionId);
+    broadcastTicketsUpdate({ name: 'admin:order_created' });
     sendInBackground(() => sendPaymentSubmittedEmail(order));
     googleSheets.syncOrder(order);
 
@@ -855,13 +894,9 @@ io.on('connection', (socket) => {
     ...state
   });
 
-  socket.on('disconnect', () => {
-    // Note: Per user requirement, if a session closes without completing purchase,
-    // the ticket stays blocked for the remaining of the 3-minute period and then releases automatically!
-  });
 });
 
-// 1-second precision timer to release expired 3-minute locks and notify all clients immediately
+// Release expired reservations and notify the affected sessions.
 setInterval(() => {
   const expired = releaseExpiredLocks();
   if (expired.length > 0) {

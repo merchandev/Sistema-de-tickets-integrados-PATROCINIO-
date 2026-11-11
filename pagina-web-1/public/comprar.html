@@ -69,7 +69,7 @@
           </div>
           <div id="pay-timer-box" class="pay-timer" role="timer" aria-label="Tiempo restante de la reserva">
             <span>Reservada por</span>
-            <strong id="countdown-timer">03:00</strong>
+            <strong id="countdown-timer">06:00</strong>
           </div>
           <button type="button" id="pay-close" class="pay-x" aria-label="Cerrar"><svg class="pay-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
         </div>
@@ -112,9 +112,9 @@
                 <input name="payment_bank" type="text" list="bank-list" required maxlength="80" placeholder="Elige o escribe tu banco" />
               </label>
               <label>Número de referencia
-                <input name="payment_reference" type="text" inputmode="numeric" required maxlength="30" placeholder="Ej: 123456789" pattern="[A-Za-z0-9-]{4,30}" title="Solo números y letras, como aparece en tu comprobante" />
+                <input name="payment_reference" type="text" inputmode="numeric" required maxlength="30" placeholder="Ej: 123456789" pattern="[A-Za-z0-9\-]{4,30}" title="Solo números y letras, como aparece en tu comprobante" />
               </label>
-              <label class="report-only" hidden>Número de entrada <small>la que se te asignó</small>
+              <label class="report-only" hidden>Número de entrada <small>opcional si no lo tienes</small>
                 <input id="requested_ticket" name="requested_ticket" type="text" inputmode="numeric" maxlength="3" placeholder="Ej: 042" pattern="[0-9]{1,3}" title="Número de la entrada asignada" />
               </label>
               <label class="report-only pay-wide" hidden>¿Qué pasó con tu pago?
@@ -130,6 +130,7 @@
             </div>
             <p id="pay-error" class="pay-error" role="alert" hidden></p>
             <button type="submit" id="btn-submit-order" class="btn btn-lg no-arrow pay-submit">Enviar pago para verificación</button>
+            <button type="button" id="cancel-payment" class="pay-copy">Cancelar reserva</button>
             <p class="pay-fine">Verificamos cada pago con el banco: puede tardar hasta 24 horas. Te avisaremos por correo y, al aprobarse, recibirás tu entrada en PDF con código QR.</p>
           </form>
         </div>
@@ -173,6 +174,10 @@
           <p class="assignment-kicker">Cupo total: 250 entradas</p>
           <h2 id="assignment-title">Reserva tu entrada</h2>
           <p>Te asignaremos una entrada por orden de solicitud y la reservaremos mientras reportas el pago.</p>
+          <div id="purchase-resume" hidden>
+            <p>Hay una compra sin terminar en este navegador. Puedes retomarla o reportar un pago que ya hiciste.</p>
+            <button type="button" id="discard-purchase" class="btn no-arrow">Descartar</button>
+          </div>
           <button type="button" id="assign-ticket" class="btn no-arrow" disabled>Asignar entrada</button>
         </div>
         <div id="assignment-result" class="assignment-result" role="status" hidden>

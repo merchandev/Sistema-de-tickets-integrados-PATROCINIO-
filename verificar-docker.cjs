@@ -28,9 +28,9 @@ async function run() {
   assert(!('tickets' in initial.data));
   const inventory = await req(central,'/api/admin/overview',undefined,true);
   assert.equal(inventory.data.tickets.length,250);
-  assert.equal(initial.data.config.lock_duration_seconds,180);
+  assert.equal(initial.data.config.lock_duration_seconds,360);
   assert.equal(initial.data.config.ticket_price_usd,5);
-  pass('250 entradas, precio USD 5 y reservas de 180 segundos');
+  pass('250 entradas, precio USD 5 y reservas de 360 segundos');
   const used = inventory.data.tickets.filter(t=>t.status==='AVAILABLE').map(t=>t.ticket_number);
   assert(used.length >= 8,'Se requieren 8 entradas libres');
   const [expiry,one,two,regression] = used;
@@ -56,7 +56,7 @@ async function run() {
   for (const [i,response] of assigned.entries()) {
     assert.equal(delivered[i].reservation.ticket_number,response.data.ticket.ticket_number);
     assert(!('tickets' in delivered[i]));
-    assert.equal(response.data.ticket.locked_until-response.data.serverTime,180000);
+    assert.equal(response.data.ticket.locked_until-response.data.serverTime,360000);
     assert.equal((await req(sites[i],'/api/public/orders',payload(response.data.ticket.ticket_number,'intruder','pagina-web-'+(i+1)))).status,409);
     await unlock(response.data.ticket.ticket_number,sessions[i]);
   }
@@ -119,13 +119,13 @@ async function run() {
   const pending=await req(sites[0],'/api/public/orders',payload(manual,'manual-pending','pagina-web-1'));
   assert.equal(pending.status,201);
   pass('Solicitud pendiente preparada para revision manual',`Entrada ${manual}, orden ${pending.data.order.id}`);
-  console.log('Esperando vencimiento REAL de 180 segundos...',new Date(expiryUntil).toISOString());
+  console.log('Esperando vencimiento REAL de 360 segundos...',new Date(expiryUntil).toISOString());
   while(Date.now()<expiryUntil+1500) await new Promise(r=>setTimeout(r,1000));
   const expiredState=await req(central,'/api/admin/overview',undefined,true);
   assert.equal(expiredState.data.tickets.find(t=>t.ticket_number===expiry).status,'AVAILABLE');
   assert.equal((await req(sites[0],'/api/public/orders',payload(expiry,'expiry-test','pagina-web-1'))).status,409);
   assert.equal((await lock(sites[1],'after-expiry')).data.ticket.ticket_number,expiry); await unlock(expiry,'after-expiry');
-  pass('Liberacion tras 180 segundos reales y reserva posterior desde la otra web');
+  pass('Liberacion tras 360 segundos reales y reserva posterior desde la otra web');
   fs.writeFileSync('output/verificacion/resultados.json',JSON.stringify({date:new Date().toISOString(),results,approved:approved.map(o=>({id:o.id,ticket:o.ticket_number,pdf:o.pdf_path})),pending:{id:pending.data.order.id,ticket:manual}},null,2));
 }
 run().catch(err=>{console.error(err);process.exitCode=1;}).finally(()=>sockets.forEach(s=>s.disconnect()));

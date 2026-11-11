@@ -115,7 +115,7 @@ function parseMail(file) {
 
     // --- Configuration: manual rate + real SMTP (local) ---
     const cfg = await api('PUT', '/api/admin/settings', { admin: true, json: {
-      bcv_mode: 'manual', bcv_manual_rate: '891.1054', lock_duration_seconds: '600',
+      bcv_mode: 'manual', bcv_manual_rate: '891.1054',
       smtp_host: '127.0.0.1', smtp_port: String(SMTP_PORT), smtp_user: '', smtp_from: 'Sistema de envío Espressivo Venezuela <soporte@merchan.dev>'
     } });
     check('Guardar configuración de correo', cfg.status === 200 && cfg.data.settings.smtp_delivery_mode === 'smtp' && !('smtp_pass' in cfg.data.settings));
@@ -128,7 +128,7 @@ function parseMail(file) {
 
     // --- 1. Checkout from Iluminando Caminos, then approval ---
     const lock = await api('POST', '/api/public/tickets/lock', { json: { ticket_number: '250', session_id: 'sess_e2e_checkout_1', source_web: 'pagina-web-1' } });
-    check('Asignar la primera entrada sin aceptar números elegidos', lock.status === 200 && lock.data.ticket.ticket_number === '001' && /10 minutos/.test(lock.data.message), lock.data.message);
+    check('Asignar la primera entrada sin aceptar números elegidos', lock.status === 200 && lock.data.ticket.ticket_number === '001' && lock.data.ticket.locked_until - lock.data.serverTime === 360000, lock.data.message);
     const candidates = ['pagina-web-1', 'pagina-web-2'];
     const parallel = await Promise.all(candidates.map((source, i) => api('POST', '/api/public/tickets/lock', { json: { source_web: source, session_id: 'sess_e2e_parallel_' + i } })));
     check('Asignaciones simultáneas entre ambas webs son consecutivas y únicas', parallel.every(res => res.status === 200) && parallel.map(res => res.data.ticket.ticket_number).sort().join(',') === '002,003');
@@ -136,12 +136,15 @@ function parseMail(file) {
     check('Reintentar conserva el número y el plazo', JSON.stringify(repeated.data.ticket) === JSON.stringify(lock.data.ticket));
     const own = await api('GET', '/api/public/state', { sessionId: 'sess_e2e_checkout_1' });
     check('El público solo ve su reserva, sin inventario', state.data.reservation === null && !('tickets' in state.data) && own.data.reservation.ticket_number === '001' && !('tickets' in own.data));
-    await Promise.all(parallel.map((res, i) => api('POST', '/api/public/tickets/unlock', { json: { ticket_number: res.data.ticket.ticket_number, session_id: 'sess_e2e_parallel_' + i } })));
+    await Promise.all(parallel.map((res, i) => api('POST', '/api/public/tickets/unlock', { json: { session_id: 'sess_e2e_parallel_' + i } })));
     const badOrder = await api('POST', '/api/public/orders', { form: buyerForm({ ticket_number: '001', session_id: 'sess_e2e_checkout_1', buyer_cedula: 'abc' }) });
     check('Validación de cédula', badOrder.status === 400 && badOrder.data.field === 'buyer_cedula');
     const noCapture = await api('POST', '/api/public/orders', { form: buyerForm({ ticket_number: '001', session_id: 'sess_e2e_checkout_1', screenshot: null }) });
     check('La captura del pago es obligatoria', noCapture.status === 400 && noCapture.data.field === 'screenshot', noCapture.data.message);
-    const order = await api('POST', '/api/public/orders', { form: buyerForm({ ticket_number: '001', session_id: 'sess_e2e_checkout_1' }) });
+    const checkout = { ticket_number: '001', session_id: 'sess_e2e_checkout_1', payment_reference: 'CONFIRM-E2E-001' };
+    const order = await api('POST', '/api/public/orders', { form: buyerForm(checkout) });
+    const repeatPayment = await api('POST', '/api/public/orders', { form: buyerForm(checkout) });
+    check('Reintentar un pago ya recibido conserva la misma orden', repeatPayment.status === 200 && repeatPayment.data.order?.id === order.data.order?.id);
     check('Enviar pago desde el popup', order.status === 201, `respuesta en ${order.ms} ms`);
     check('Respuesta rápida (correo en segundo plano)', order.ms < 1500, `${order.ms} ms`);
     await waitMails(2);
@@ -164,12 +167,12 @@ function parseMail(file) {
     check('Enlace del QR lleva al verificador', qrLink.status === 302 && qrLink.headers.get('location').includes('verifyToken='));
 
     // --- 2. Payment report from Hablemos de Marketing, approved with an assigned ticket ---
-    for (const [field, label] of [['requested_ticket', 'el número de entrada'], ['buyer_comment', 'qué pasó con el pago'], ['screenshot', 'la captura']]) {
+    for (const [field, label] of [['buyer_comment', 'qué pasó con el pago'], ['screenshot', 'la captura']]) {
       const incomplete = await api('POST', '/api/public/payment-reports', { form: buyerForm({ source_web: 'pagina-web-2', [field]: null }) });
       check(`El reporte exige ${label}`, incomplete.status === 400 && incomplete.data.field === field, incomplete.data.message);
     }
-    const report = await api('POST', '/api/public/payment-reports', { form: buyerForm({ source_web: 'pagina-web-2', buyer_first_name: 'Luis', buyer_last_name: 'Martínez', buyer_email: 'luis@prueba.test', requested_ticket: '001', buyer_comment: 'Mi reserva expiró' }) });
-    check('Enviar reporte de pago', report.status === 201, `respuesta en ${report.ms} ms`);
+    const report = await api('POST', '/api/public/payment-reports', { form: buyerForm({ source_web: 'pagina-web-2', buyer_first_name: 'Luis', buyer_last_name: 'Martínez', buyer_email: 'luis@prueba.test', requested_ticket: null, buyer_comment: 'Mi reserva expiró' }) });
+    check('Enviar reporte de pago sin número de entrada', report.status === 201, `respuesta en ${report.ms} ms`);
     await waitMails(4);
     check('No asigna una entrada vendida', (await api('POST', `/api/admin/orders/${report.data.order.id}/approve`, { admin: true, json: { ticket_number: '001' } })).status === 400);
     const approveReport = await api('POST', `/api/admin/orders/${report.data.order.id}/approve`, { admin: true, json: {} });

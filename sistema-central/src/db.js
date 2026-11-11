@@ -133,7 +133,7 @@ const defaultSettings = {
   concert_end: 'Por definir (Abierto)',
   event_location: 'Auditorio Principal - Centro Cultural',
   ticket_price_usd: '5.00',
-  lock_duration_seconds: '180', // 3 minutes = 180 seconds
+  lock_duration_seconds: '360',
   bcv_mode: 'auto', // 'auto' or 'manual'
   bcv_manual_rate: '45.50',
   bcv_last_scraped_rate: '45.50',
@@ -171,8 +171,8 @@ const defaultSettings = {
     '4. Los datos suministrados en el pago (nombre, apellido, cédula, teléfono y referencia) son verificados por la administración para garantizar que quien realizó el pago sea quien reciba la entrada.'
   ].join('\n'),
   terms_and_conditions: [
-    '1. Reserva temporal de 3 minutos: el sistema asigna la primera entrada disponible por orden de solicitud y la reserva durante tres (3) minutos.',
-    '2. Si transcurren los 3 minutos o se cierra la sesión sin enviar el soporte de pago, la entrada vuelve a estar disponible automáticamente para todas las páginas conectadas.',
+    '1. Reserva temporal de 6 minutos: el sistema asigna la primera entrada disponible por orden de solicitud y la reserva durante seis (6) minutos.',
+    '2. Si vence el plazo, cancelas la reserva o sales de la página antes de reportar el pago, la entrada se libera. Si el navegador pierde la conexión al salir, se libera al vencer el plazo.',
     '3. Verificación administrativa: una vez enviado el formulario con la captura y referencia bancaria, la entrada pasa a estado "En verificación" hasta que un administrador valide la transacción en el panel de administración.',
     '4. Envío automático: al aprobarse el pago, el sistema genera un PDF con un token y un código QR criptográfico únicos y lo envía automáticamente al correo electrónico registrado.'
   ].join('\n'),
@@ -265,6 +265,12 @@ try {
   }
   const formerReservationTerm = 'al seleccionar una entrada (001 al 250), el sistema bloquea automáticamente el puesto por tres (3) minutos dándole prioridad exclusiva a la primera persona que lo seleccionó.';
   replaceSettingText.run(formerReservationTerm, 'el sistema asigna la primera entrada disponible por orden de solicitud y la reserva durante tres (3) minutos.', 'terms_and_conditions', formerReservationTerm);
+  db.prepare("UPDATE settings SET value = '360', updated_at = datetime('now') WHERE key = 'lock_duration_seconds' AND value = '180'").run();
+  for (const [before, after] of [
+    ['Reserva temporal de 3 minutos', 'Reserva temporal de 6 minutos'],
+    ['durante tres (3) minutos.', 'durante seis (6) minutos.'],
+    ['Si transcurren los 3 minutos o se cierra la sesión sin enviar el soporte de pago, la entrada vuelve a estar disponible automáticamente para todas las páginas conectadas.', 'Si vence el plazo, cancelas la reserva o sales de la página antes de reportar el pago, la entrada se libera. Si el navegador pierde la conexión al salir, se libera al vencer el plazo.']
+  ]) replaceSettingText.run(before, after, 'terms_and_conditions', before);
   replaceSettingText.run(' (entradas 001 - 250)', '', 'event_subtitle', ' (entradas 001 - 250)');
 
   // Seed tickets 001 to 250
@@ -332,7 +338,7 @@ function getPublicConfig() {
     bcv_last_error: s.bcv_last_error,
     bcv_is_official: s.bcv_source_url === 'https://www.bcv.org.ve/',
     ticket_price_ves: priceVes,
-    lock_duration_seconds: parseInt(s.lock_duration_seconds || '180', 10),
+    lock_duration_seconds: parseInt(s.lock_duration_seconds || '360', 10),
     payment_methods: paymentMethods,
     event_schedule: schedule,
     event_conditions: s.event_conditions,
@@ -362,7 +368,7 @@ function updateSettings(updates) {
 }
 
 /**
- * Releases any LOCKED tickets whose 3-minute timer (locked_until) has expired.
+ * Releases LOCKED tickets whose reservation has expired.
  * Returns array of released ticket_numbers so Socket.IO can broadcast if any changed.
  */
 function releaseExpiredLocks() {
@@ -407,7 +413,7 @@ function nextAvailableTicket() {
 function lockTicketAtomic(ticketNumber, sessionId, sourceWeb) {
   const now = Date.now();
   const settings = getAllSettings();
-  const lockDurationMs = (parseInt(settings.lock_duration_seconds || '180', 10)) * 1000;
+  const lockDurationMs = parseInt(settings.lock_duration_seconds || '360', 10) * 1000;
   const lockedUntil = now + lockDurationMs;
   const quote = getPublicConfig();
 
@@ -525,15 +531,7 @@ function lockTicketAtomic(ticketNumber, sessionId, sourceWeb) {
  * Releases a lock voluntarily (e.g. user cancels or closes session/modal)
  */
 function unlockTicketAtomic(ticketNumber, sessionId) {
-  db.exec('BEGIN IMMEDIATE TRANSACTION');
-  try {
-    const ticket = db.prepare('SELECT * FROM tickets WHERE ticket_number = ?').get(ticketNumber);
-    if (!ticket) {
-      db.exec('ROLLBACK');
-      return { success: false, message: 'Entrada no encontrada' };
-    }
-    if (ticket.status === 'LOCKED' && ticket.locked_by_session === sessionId) {
-      db.prepare(`
+  const result = db.prepare(`
         UPDATE tickets
         SET status = 'AVAILABLE',
             locked_by_session = NULL,
@@ -541,17 +539,10 @@ function unlockTicketAtomic(ticketNumber, sessionId) {
             locked_at = NULL,
             locked_until = NULL,
             updated_at = datetime('now')
-        WHERE ticket_number = ?
-      `).run(ticketNumber);
-      db.exec('COMMIT');
-      return { success: true, released: true, ticketNumber };
-    }
-    db.exec('COMMIT');
-    return { success: true, released: false, ticketNumber };
-  } catch (err) {
-    db.exec('ROLLBACK');
-    throw err;
-  }
+        WHERE status = 'LOCKED' AND locked_by_session = ?
+          AND (? IS NULL OR ticket_number = ?)
+      `).run(sessionId, ticketNumber, ticketNumber);
+  return { success: true, released: result.changes > 0, ticketNumber };
 }
 
 /**

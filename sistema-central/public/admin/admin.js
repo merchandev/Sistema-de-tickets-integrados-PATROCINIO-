@@ -160,7 +160,7 @@ function renderOrdersTable() {
 
   tbody.innerHTML = filtered.map(o => {
     const statusBadge = o.status === 'PENDING'
-      ? '<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800">Pendiente</span>'
+      ? '<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800">Por verificar</span>'
       : o.status === 'APPROVED'
       ? '<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">Aprobado</span>'
       : '<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-red-100 text-red-800">Rechazado</span>';
@@ -280,7 +280,7 @@ function inspectSeat(ticketNumber) {
   if (ticket.status === 'LOCKED') {
     html += `
       <div class="p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs space-y-1">
-        <div><strong>Bloqueo temporal activo (3 minutos):</strong> Restan <strong>${ticket.remaining_seconds} segundos</strong></div>
+        <div><strong>Bloqueo temporal activo:</strong> Restan <strong>${ticket.remaining_seconds} segundos</strong></div>
         <div><strong>Página de origen:</strong> ${sourceBadge(ticket.locked_by_source)}</div>
       </div>
     `;
@@ -837,7 +837,7 @@ function populateCmsAndSmtpForms() {
   document.getElementById('cms-concert-end').value = s.concert_end || 'Por definir';
   document.getElementById('cms-event-location').value = s.event_location || '';
   document.getElementById('cms-price-usd').value = s.ticket_price_usd || '5.00';
-  document.getElementById('cms-lock-seconds').value = s.lock_duration_seconds || '180';
+  document.getElementById('cms-lock-seconds').value = s.lock_duration_seconds || '360';
   document.getElementById('cms-bcv-mode').value = s.bcv_mode || 'auto';
   document.getElementById('cms-bcv-manual').value = s.bcv_manual_rate || '45.50';
 

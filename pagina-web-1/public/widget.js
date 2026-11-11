@@ -5,18 +5,24 @@
     SITE_LABEL: 'PÁGINA WEB 1'
   };
 
-  // Unique session ID per browser tab
-  let sessionId = sessionStorage.getItem('entradas_session_id');
-  if (!sessionId) {
-    sessionId = crypto.randomUUID?.() || ('sess_' + Math.random().toString(36).slice(2) + '_' + Date.now());
-    sessionStorage.setItem('entradas_session_id', sessionId);
-  }
+  const sessionKey = 'entradas_session_id';
+  const cleanupKey = 'entradas_cleanup_id';
+  const isReload = performance.getEntriesByType('navigation')[0]?.type === 'reload';
+  const previousSession = sessionStorage.getItem(cleanupKey) || (isReload ? sessionStorage.getItem(sessionKey) : null);
+  const sessionId = crypto.randomUUID?.() || ('sess_' + Math.random().toString(36).slice(2) + '_' + Date.now());
+  sessionStorage.setItem(sessionKey, sessionId);
+  const intentKey = 'entradas_compra_pendiente';
+  let purchaseIntent = null;
+  try { purchaseIntent = JSON.parse(localStorage.getItem(intentKey)); } catch (_) {}
+  let closing = false;
+  let restoring = Boolean(previousSession);
 
   let eventConfig = {};
   let assigning = false;
   let latestReservationTime = 0;
   let myLockedTicket = null;
   let myLockRemainingSec = 0;
+  let myLockDeadline = 0;
   let myQuote = null;
   // Popup state: 'checkout' (ticket locked for this tab) or 'report' (standalone payment report)
   let payMode = null;
@@ -34,6 +40,41 @@
   const COPY_ICONS = icon('i-copy', '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/>') +
     icon('i-check', '<path d="M5 12.5l4.5 4.5L19 7.5"/>');
   const MAX_CAPTURE_BYTES = 10 * 1024 * 1024;
+
+  function setPurchaseIntent(intent) {
+    purchaseIntent = intent;
+    try {
+      if (intent) localStorage.setItem(intentKey, JSON.stringify(intent));
+      else localStorage.removeItem(intentKey);
+    } catch (_) {}
+    renderResume();
+  }
+
+  function renderResume() {
+    $('purchase-resume').hidden = !purchaseIntent || Boolean(myLockedTicket);
+    if (!assigning) assignmentButton.textContent = purchaseIntent ? 'Continuar compra' : 'Asignar entrada';
+  }
+
+  async function requestRelease(id, keepalive = false) {
+    const response = await fetch(CFG.CENTRAL_API_URL + '/api/public/tickets/unlock', {
+      method: 'POST', body: new URLSearchParams({ session_id: id }), keepalive
+    });
+    if (!response.ok || !(await response.json()).ok) throw new Error("No se pudo liberar la reserva.");
+  }
+
+  window.addEventListener('pagehide', () => {
+    if (!myLockedTicket && !assigning) return;
+    sessionStorage.setItem(cleanupKey, sessionId);
+    if (paySubmitting) return;
+    const url = CFG.CENTRAL_API_URL + '/api/public/tickets/unlock';
+    if (!navigator.sendBeacon?.(url, new URLSearchParams({ session_id: sessionId }))) {
+      requestRelease(sessionId, true).catch(() => {});
+    }
+  });
+  window.addEventListener('pageshow', event => { if (event.persisted) location.reload(); });
+  $('discard-purchase').addEventListener('click', () => { form.reset(); setPurchaseIntent(null); });
+  renderResume();
+
 
   // Dynamically load Socket.IO client from Central Server
   const script = document.createElement('script');
@@ -93,7 +134,7 @@
     const salesClosed = eventConfig.sales_enabled === false;
     if (salesClosed) showAlert("Venta de entradas próximamente. Puedes consultar el evento; aún no debes realizar pagos.", "info");
     $('open-report').disabled = salesClosed;
-    assignmentButton.disabled = salesClosed || assigning;
+    assignmentButton.disabled = salesClosed || assigning || restoring;
 
     const usd = Number(eventConfig.ticket_price_usd || 5).toFixed(2);
     const ves = Number(eventConfig.ticket_price_ves || 0);
@@ -148,26 +189,28 @@
   }
 
   function syncMyLockFromServer({reservation, serverTime}) {
-    if (assigning || serverTime < latestReservationTime) return;
+    if (assigning || closing || serverTime < latestReservationTime) return;
     latestReservationTime = serverTime;
     if (reservation) {
       myLockedTicket = reservation.ticket_number;
       myQuote = reservation.pricing;
-      myLockRemainingSec = Math.max(0, Math.ceil((reservation.locked_until - serverTime) / 1000));
+      setLockDeadline(reservation.locked_until, serverTime);
       showAssignment(myLockedTicket);
-      if (payMode !== 'checkout' && !paySubmitting) openPayDialog('checkout');
+      renderResume();
       updateTimerDisplay();
     } else if (myLockedTicket) {
       const lost = myLockedTicket;
       myLockedTicket = null;
       myLockRemainingSec = 0;
       assignmentResult.hidden = true;
+      renderResume();
       if (payMode === 'checkout' && !payDone && !paySubmitting) switchToReportAfterExpiry(lost);
     }
   }
 
   assignmentButton.addEventListener('click', async () => {
     if (assigning) return;
+    setPurchaseIntent(purchaseIntent || { ticket: null });
     assigning = true;
     assignmentButton.disabled = true;
     assignmentButton.textContent = 'Asignando…';
@@ -186,7 +229,8 @@
       latestReservationTime = data.serverTime;
       myLockedTicket = data.ticket.ticket_number;
       myQuote = data.pricing;
-      myLockRemainingSec = Math.max(0, Math.ceil((data.ticket.locked_until - data.serverTime) / 1000));
+      setLockDeadline(data.ticket.locked_until, data.serverTime);
+      setPurchaseIntent({ ticket: myLockedTicket });
       showAssignment(myLockedTicket);
       if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) await new Promise(resolve => setTimeout(resolve, 550));
       if (myLockedTicket) {
@@ -198,24 +242,16 @@
     } finally {
       assigning = false;
       assignmentButton.disabled = eventConfig.sales_enabled === false;
-      assignmentButton.textContent = 'Asignar entrada';
+      renderResume();
     }
   });
 
   async function releaseMyTicket() {
-    if (!myLockedTicket) return;
-    const num = myLockedTicket;
-    assignmentResult.hidden = true;
+    await requestRelease(sessionId);
     myLockedTicket = null;
     myLockRemainingSec = 0;
-    try {
-      await fetch(`${CFG.CENTRAL_API_URL}/api/public/tickets/unlock`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ticket_number: num, session_id: sessionId })
-      });
-      showAlert(`Liberaste la entrada #${num}. Ya está disponible nuevamente.`, 'info');
-    } catch (_) {}
+    myQuote = null;
+    assignmentResult.hidden = true;
   }
 
   // ---------------------------------------------------------------------------
@@ -230,13 +266,14 @@
     $('pay-kicker').textContent = isReport ? 'Reporte de pago' : 'Entrada reservada para ti';
     $('pay-title').textContent = isReport ? '¿Ya pagaste? Repórtalo aquí' : `Entrada #${myLockedTicket}`;
     $('pay-timer-box').hidden = isReport;
+    $('cancel-payment').textContent = isReport ? 'Cerrar reporte' : 'Cancelar reserva';
     $('pay-notice').hidden = !notice;
     $('pay-notice').textContent = notice;
     $('pay-step-pay').textContent = isReport ? 'Datos de la cuenta' : 'Paga por Pago Móvil';
-    // The report asks for the ticket number and what happened; both are required, but only in that mode
+    // The report can be submitted without a ticket number if the buyer does not have it.
     form.querySelectorAll('.report-only').forEach(el => {
       el.hidden = !isReport;
-      el.querySelectorAll('input, textarea').forEach(field => { field.required = isReport; });
+      el.querySelectorAll('input, textarea').forEach(field => { field.required = isReport && field.name !== 'requested_ticket'; });
     });
     $('btn-submit-order').textContent = isReport ? 'Enviar reporte de pago' : 'Enviar pago para verificación';
     $('pay-content').hidden = false;
@@ -247,7 +284,7 @@
     $('pay-dialog').scrollTop = 0;
   }
 
-  // The 3-minute reservation ended before the form was sent: keep what was typed and offer the report.
+  // The reservation ended before the form was sent: keep what was typed and offer the report.
   function switchToReportAfterExpiry(ticketNumber) {
     const which = ticketNumber ? ` de la entrada #${ticketNumber}` : '';
     openPayDialog('report', `Tu reserva${which} expiró. Si ya hiciste el pago, envía este reporte y te asignaremos una entrada disponible.`);
@@ -255,20 +292,31 @@
   }
 
   async function closePayDialog() {
-    if (payMode === 'checkout' && !payDone && myLockedTicket) {
-      if (!window.confirm(`Si cierras, la entrada #${myLockedTicket} se liberará para otra persona. ¿Quieres cerrar?`)) return;
-      await releaseMyTicket();
+    if (closing || paySubmitting) return;
+    closing = true;
+    try {
+      if (payMode === 'checkout' && !payDone && myLockedTicket) {
+        await releaseMyTicket();
+        showAlert('Reserva cancelada. Puedes continuar tu compra cuando quieras.', 'info');
+      }
+      payMode = null;
+      if (dialog.open) dialog.close();
+      renderResume();
+    } catch (_) {
+      showFormError('No pudimos liberar tu reserva. Revisa tu conexión y vuelve a pulsar «Cancelar reserva».');
+    } finally {
+      closing = false;
     }
-    payMode = null;
-    if (dialog.open) dialog.close();
   }
 
   $('pay-close').addEventListener('click', closePayDialog);
+  $('cancel-payment').addEventListener('click', closePayDialog);
   $('pay-done-close').addEventListener('click', () => { payMode = null; dialog.close(); });
   dialog.addEventListener('cancel', (event) => { event.preventDefault(); closePayDialog(); });
   $('open-report').addEventListener('click', () => {
     form.reset();
     openPayDialog('report');
+    $('requested_ticket').value = purchaseIntent?.ticket || '';
   });
 
   // Copy buttons of the account data and the amount
@@ -326,6 +374,7 @@
 
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
+    if (paySubmitting || closing) return;
     hideFormError();
     if (!form.reportValidity()) return;
     const capture = captureInput.files[0];
@@ -371,6 +420,7 @@
       }
 
       payDone = true;
+      setPurchaseIntent(null);
       assignmentResult.hidden = true;
       myLockedTicket = null;
       myLockRemainingSec = 0;
@@ -389,6 +439,12 @@
       btn.textContent = idleText;
     }
   });
+
+  function setLockDeadline(lockedUntil, serverTime) {
+    const timeLeft = Math.max(0, lockedUntil - serverTime);
+    myLockDeadline = Date.now() + timeLeft;
+    myLockRemainingSec = Math.ceil(timeLeft / 1000);
+  }
 
   function updateTimerDisplay() {
     const mins = String(Math.floor(myLockRemainingSec / 60)).padStart(2, '0');
@@ -414,17 +470,26 @@
 
   // 1-second local countdown
   setInterval(() => {
-    if (myLockedTicket && myLockRemainingSec > 0) {
-      myLockRemainingSec = Math.max(0, myLockRemainingSec - 1);
+    if (myLockedTicket) {
+      myLockRemainingSec = Math.max(0, Math.ceil((myLockDeadline - Date.now()) / 1000));
       updateTimerDisplay();
       if (myLockRemainingSec === 0) {
         const expired = myLockedTicket;
         assignmentResult.hidden = true;
         myLockedTicket = null;
+        renderResume();
         if (payMode === 'checkout' && !payDone && !paySubmitting) switchToReportAfterExpiry(expired);
       }
     }
   }, 1000);
 
-  loadInitialState();
+  async function start() {
+    if (previousSession) {
+      try { await requestRelease(previousSession); } catch (_) { /* the old reservation still expires on the server */ }
+      sessionStorage.removeItem(cleanupKey);
+    }
+    restoring = false;
+    await loadInitialState();
+  }
+  start();
 })();
