@@ -165,8 +165,8 @@ function createTicketDocument(order, config, qrBuffer, demo) {
 
 const qrOptions = { errorCorrectionLevel: 'H', margin: 4, width: 360 };
 
-async function generateTicketPdf(order, eventConfig, baseUrl = 'http://localhost:4000', outputDir = ticketsDir) {
-  const filename = `ENTRADA-${order.ticket_number}-ORD${order.id}.pdf`;
+async function generateTicketPdf(order, eventConfig, baseUrl = 'http://localhost:4000', outputDir = ticketsDir, revision = '') {
+  const filename = `ENTRADA-${order.ticket_number}-ORD${order.id}${revision ? `-${revision}` : ''}.pdf`;
   const pdfFullPath = path.join(outputDir, filename);
   const verificationUrl = `${baseUrl.replace(/\/$/, '')}/verify/${encodeURIComponent(order.verification_token)}`;
   const qrBuffer = await QRCode.toBuffer(verificationUrl, qrOptions);

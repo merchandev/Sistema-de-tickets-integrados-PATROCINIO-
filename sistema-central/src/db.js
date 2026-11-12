@@ -575,61 +575,57 @@ function submitOrderAtomic(orderData) {
       };
     }
 
-    orderData.amount_usd = ticket.quoted_usd ?? orderData.amount_usd;
-    orderData.bcv_rate = ticket.quoted_rate ?? orderData.bcv_rate;
-    orderData.amount_ves = ticket.quoted_ves ?? orderData.amount_ves;
-    // Insert order
-    const insertResult = db.prepare(`
-      INSERT INTO orders (
-        ticket_number, source_web, session_id,
-        buyer_name, buyer_first_name, buyer_last_name, buyer_cedula, buyer_phone, buyer_email,
-        payment_phone, payment_reference, payment_bank, screenshot_path,
-        amount_usd, bcv_rate, amount_ves, status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')
-    `).run(
-      orderData.ticket_number,
-      ticket.locked_by_source,
-      orderData.session_id,
-      orderData.buyer_name,
-      orderData.buyer_first_name || null,
-      orderData.buyer_last_name || null,
-      orderData.buyer_cedula,
-      orderData.buyer_phone,
-      orderData.buyer_email,
-      orderData.payment_phone,
-      orderData.payment_reference,
-      orderData.payment_bank || null,
-      orderData.screenshot_path,
-      orderData.amount_usd,
-      orderData.bcv_rate,
-      orderData.amount_ves
-    );
-
-    const orderId = Number(insertResult.lastInsertRowid);
-
-    // Transition ticket to PENDING
-    db.prepare(`
-      UPDATE tickets
-      SET status = 'PENDING',
-          locked_by_session = ?,
-          locked_by_source = ?,
-          locked_until = NULL,
-          current_order_id = ?,
-          updated_at = datetime('now')
-      WHERE ticket_number = ?
-    `).run(orderData.session_id, ticket.locked_by_source, orderId, orderData.ticket_number);
-
-    const createdOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
+    const order = recordTicketPayment(ticket, orderData);
     db.exec('COMMIT');
-
-    return {
-      success: true,
-      order: createdOrder
-    };
+    return { success: true, order };
   } catch (err) {
     db.exec('ROLLBACK');
     throw err;
   }
+}
+
+// The caller owns the transaction and has checked that this ticket can receive a payment.
+function recordTicketPayment(ticket, orderData) {
+  const insertResult = db.prepare(`
+    INSERT INTO orders (
+      ticket_number, source_web, session_id,
+      buyer_name, buyer_first_name, buyer_last_name, buyer_cedula, buyer_phone, buyer_email,
+      payment_phone, payment_reference, payment_bank, screenshot_path,
+      amount_usd, bcv_rate, amount_ves, status
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')
+  `).run(
+    ticket.ticket_number,
+    ticket.locked_by_source,
+    orderData.session_id,
+    orderData.buyer_name,
+    orderData.buyer_first_name || null,
+    orderData.buyer_last_name || null,
+    orderData.buyer_cedula,
+    orderData.buyer_phone,
+    orderData.buyer_email,
+    orderData.payment_phone,
+    orderData.payment_reference,
+    orderData.payment_bank || null,
+    orderData.screenshot_path,
+    ticket.quoted_usd ?? orderData.amount_usd,
+    ticket.quoted_rate ?? orderData.bcv_rate,
+    ticket.quoted_ves ?? orderData.amount_ves
+  );
+
+  const orderId = Number(insertResult.lastInsertRowid);
+
+  // Transition ticket to PENDING
+  db.prepare(`
+    UPDATE tickets
+    SET status = 'PENDING',
+        locked_by_session = ?,
+        locked_by_source = ?,
+        locked_until = NULL,
+        current_order_id = ?,
+        updated_at = datetime('now')
+    WHERE ticket_number = ?
+  `).run(orderData.session_id, ticket.locked_by_source, orderId, ticket.ticket_number);
+  return db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
 }
 
 /**
@@ -670,7 +666,7 @@ function submitPaymentReport(report) {
  * Generates a unique cryptographic token for a verified ticket and marks the order APPROVED & ticket SOLD.
  * Standalone payment reports receive the lowest available number.
  */
-function approveOrderAtomic(orderId, adminNotes = '', assignTicket = null) {
+function approveOrderAtomic(orderId, adminNotes = '', assignTicket = null, onApproved) {
   db.exec('BEGIN IMMEDIATE TRANSACTION');
   try {
     const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
@@ -735,6 +731,7 @@ function approveOrderAtomic(orderId, adminNotes = '', assignTicket = null) {
     `).run(orderId, order.ticket_number);
 
     const updatedOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
+    onApproved?.(updatedOrder);
     db.exec('COMMIT');
 
     return {
@@ -817,7 +814,7 @@ function getAllTicketsForAdmin() {
   releaseExpiredLocks();
   const now = Date.now();
   const rows = db.prepare(`
-    SELECT ticket_number, numeric_id, status, locked_by_source, locked_until
+    SELECT ticket_number, numeric_id, status, locked_by_source, locked_until, current_order_id
     FROM tickets
     ORDER BY numeric_id ASC
   `).all();
@@ -829,6 +826,7 @@ function getAllTicketsForAdmin() {
       numeric_id: r.numeric_id,
       status: r.status,
       locked_by_source: r.locked_by_source,
+      current_order_id: r.current_order_id,
       locked_until: r.status === 'LOCKED' ? r.locked_until : null,
       remaining_seconds: r.status === 'LOCKED' && r.locked_until
         ? Math.max(0, Math.ceil((r.locked_until - now) / 1000))
@@ -846,6 +844,7 @@ module.exports = {
   lockTicketAtomic,
   unlockTicketAtomic,
   submitOrderAtomic,
+  recordTicketPayment,
   submitPaymentReport,
   approveOrderAtomic,
   rejectOrderAtomic,

@@ -27,6 +27,7 @@ const { scrapeBcvRate } = require('./bcvScraper');
 const { generateTicketPdf, generateDemoTicketPdf } = require('./pdfGenerator');
 const { parsePaymentForm, parseTicketNumber } = require('./paymentForm');
 const { resetTickets } = require('./ticketReset');
+const ticketArbitration = require('./ticketArbitration');
 const {
   sendPaymentSubmittedEmail,
   sendTicketEmail,
@@ -91,6 +92,7 @@ fs.mkdirSync(uploadsDir, { recursive: true });
 fs.mkdirSync(ticketsDir, { recursive: true });
 
 let activeTicketOperations = 0;
+const issuingOrders = new Set();
 
 async function runTicketOperation(work) {
   activeTicketOperations++;
@@ -533,40 +535,31 @@ app.post('/api/admin/orders/:id/approve', ticketRoute(async (req, res) => {
       return res.status(400).json({ ok: false, message: result.message });
     }
 
-    const config = getPublicConfig();
-    const { pdfFullPath, pdfRelativeUrl, qrDataUrl, verificationUrl } = await generateTicketPdf(
-      result.order,
-      config,
-      PUBLIC_BASE_URL
-    );
-
-    // Save PDF path in order record
-    db.prepare('UPDATE orders SET pdf_path = ? WHERE id = ?').run(pdfRelativeUrl, orderId);
-    const finalOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
-
-    // Payment confirmation and the ticket with the PDF attached, in a single email
-    const emailResult = await sendTicketEmail(finalOrder, pdfFullPath, pdfRelativeUrl);
-
-    broadcastTicketsUpdate({
-      name: 'admin:order_updated',
-      payload: finalOrder
-    });
-
-    return res.json({
-      ok: true,
-      message: `Pago aprobado y entrada #${finalOrder.ticket_number} generada.` +
-        (emailResult.status === 'SENT_SMTP' ? ' El servidor SMTP aceptó el correo con la entrada PDF.' : ' El correo con la entrada está pendiente de envío real. Revísalo en Correos y avisos.'),
-      order: finalOrder,
-      pdfUrl: pdfRelativeUrl,
-      qrDataUrl,
-      verificationUrl,
-      emailResult
-    });
+    return res.json(await issueApprovedTicket(result.order));
   } catch (err) {
     console.error('Error approving order:', err);
     return res.status(500).json({ ok: false, message: err.message });
   }
 }));
+
+async function issueApprovedTicket(order) {
+  issuingOrders.add(order.id);
+  try {
+    const { pdfFullPath, pdfRelativeUrl, qrDataUrl, verificationUrl } = await generateTicketPdf(order, getPublicConfig(), PUBLIC_BASE_URL);
+    db.prepare('UPDATE orders SET pdf_path = ? WHERE id = ?').run(pdfRelativeUrl, order.id);
+    const finalOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(order.id);
+    const emailResult = await sendTicketEmail(finalOrder, pdfFullPath, pdfRelativeUrl);
+    return {
+      ok: true,
+      message: `Pago aprobado y entrada #${finalOrder.ticket_number} generada.` +
+        (emailResult.status === 'SENT_SMTP' ? ' El servidor SMTP aceptó el correo con la entrada PDF.' : ' El correo con la entrada está pendiente de envío real. Revísalo en Correos y avisos.'),
+      order: finalOrder, pdfUrl: pdfRelativeUrl, qrDataUrl, verificationUrl, emailResult
+    };
+  } finally {
+    issuingOrders.delete(order.id);
+    broadcastTicketsUpdate({ name: 'admin:order_updated' });
+  }
+}
 
 /**
  * Reject payment -> Releases ticket back to AVAILABLE and notifies buyer
@@ -732,12 +725,121 @@ function canResetTickets(req) {
   return account?.role === 'superadmin' && account.email === 'soporte@merchan.dev';
 }
 
+function canArbitrateTickets(req) {
+  return adminAuth.sessionFrom(req)?.admin?.role === 'superadmin';
+}
+
 app.get('/api/admin/session', (req, res) => res.json({
   ok: true, user: req.adminUser, role: req.admin.role, named: Boolean(req.admin.id),
   canResetTickets: canResetTickets(req),
+  canArbitrateTickets: canArbitrateTickets(req),
   canEditSettings: canEditSettings(req),
   canManageUsers: req.admin.role === 'superadmin'
 }));
+
+function requireTicketArbitration(req, res, next) {
+  if (!canArbitrateTickets(req)) return res.status(403).json({ ok: false, message: 'El arbitraje de entradas requiere una sesión de superadministrador.' });
+  if (req.method === 'POST' && req.get('origin')) {
+    try {
+      if (new URL(req.get('origin')).host === req.get('host')) return next();
+    } catch (_) { /* invalid origin */ }
+    return res.status(403).json({ ok: false, message: 'Abre el mapa desde el dominio del panel para continuar.' });
+  }
+  return next();
+}
+
+app.get('/api/admin/tickets/:number/arbitration', requireTicketArbitration, (req, res) => {
+  releaseExpiredLocks();
+  const details = ticketArbitration.getTicket(parseTicketNumber(req.params.number));
+  if (!details) return res.status(404).json({ ok: false, message: 'Entrada no encontrada.' });
+  res.set('Cache-Control', 'no-store');
+  return res.json({ ok: true, revision: details.revision, manualHold: details.manualHold,
+    status: details.ticket.status, source: details.ticket.locked_by_source, lockedUntil: details.ticket.locked_until, order: details.order });
+});
+
+const arbitrationMessages = {
+  hold: 'Entrada bloqueada manualmente.', release: 'Entrada liberada para la venta.',
+  cancel: 'Orden anulada y entrada liberada.', assist: 'Pago registrado y pendiente de verificación.', edit: 'Datos de la orden actualizados.'
+};
+
+app.post('/api/admin/tickets/:number/arbitration', requireTicketArbitration, ticketRoute(async (req, res) => {
+  const number = parseTicketNumber(req.params.number);
+  const { action, revision, confirmation, source } = req.body || {};
+  const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim() : '';
+  let saved = false;
+  let revisedPdfPath;
+  try {
+    if (!number || !/^[a-f0-9]{64}$/.test(revision || '') || (action !== 'approve' && !Object.hasOwn(arbitrationMessages, action))) {
+      return res.status(400).json({ ok: false, message: 'Revisa el número de entrada y la acción solicitada.' });
+    }
+    if (reason.length < 3 || reason.length > 500) return res.status(400).json({ ok: false, message: 'Escribe un motivo de 3 a 500 caracteres.' });
+    const current = ticketArbitration.checkTicket(number, revision);
+    if (!current.ok) return res.status(409).json(current);
+    if (current.order && issuingOrders.has(current.order.id)) {
+      return res.status(409).json({ ok: false, message: 'La entrada se está emitiendo. Vuelve a abrirla cuando termine el envío.' });
+    }
+    if (action === 'cancel' && confirmation !== `ANULAR ${number}`) {
+      return res.status(400).json({ ok: false, message: `Escribe ANULAR ${number} para confirmar.` });
+    }
+    if (action === 'approve') {
+      if (current.ticket.status !== 'PENDING' || !current.order) {
+        return res.status(409).json({ ok: false, message: 'La entrada no tiene un pago pendiente.' });
+      }
+      const approved = approveOrderAtomic(current.order.id, reason, null,
+        order => ticketArbitration.audit(number, order.id, req.adminUser, action, reason));
+      if (!approved.success) return res.status(409).json({ ok: false, message: approved.message });
+      return res.json(await issueApprovedTicket(approved.order));
+    }
+
+    let payment;
+    if (action === 'assist' || action === 'edit') {
+      const parsed = parsePaymentForm(req.body);
+      if (!parsed.ok) return res.status(400).json(parsed);
+      payment = parsed.data;
+      if (action === 'edit' && current.order) {
+        const paymentPhone = req.body.payment_phone;
+        if (typeof paymentPhone === 'string' && paymentPhone.trim() !== current.order.payment_phone) {
+          const digits = paymentPhone.replace(/\D/g, '');
+          if (!/^\+?[\d\s()-]+$/.test(paymentPhone.trim()) || digits.length < 10 || digits.length > 13) {
+            return res.status(400).json({ ok: false, message: 'Revisa el teléfono utilizado para pagar.' });
+          }
+          payment.payment_phone = paymentPhone.trim();
+        } else {
+          payment.payment_phone = current.order.payment_phone;
+        }
+        payment.buyer_comment = typeof req.body.buyer_comment === 'string' ? req.body.buyer_comment.trim().slice(0, 500) || null : current.order.buyer_comment;
+      }
+      if (action === 'assist') {
+        if (!['pagina-web-1', 'pagina-web-2'].includes(source)) return res.status(400).json({ ok: false, message: 'Elige la página de origen.' });
+        if (!req.file) return res.status(400).json(MISSING_SCREENSHOT);
+      }
+    }
+
+    let pdfPath;
+    if (action === 'edit' && current.order?.status === 'APPROVED') {
+      const fileRevision = randomUUID();
+      revisedPdfPath = path.join(ticketsDir, `ENTRADA-${number}-ORD${current.order.id}-${fileRevision}.pdf`);
+      const pdf = await generateTicketPdf({ ...current.order, ...payment }, getPublicConfig(), PUBLIC_BASE_URL, ticketsDir, fileRevision);
+      pdfPath = pdf.pdfRelativeUrl;
+    }
+    const result = ticketArbitration.applyAction(number, { action, revision, reason, actor: req.adminUser,
+      source, payment, screenshot: req.file && payment ? saveScreenshot(req, number) : null, pdfPath });
+    if (!result.ok) return res.status(409).json(result);
+    saved = true;
+    if (action === 'assist') {
+      sendInBackground(() => sendPaymentSubmittedEmail(result.order));
+      googleSheets.syncOrder(result.order);
+    }
+    broadcastTicketsUpdate({ name: action === 'assist' ? 'admin:order_created' : 'admin:order_updated' });
+    return res.json({ ok: true, message: arbitrationMessages[action] });
+  } catch (err) {
+    console.error('Ticket arbitration failed:', err);
+    return res.status(500).json({ ok: false, message: 'No se pudo completar la operación. Vuelve a abrir la entrada para confirmar su estado.' });
+  } finally {
+    if ((!saved || !['assist', 'edit'].includes(action)) && req.file) fs.unlink(req.file.path, () => {});
+    if (!saved && revisedPdfPath) fs.unlink(revisedPdfPath, () => {});
+  }
+}, upload.single('screenshot')));
 
 app.post('/api/admin/tickets/reset', (req, res) => {
   if (!canResetTickets(req)) return res.status(403).json({ ok: false, message: 'Tu cuenta no puede reiniciar las entradas.' });

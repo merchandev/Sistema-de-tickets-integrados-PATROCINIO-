@@ -461,6 +461,52 @@ function parseMail(file) {
     check('Hoja: rechazar un pago no envía otra escritura', rejectedSheetPayment.status === 200 && sheetWrites === writesBeforeReview);
     const replay = await api('POST', '/api/admin/sheets/sync-all', { cookie: sup.cookie, json: {} });
     check('Hoja: la recuperación omite filas existentes', replay.status === 200 && /Pagos agregados: 0/.test(replay.data.message) && sheetRows.get(String(sheetReport.data.order.id)) === sheetRow);
+
+    const arbitrationUrl = '/api/admin/tickets/250/arbitration';
+    const ticketDetails = async () => (await api('GET', arbitrationUrl, { cookie: sup.cookie })).data;
+    const action = (name, revision, extra = {}) => api('POST', arbitrationUrl, {
+      cookie: sup.cookie, json: { action: name, revision, reason: 'Prueba de arbitraje', ...extra }
+    });
+    const initialTicket = await ticketDetails();
+    check('Arbitraje: exige sesión de superadministrador',
+      (await api('GET', arbitrationUrl, { cookie: adm.cookie })).status === 403 &&
+      (await api('POST', arbitrationUrl, { admin: true, json: { action: 'hold', revision: initialTicket.revision } })).status === 403);
+    const hold = await action('hold', initialTicket.revision);
+    let heldTicket = await ticketDetails();
+    check('Arbitraje: bloqueo manual y protección contra una vista desactualizada', hold.status === 200 && heldTicket.manualHold &&
+      (await action('release', initialTicket.revision)).status === 409);
+    const release = await action('release', heldTicket.revision);
+    const releasedTicket = await ticketDetails();
+    check('Arbitraje: liberar un bloqueo vuelve a habilitar la entrada', release.status === 200 && releasedTicket.status === 'AVAILABLE');
+    await action('hold', releasedTicket.revision);
+    heldTicket = await ticketDetails();
+    const assistedForm = buyerForm({ buyer_email: 'arbitraje@prueba.test', payment_reference: 'ART250', action: 'assist',
+      revision: heldTicket.revision, reason: 'Compra asistida de prueba', source: 'pagina-web-2' });
+    const assisted = await api('POST', arbitrationUrl, { cookie: sup.cookie, form: assistedForm });
+    const pendingTicket = await ticketDetails();
+    check('Arbitraje: compra asistida registra el pago en la entrada seleccionada', assisted.status === 200 && pendingTicket.status === 'PENDING' &&
+      pendingTicket.order.ticket_number === '250' && pendingTicket.order.source_web === 'pagina-web-2');
+    for (let i = 0; i < 30 && !sheetRows.has(String(pendingTicket.order?.id)); i++) await sleep(100);
+    const sheetWritesAfterAssist = sheetWrites;
+    const approvedTicket = await action('approve', pendingTicket.revision);
+    const soldTicket = await ticketDetails();
+    check('Arbitraje: aprobar emite el PDF y el QR sin volver a escribir en la hoja', approvedTicket.status === 200 && soldTicket.status === 'SOLD' &&
+      soldTicket.order.pdf_path && soldTicket.order.verification_token && sheetRows.has(String(soldTicket.order.id)) && sheetWrites === sheetWritesAfterAssist);
+    const edited = await action('edit', soldTicket.revision, {
+      buyer_first_name: 'Elena', buyer_last_name: 'Rodríguez', buyer_cedula: 'V-21456789', buyer_phone: '0414-5550101',
+      buyer_email: 'arbitraje@prueba.test', payment_bank: 'Banesco (0134)', payment_reference: 'ART250'
+    });
+    const editedTicket = await ticketDetails();
+    const editedPdf = await api('GET', editedTicket.order.pdf_path, { admin: true });
+    check('Arbitraje: editar una venta actualiza el PDF y conserva el mismo QR', edited.status === 200 && editedTicket.order.buyer_name === 'Elena Rodríguez' &&
+      editedTicket.order.verification_token === soldTicket.order.verification_token && editedTicket.order.pdf_path !== soldTicket.order.pdf_path &&
+      editedPdf.status === 200 && editedPdf.data.subarray(0, 5).toString() === '%PDF-');
+    const withoutConfirmation = await action('cancel', editedTicket.revision);
+    const cancelled = await action('cancel', editedTicket.revision, { confirmation: 'ANULAR 250' });
+    const oldQr = await api('GET', `/api/admin/verify-qr/${encodeURIComponent(soldTicket.order.verification_token)}`, { admin: true });
+    const otherTicket = await api('GET', `/api/admin/verify-qr/${encodeURIComponent(token)}`, { admin: true });
+    check('Arbitraje: anulación expresa libera solo la entrada elegida e invalida su QR', withoutConfirmation.status === 400 &&
+      cancelled.status === 200 && (await ticketDetails()).status === 'AVAILABLE' && oldQr.data.valid === false && otherTicket.data.valid === true && sheetWrites === sheetWritesAfterAssist);
     sheetApp.close();
 
     check('Log del servidor sin errores inesperados', !/Error (approving|rejecting|submitting)|Unhandled|TypeError/.test(serverLog));

@@ -163,7 +163,7 @@ function renderOrdersTable() {
       ? '<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800">Por verificar</span>'
       : o.status === 'APPROVED'
       ? '<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">Aprobado</span>'
-      : '<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-red-100 text-red-800">Rechazado</span>';
+      : `<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-red-100 text-red-800">${o.status === 'CANCELLED' ? 'Anulado' : 'Rechazado'}</span>`;
 
     const originBadge = sourceBadge(o.source_web);
 
@@ -239,7 +239,7 @@ function renderSeatsMap() {
 
     if (t.status === 'LOCKED') {
       classes = 'bg-amber-500 text-slate-950 font-bold animate-pulse';
-      subtitle = `${t.remaining_seconds}s`;
+      subtitle = t.locked_until == null ? 'Manual' : `${t.remaining_seconds}s`;
     } else if (t.status === 'PENDING') {
       classes = 'bg-blue-600 text-white';
       subtitle = 'Verif.';
@@ -262,8 +262,9 @@ function renderSeatsMap() {
 }
 
 function inspectSeat(ticketNumber) {
+  if (adminSession?.canArbitrateTickets) return openTicketArbitration(ticketNumber);
   const ticket = (state.tickets || []).find(t => t.ticket_number === ticketNumber);
-  const order = (state.orders || []).find(o => o.ticket_number === ticketNumber && o.status !== 'REJECTED');
+  const order = (state.orders || []).find(o => o.id === ticket?.current_order_id);
   if (!ticket) return;
 
   let html = `
@@ -280,8 +281,7 @@ function inspectSeat(ticketNumber) {
   if (ticket.status === 'LOCKED') {
     html += `
       <div class="p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs space-y-1">
-        <div><strong>Bloqueo temporal activo:</strong> Restan <strong>${ticket.remaining_seconds} segundos</strong></div>
-        <div><strong>Página de origen:</strong> ${sourceBadge(ticket.locked_by_source)}</div>
+        ${ticket.locked_until == null ? '<strong>Bloqueo manual</strong>' : `<div><strong>Bloqueo temporal activo:</strong> Restan <strong>${ticket.remaining_seconds} segundos</strong></div><div><strong>Página de origen:</strong> ${sourceBadge(ticket.locked_by_source)}</div>`}
       </div>
     `;
   }
@@ -304,6 +304,102 @@ function inspectSeat(ticketNumber) {
 
   html += `</div>`;
   openModal(`Detalle de la entrada #${ticketNumber}`, html);
+}
+
+const arbitrationActions = {
+  hold: ['Bloquear entrada', 'La entrada quedará fuera de venta hasta que la liberes.'],
+  release: ['Liberar entrada', 'La entrada volverá a estar disponible para la venta.'],
+  assist: ['Registrar compra asistida', 'Registra un pago recibido. La entrada quedará pendiente de verificación.'],
+  edit: ['Editar datos', 'Guarda las correcciones en esta orden. Para una entrada emitida, el panel ofrecerá un PDF actualizado con el mismo QR.'],
+  approve: ['Aprobar y enviar entrada', 'Confirma que verificaste el pago. Se emitirá el PDF y se enviará al correo del comprador.'],
+  cancel: ['Anular orden', 'Se conservará la orden en el historial. La entrada volverá a la venta y cualquier QR emitido quedará invalidado.']
+};
+
+async function openTicketArbitration(number) {
+  openModal(`Entrada #${number}`, '<div id="ticket-arbitration" class="order-detail" aria-live="polite">Cargando el estado de la entrada…</div>');
+  const panel = document.getElementById('ticket-arbitration');
+  const endpoint = `/api/admin/tickets/${number}/arbitration`;
+  try {
+    const response = await fetch(endpoint);
+    const details = await response.json();
+    if (!panel.isConnected) return;
+    if (!response.ok) { panel.textContent = details.message; return; }
+    const { order, status, manualHold } = details;
+    const labels = { AVAILABLE: 'Disponible', LOCKED: manualHold ? 'Bloqueo manual' : 'Reserva temporal', PENDING: 'En verificación', SOLD: 'Vendida' };
+    const actions = {
+      AVAILABLE: ['assist', 'hold'], LOCKED: manualHold ? ['assist', 'release'] : ['release'],
+      PENDING: ['approve', 'edit', 'cancel'], SOLD: ['edit', 'cancel']
+    }[status] || [];
+    const attended = order && (order.checked_in_at || order.checked_in_conference || order.checked_in_concert);
+    const field = (label, value) => `<div class="od-field"><span>${label}</span><strong>${escapeHtml(value || '—')}</strong></div>`;
+    panel.innerHTML = `
+      <div class="od-head"><div><h4>${labels[status]}</h4>${(order || details.source) ? sourceBadge(order?.source_web || details.source) : ''}</div></div>
+      ${details.lockedUntil ? `<p class="od-muted">Reserva vigente hasta ${escapeHtml(new Intl.DateTimeFormat('es-VE', { timeStyle: 'medium', timeZone: 'America/Caracas' }).format(details.lockedUntil))}, hora de Venezuela. Liberarla cancela la reserva del comprador.</p>` : ''}
+      ${order ? `<div class="od-grid">${field('Comprador', order.buyer_name)}${field('Cédula', order.buyer_cedula)}
+        ${field('Correo', order.buyer_email)}${field('Teléfono', order.buyer_phone)}${field('Banco', order.payment_bank)}${field('Referencia', order.payment_reference)}
+        ${field('Monto reportado', `Bs. ${Number(order.amount_ves).toFixed(2)}`)}</div>
+        <div class="od-actions">
+          ${order.screenshot_path ? `<a class="od-cancel" href="${escapeHtml(order.screenshot_path)}" target="_blank" rel="noopener">Ver comprobante</a>` : ''}
+          ${order.pdf_path ? `<a class="od-cancel" href="${escapeHtml(order.pdf_path)}" target="_blank" rel="noopener">Abrir PDF</a>` : ''}
+        </div>` : ''}
+      ${attended ? '<p class="od-muted">La asistencia ya está registrada.</p>' : ''}
+      <div class="od-actions">${actions.filter(action => action !== 'cancel' || !attended).map(action => `<button type="button" class="${action === 'cancel' ? 'od-reject' : action === 'approve' || action === 'assist' ? 'od-approve' : 'od-cancel'}" data-ticket-action="${action}">${arbitrationActions[action][0]}</button>`).join('')}</div>
+      <div data-arbitration-form></div>`;
+    panel.querySelectorAll('[data-ticket-action]').forEach(button => button.addEventListener('click', () => {
+      renderArbitrationForm(panel.querySelector('[data-arbitration-form]'), endpoint, number, details, button.dataset.ticketAction);
+    }));
+  } catch (_) {
+    panel.textContent = 'No se pudo cargar la entrada. Vuelve a abrirla desde el mapa.';
+  }
+}
+
+function renderArbitrationForm(container, endpoint, number, { order, revision }, action) {
+  const [label, description] = arbitrationActions[action];
+  const [first, ...last] = (order?.buyer_name || '').trim().split(/\s+/);
+  const defaults = { buyer_first_name: first, buyer_last_name: last.join(' ') };
+  const input = (name, label, type = 'text') => `<label>${label}<input name="${name}" type="${type}" value="${escapeHtml(order?.[name] || defaults[name])}" required></label>`;
+  container.innerHTML = `<form class="od-reject-form arbitration-form">
+    <h5>${label}</h5><p class="od-muted">${description}</p>
+    ${action === 'assist' || action === 'edit' ? `<div class="od-grid">
+      ${input('buyer_first_name', 'Nombre')}${input('buyer_last_name', 'Apellido')}
+      ${input('buyer_cedula', 'Cédula')}${input('buyer_phone', 'Teléfono', 'tel')}
+      ${input('buyer_email', 'Correo electrónico', 'email')}${input('payment_bank', 'Banco de origen')}${input('payment_reference', 'Referencia bancaria')}
+      ${action === 'edit' ? `<label>Teléfono utilizado para pagar<input name="payment_phone" type="tel" value="${escapeHtml(order?.payment_phone)}"></label>` : ''}
+      ${action === 'assist' ? '<label>Página de origen<select name="source" required><option value="">Elige una página</option><option value="pagina-web-1">Iluminando Caminos</option><option value="pagina-web-2">Hablemos de Marketing</option></select></label>' : ''}
+      <label>Comprobante ${action === 'edit' ? '(opcional)' : ''}<input name="screenshot" type="file" accept="image/png,image/jpeg,image/webp" ${action === 'assist' ? 'required' : ''}></label>
+      ${order?.report_kind === 'REPORT' ? `<label>Comentario del reporte<textarea name="buyer_comment" rows="2" maxlength="500">${escapeHtml(order.buyer_comment)}</textarea></label>` : ''}
+    </div>` : ''}
+    <label>Motivo de la intervención<textarea name="reason" rows="2" minlength="3" maxlength="500" required></textarea></label>
+    ${action === 'cancel' ? `<label>Escribe ANULAR ${number} para confirmar<input name="confirmation" required autocomplete="off"></label>` : ''}
+    <p class="od-muted" role="status"></p>
+    <div class="od-actions"><button type="submit" class="${action === 'cancel' ? 'od-reject' : 'od-approve'}">${label}</button><button type="button" class="od-cancel" data-dismiss>Volver</button></div>
+  </form>`;
+  const form = container.querySelector('form');
+  form.querySelector('[data-dismiss]').addEventListener('click', () => container.replaceChildren());
+  form.querySelector('input, textarea').focus();
+  form.addEventListener('submit', async event => {
+    event.preventDefault();
+    const body = new FormData(form);
+    if (!body.get('screenshot')?.size) body.delete('screenshot');
+    body.set('action', action);
+    body.set('revision', revision);
+    const buttons = [...form.querySelectorAll('button'), ...container.parentElement.querySelectorAll('[data-ticket-action]')];
+    const status = form.querySelector('[role="status"]');
+    buttons.forEach(button => { button.disabled = true; });
+    status.textContent = 'Guardando…';
+    try {
+      const response = await fetch(endpoint, { method: 'POST', body });
+      const data = await response.json();
+      if (!response.ok) { status.textContent = data.message; return; }
+      showToast(data.message);
+      if (form.isConnected && !document.getElementById('admin-modal').classList.contains('hidden')) await openTicketArbitration(number);
+      await fetchAdminOverview();
+    } catch (_) {
+      status.textContent = 'No se pudo confirmar la operación. Vuelve a abrir la entrada para revisar su estado.';
+    } finally {
+      buttons.forEach(button => { button.disabled = false; });
+    }
+  });
 }
 
 // ============================================================================
@@ -335,9 +431,9 @@ function openOrderDetail(orderId) {
   if (!o) return;
   closeNotifPanel();
   const isReport = !o.ticket_number;
-  const duplicates = (state.orders || []).filter(other => other.id !== o.id && other.status !== 'REJECTED' && other.payment_reference === o.payment_reference);
+  const duplicates = (state.orders || []).filter(other => other.id !== o.id && ['PENDING', 'APPROVED'].includes(other.status) && other.payment_reference === o.payment_reference);
   const field = (label, value, mono = false) => `<div class="od-field"><span>${label}</span><strong class="${mono ? 'mono' : ''}">${escapeHtml(value || '—')}</strong></div>`;
-  const statusText = { PENDING: 'Por verificar', APPROVED: 'Aprobado', REJECTED: 'Rechazado' }[o.status] || o.status;
+  const statusText = { PENDING: 'Por verificar', APPROVED: 'Aprobado', REJECTED: 'Rechazado', CANCELLED: 'Anulado' }[o.status] || o.status;
 
   let actions = '';
   if (o.status === 'PENDING') {
@@ -362,7 +458,7 @@ function openOrderDetail(orderId) {
         <button type="button" class="od-cancel" onclick="closeModal(); testTokenInScanner('${escapeHtml(o.verification_token)}')">Comprobar QR</button>
       </div>`;
   } else {
-    actions = `<p class="od-muted">Motivo del rechazo: ${escapeHtml(o.admin_notes || '—')}</p>`;
+    actions = `<p class="od-muted">${o.status === 'CANCELLED' ? 'Motivo de la anulación' : 'Motivo del rechazo'}: ${escapeHtml(o.admin_notes || '—')}</p>`;
   }
 
   openModal(isReport ? 'Reporte de pago' : `Pedido de la entrada #${o.ticket_number}`, `
