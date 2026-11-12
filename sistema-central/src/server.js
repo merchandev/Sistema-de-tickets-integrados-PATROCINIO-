@@ -461,11 +461,12 @@ function adminSettings() {
   return settings;
 }
 
-app.get('/api/admin/overview', (_req, res) => {
+app.get('/api/admin/overview', (req, res) => {
   releaseExpiredLocks();
   const ticketsState = getAllTicketsForAdmin();
   const orders = db.prepare('SELECT * FROM orders ORDER BY id DESC').all();
-  const emailLogs = db.prepare('SELECT * FROM email_logs ORDER BY id DESC LIMIT 100').all();
+  const emailLogs = db.prepare(`SELECT * FROM email_logs WHERE (? OR type != 'TICKET_DETAILS_CORRECTION') ORDER BY id DESC LIMIT 100`)
+    .all(Number(canArbitrateTickets(req)));
   const undelivered = undeliveredOrderEmails();
   const campaigns = db.prepare('SELECT * FROM notification_campaigns ORDER BY id DESC LIMIT 50').all();
   const rawSettings = adminSettings();
@@ -757,6 +758,7 @@ app.get('/api/admin/tickets/:number/arbitration', requireTicketArbitration, (req
   res.set('Cache-Control', 'no-store');
   return res.json({ ok: true, revision: details.revision, manualHold: details.manualHold,
     status: details.ticket.status, source: details.ticket.locked_by_source, lockedUntil: details.ticket.locked_until, order: details.order,
+    pdfResendHistory: ticketArbitration.getPdfResendHistory(details.ticket.ticket_number),
     canResendCorrectedPdf: details.ticket.status === 'SOLD' && details.order?.status === 'APPROVED' && Boolean(correctedTicketPdfFilename(details.order)) });
 });
 
@@ -776,22 +778,30 @@ app.post('/api/admin/tickets/:number/arbitration/resend-pdf', requireTicketArbit
   if (issuingOrders.has(order.id)) {
     return res.status(409).json({ ok: false, message: 'Ya hay un envío en curso para esta entrada.' });
   }
-  if (mailDeliveryMode() !== 'smtp') {
-    return res.status(409).json({ ok: false, message: 'Configura un servidor SMTP real antes de reenviar el PDF.' });
-  }
-  const pdfPath = path.join(ticketsDir, filename);
-  if (!fs.existsSync(pdfPath)) return res.status(404).json({ ok: false, message: 'No se encontró el PDF corregido.' });
-
   issuingOrders.add(order.id);
+  let attemptId;
   try {
-    ticketArbitration.audit(number, order.id, req.adminUser, 'resend_pdf', 'Reenvío manual del PDF corregido');
+    attemptId = ticketArbitration.startPdfResend(order, req.adminUser);
+    if (mailDeliveryMode() !== 'smtp') {
+      const message = 'Configura un servidor SMTP real antes de reenviar el PDF.';
+      ticketArbitration.finishPdfResend(attemptId, 'ERROR', message);
+      return res.status(409).json({ ok: false, message });
+    }
+    const pdfPath = path.join(ticketsDir, filename);
+    if (!fs.existsSync(pdfPath)) {
+      const message = 'No se encontró el PDF corregido.';
+      ticketArbitration.finishPdfResend(attemptId, 'ERROR', message);
+      return res.status(404).json({ ok: false, message });
+    }
     const result = await sendTicketEmail(order, pdfPath, order.pdf_path, { correctedDetails: true });
+    ticketArbitration.finishPdfResend(attemptId, result.status, result.errorMessage);
     if (result.status !== 'SENT_SMTP') {
       return res.status(502).json({ ok: false, message: 'El servidor de correo no aceptó el PDF. Revisa el registro de correos.' });
     }
     return res.json({ ok: true, message: `El servidor de correo aceptó el PDF para ${order.buyer_email}.` });
   } catch (err) {
     console.error('Error resending corrected PDF:', err);
+    if (attemptId) ticketArbitration.finishPdfResend(attemptId, 'UNKNOWN', 'No se pudo confirmar el resultado del reenvío.');
     return res.status(500).json({ ok: false, message: 'No se pudo confirmar el reenvío. Revisa el registro de correos.' });
   } finally {
     issuingOrders.delete(order.id);

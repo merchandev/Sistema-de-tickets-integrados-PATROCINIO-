@@ -11,9 +11,33 @@ db.exec(`CREATE TABLE IF NOT EXISTS ticket_arbitration_log (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 )`);
 
+const auditColumns = db.prepare('PRAGMA table_info(ticket_arbitration_log)').all();
+for (const column of ['recipient_email', 'resend_status', 'resend_error', 'resend_completed_at']) {
+  if (!auditColumns.some(info => info.name === column)) db.exec(`ALTER TABLE ticket_arbitration_log ADD COLUMN ${column} TEXT`);
+}
+
 function audit(ticketNumber, orderId, actor, action, reason) {
   db.prepare(`INSERT INTO ticket_arbitration_log (ticket_number, order_id, actor, action, reason)
     VALUES (?, ?, ?, ?, ?)`).run(ticketNumber, orderId ?? null, actor, action, reason);
+}
+
+function startPdfResend(order, actor) {
+  return db.prepare(`INSERT INTO ticket_arbitration_log (ticket_number, order_id, actor, action, reason, recipient_email, resend_status)
+    VALUES (?, ?, ?, 'resend_pdf', 'Reenvío manual del PDF corregido', ?, 'PENDING')`).run(
+    order.ticket_number, order.id, actor, order.buyer_email
+  ).lastInsertRowid;
+}
+
+function finishPdfResend(id, status, error = null) {
+  db.prepare(`UPDATE ticket_arbitration_log SET resend_status = ?, resend_error = ?, resend_completed_at = datetime('now')
+    WHERE id = ?`).run(status, error, id);
+}
+
+function getPdfResendHistory(number) {
+  return db.prepare(`SELECT log.order_id, log.actor, log.recipient_email, log.created_at,
+    log.resend_status, log.resend_error, log.resend_completed_at
+    FROM ticket_arbitration_log log JOIN orders ON orders.id = log.order_id
+    WHERE log.ticket_number = ? AND log.action = 'resend_pdf' ORDER BY log.id DESC`).all(number);
 }
 
 function getTicket(number) {
@@ -95,4 +119,4 @@ function applyAction(number, { revision, action, reason, actor, payment, source,
   }
 }
 
-module.exports = { getTicket, checkTicket, applyAction, audit };
+module.exports = { getTicket, checkTicket, applyAction, audit, startPdfResend, finishPdfResend, getPdfResendHistory };

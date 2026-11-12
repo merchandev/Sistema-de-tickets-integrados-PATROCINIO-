@@ -522,8 +522,27 @@ function parseMail(file) {
       mailFiles().length === mailsBeforeEdit + 1 && correctedEmail.subject === 'Entrada #250 corregida' &&
       /^To: .*actualizado@prueba\.test/im.test(correctedEmail.raw) && Boolean(attachment) && Buffer.from(attachment, 'base64').equals(editedPdf.data) &&
       (await ticketDetails()).order.verification_token === soldTicket.order.verification_token);
-    const withoutConfirmation = await action('cancel', editedTicket.revision);
-    const cancelled = await action('cancel', editedTicket.revision, { confirmation: 'ANULAR 250' });
+    await action('edit', editedTicket.revision, {
+      buyer_first_name: 'Elena', buyer_last_name: 'Rodríguez', buyer_cedula: 'V-21456789', buyer_phone: '0414-5550101',
+      buyer_email: 'nuevo@prueba.test', payment_bank: 'Banesco (0134)', payment_reference: 'ART250'
+    });
+    const updatedTicket = await ticketDetails();
+    await api('PUT', '/api/admin/settings', { cookie: sup.cookie, json: { smtp_port: '2599' } });
+    const failedResend = await resend(updatedTicket.revision);
+    await api('PUT', '/api/admin/settings', { cookie: sup.cookie, json: { smtp_port: String(SMTP_PORT) } });
+    const { pdfResendHistory } = await ticketDetails();
+    const [failedEntry, sentEntry] = pdfResendHistory;
+    check('Arbitraje: el historial conserva el destinatario original y registra autor, fecha y error por intento',
+      failedResend.status === 502 && pdfResendHistory.length === 2 &&
+      failedEntry?.recipient_email === 'nuevo@prueba.test' && failedEntry.resend_status === 'ERROR' && /ECONNREFUSED/.test(failedEntry.resend_error) &&
+      sentEntry?.recipient_email === 'actualizado@prueba.test' && sentEntry.resend_status === 'SENT_SMTP' && !sentEntry.resend_error &&
+      pdfResendHistory.every(entry => entry.actor === 'soporte@prueba.test' && entry.created_at && entry.resend_completed_at));
+    const regularOverview = await api('GET', '/api/admin/overview', { cookie: adm.cookie });
+    check('Arbitraje: el historial de reenvíos solo está disponible para el superadministrador',
+      (await api('GET', arbitrationUrl, { cookie: adm.cookie })).status === 403 &&
+      regularOverview.data.emailLogs.every(log => log.type !== 'TICKET_DETAILS_CORRECTION'));
+    const withoutConfirmation = await action('cancel', updatedTicket.revision);
+    const cancelled = await action('cancel', updatedTicket.revision, { confirmation: 'ANULAR 250' });
     const oldQr = await api('GET', `/api/admin/verify-qr/${encodeURIComponent(soldTicket.order.verification_token)}`, { admin: true });
     const otherTicket = await api('GET', `/api/admin/verify-qr/${encodeURIComponent(token)}`, { admin: true });
     check('Arbitraje: anulación expresa libera solo la entrada elegida e invalida su QR', withoutConfirmation.status === 400 &&

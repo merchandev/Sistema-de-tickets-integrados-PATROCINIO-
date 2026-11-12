@@ -1779,6 +1779,22 @@ button.bg-emerald-600:hover {
 .arbitration-form .od-actions { margin-top: 0; }
 .arbitration-form [role="status"]:empty { display: none; }
 
+.pdf-resend-history {
+  margin-top: 16px;
+  padding: 12px 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow-wrap: anywhere;
+}
+.pdf-resend-history summary { cursor: pointer; font-weight: 700; }
+.pdf-resend-history ol { margin-top: 10px; }
+.pdf-resend-history li {
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+}
+.pdf-resend-history li p { margin-top: 6px; color: #a12a2a; }
+
 /* Mail account form */
 .mail-settings fieldset {
   margin: 0;

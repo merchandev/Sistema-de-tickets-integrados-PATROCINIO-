@@ -346,7 +346,11 @@ async function openTicketArbitration(number) {
       ${details.canResendCorrectedPdf ? `<p class="od-muted" data-resend-status role="status">Destinatario: ${escapeHtml(order.buyer_email)}</p>` : ''}
       ${attended ? '<p class="od-muted">La asistencia ya está registrada.</p>' : ''}
       <div class="od-actions">${actions.filter(action => action !== 'cancel' || !attended).map(action => `<button type="button" class="${action === 'cancel' ? 'od-reject' : action === 'approve' || action === 'assist' ? 'od-approve' : 'od-cancel'}" data-ticket-action="${action}">${arbitrationActions[action][0]}</button>`).join('')}</div>
-      <div data-arbitration-form></div>`;
+      <div data-arbitration-form></div>
+      ${details.canResendCorrectedPdf || details.pdfResendHistory.length ? `<details class="pdf-resend-history">
+        <summary>Historial de reenvíos del PDF corregido</summary>
+        <div data-resend-history>${renderPdfResendHistory(details.pdfResendHistory)}</div>
+      </details>` : ''}`;
     panel.querySelectorAll('[data-ticket-action]').forEach(button => button.addEventListener('click', () => {
       renderArbitrationForm(panel.querySelector('[data-arbitration-form]'), endpoint, number, details, button.dataset.ticketAction);
     }));
@@ -361,6 +365,11 @@ async function openTicketArbitration(number) {
         });
         const result = await response.json();
         status.textContent = result.message;
+        const latest = await fetch(endpoint).then(response => response.ok ? response.json() : null).catch(() => null);
+        if (latest) {
+          panel.querySelector('[data-resend-history]').innerHTML = renderPdfResendHistory(latest.pdfResendHistory);
+          panel.querySelector('.pdf-resend-history').open = true;
+        }
         if (response.ok) await fetchAdminOverview();
       } catch (_) {
         status.textContent = 'No se pudo confirmar el reenvío. Revisa el registro de correos.';
@@ -371,6 +380,22 @@ async function openTicketArbitration(number) {
   } catch (_) {
     panel.textContent = 'No se pudo cargar la entrada. Vuelve a abrirla desde el mapa.';
   }
+}
+
+function renderPdfResendHistory(entries) {
+  if (!entries.length) return '<p class="od-muted">Todavía no hay reenvíos registrados.</p>';
+  const formatter = new Intl.DateTimeFormat('es-VE', { dateStyle: 'medium', timeStyle: 'medium', timeZone: 'America/Caracas' });
+  const labels = { SENT_SMTP: 'Aceptado por el servidor de correo', ERROR: 'Error de envío', SIMULATED_OUTBOX: 'Prueba sin entrega' };
+  return `<ol>${entries.map(entry => {
+    const date = formatter.format(parseDbDate(entry.resend_completed_at || entry.created_at));
+    return `<li>
+      <strong>${escapeHtml(labels[entry.resend_status] || 'Resultado sin confirmar')}</strong>
+      <div>${escapeHtml(date)} · Hora de Venezuela · Orden #${escapeHtml(entry.order_id)}</div>
+      <div>Destinatario <strong>${escapeHtml(entry.recipient_email || 'Sin registro')}</strong></div>
+      <div>${entry.resend_status === 'SENT_SMTP' ? 'Enviado por' : 'Solicitado por'} <strong>${escapeHtml(entry.actor)}</strong></div>
+      ${entry.resend_error ? `<p>${escapeHtml(entry.resend_error)}</p>` : ''}
+    </li>`;
+  }).join('')}</ol>`;
 }
 
 function renderArbitrationForm(container, endpoint, number, { order, revision }, action) {
