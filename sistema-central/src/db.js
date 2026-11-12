@@ -668,7 +668,7 @@ function submitPaymentReport(report) {
 
 /**
  * Generates a unique cryptographic token for a verified ticket and marks the order APPROVED & ticket SOLD.
- * Standalone payment reports have no ticket yet: `assignTicket` must name an AVAILABLE one.
+ * Standalone payment reports receive the lowest available number.
  */
 function approveOrderAtomic(orderId, adminNotes = '', assignTicket = null) {
   db.exec('BEGIN IMMEDIATE TRANSACTION');
@@ -688,19 +688,18 @@ function approveOrderAtomic(orderId, adminNotes = '', assignTicket = null) {
         SET status = 'AVAILABLE', locked_by_session = NULL, locked_by_source = NULL, locked_at = NULL, locked_until = NULL, updated_at = datetime('now')
         WHERE status = 'LOCKED' AND locked_until IS NOT NULL AND locked_until <= ?
       `).run(Date.now());
-      assignTicket ??= nextAvailableTicket();
-      if (!assignTicket) {
+      const nextTicket = nextAvailableTicket();
+      if (!nextTicket) {
         db.exec('ROLLBACK');
         return { success: false, message: 'No hay una entrada libre para asignar a este pago.' };
       }
-      const ticket = db.prepare('SELECT status FROM tickets WHERE ticket_number = ?').get(assignTicket);
-      if (!ticket || ticket.status !== 'AVAILABLE') {
+      if (assignTicket && assignTicket !== nextTicket) {
         db.exec('ROLLBACK');
-        return { success: false, message: `La entrada #${assignTicket} no está disponible. Elige otra entrada libre.` };
+        return { success: false, message: `La primera entrada libre es la #${nextTicket}. Aprueba el pago con ese número o deja que se asigne automáticamente.` };
       }
-      db.prepare('UPDATE orders SET ticket_number = ? WHERE id = ?').run(assignTicket, orderId);
-      db.prepare('UPDATE tickets SET locked_by_source = ? WHERE ticket_number = ?').run(order.source_web, assignTicket);
-      order.ticket_number = assignTicket;
+      db.prepare('UPDATE orders SET ticket_number = ? WHERE id = ?').run(nextTicket, orderId);
+      db.prepare('UPDATE tickets SET locked_by_source = ? WHERE ticket_number = ?').run(order.source_web, nextTicket);
+      order.ticket_number = nextTicket;
     } else if (order.status !== 'PENDING' || !db.prepare("SELECT 1 FROM tickets WHERE ticket_number = ? AND status = 'PENDING' AND current_order_id = ?").get(order.ticket_number, orderId)) {
       db.exec('ROLLBACK');
       return { success: false, message: 'Esta orden ya fue aprobada anteriormente.' };

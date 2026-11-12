@@ -136,7 +136,14 @@ function parseMail(file) {
     check('Reintentar conserva el número y el plazo', JSON.stringify(repeated.data.ticket) === JSON.stringify(lock.data.ticket));
     const own = await api('GET', '/api/public/state', { sessionId: 'sess_e2e_checkout_1' });
     check('El público solo ve su reserva, sin inventario', state.data.reservation === null && !('tickets' in state.data) && own.data.reservation.ticket_number === '001' && !('tickets' in own.data));
-    await Promise.all(parallel.map((res, i) => api('POST', '/api/public/tickets/unlock', { json: { session_id: 'sess_e2e_parallel_' + i } })));
+    const releaseParallel = number => api('POST', '/api/public/tickets/unlock', {
+      json: { session_id: 'sess_e2e_parallel_' + parallel.findIndex(res => res.data.ticket.ticket_number === number) }
+    });
+    await releaseParallel('002');
+    const reused = await api('POST', '/api/public/tickets/lock', { json: { source_web: 'pagina-web-2', session_id: 'sess_e2e_reuse' } });
+    check('Se reutiliza el número libre más bajo aunque otro superior siga reservado', reused.status === 200 && reused.data.ticket.ticket_number === '002');
+    await api('POST', '/api/public/tickets/unlock', { json: { session_id: 'sess_e2e_reuse' } });
+    await releaseParallel('003');
     const badOrder = await api('POST', '/api/public/orders', { form: buyerForm({ ticket_number: '001', session_id: 'sess_e2e_checkout_1', buyer_cedula: 'abc' }) });
     check('Validación de cédula', badOrder.status === 400 && badOrder.data.field === 'buyer_cedula');
     const noCapture = await api('POST', '/api/public/orders', { form: buyerForm({ ticket_number: '001', session_id: 'sess_e2e_checkout_1', screenshot: null }) });
@@ -175,6 +182,7 @@ function parseMail(file) {
     check('Enviar reporte de pago sin número de entrada', report.status === 201, `respuesta en ${report.ms} ms`);
     await waitMails(4);
     check('No asigna una entrada vendida', (await api('POST', `/api/admin/orders/${report.data.order.id}/approve`, { admin: true, json: { ticket_number: '001' } })).status === 400);
+    check('El panel tampoco puede saltar una entrada libre', (await api('POST', `/api/admin/orders/${report.data.order.id}/approve`, { admin: true, json: { ticket_number: '003' } })).status === 400);
     const approveReport = await api('POST', `/api/admin/orders/${report.data.order.id}/approve`, { admin: true, json: {} });
     check('Aprobar reporte asigna automáticamente la primera libre', approveReport.status === 200 && approveReport.data.order.ticket_number === '002');
     await waitMails(5);

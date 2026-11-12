@@ -69,7 +69,8 @@ test("payment reports hold no ticket until approved with an available one", () =
   assert.equal(pending.ticket_number, "");
   assert.equal(pending.report_kind, "REPORT");
   // 010 is already in verification for the checkout order above
-  assert.match(store.approveOrderAtomic(pending.id, "", "010").message, /no está disponible/);
+  assert.match(store.approveOrderAtomic(pending.id, "", "010").message, /primera entrada libre es la #001/);
+  assert.equal(store.approveOrderAtomic(pending.id, "", "011").success, false);
   const approved = store.approveOrderAtomic(pending.id, "ok");
   assert.equal(approved.success, true);
   assert.equal(approved.order.ticket_number, "001");
