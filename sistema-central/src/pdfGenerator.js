@@ -201,4 +201,9 @@ async function generateDemoTicketPdf(source, eventConfig) {
   return Buffer.concat(chunks);
 }
 
-module.exports = { generateTicketPdf, generateDemoTicketPdf };
+function correctedTicketPdfFilename(order) {
+  const filename = /^\/storage\/tickets\/(ENTRADA-\d{3}-ORD\d+-[a-f0-9-]{36}\.pdf)$/.exec(order?.pdf_path || '')?.[1];
+  return filename?.startsWith(`ENTRADA-${order.ticket_number}-ORD${order.id}-`) ? filename : null;
+}
+
+module.exports = { generateTicketPdf, generateDemoTicketPdf, correctedTicketPdfFilename };

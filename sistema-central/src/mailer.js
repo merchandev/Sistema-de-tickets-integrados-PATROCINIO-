@@ -6,6 +6,7 @@ const nodemailer = require('nodemailer');
 const MailComposer = require('nodemailer/lib/mail-composer');
 const { ImapFlow } = require('imapflow');
 const { db, getAllSettings, getPublicConfig } = require('./db');
+const { correctedTicketPdfFilename } = require('./pdfGenerator');
 
 // Address and domain of the configured sender ("Nombre <correo@dominio>" or a bare address).
 function senderAddress(from) {
@@ -309,17 +310,19 @@ async function sendPaymentSubmittedEmail(order) {
  * 2. Sent when the administrator approves the payment: confirms it and carries the ticket PDF
  * (buyer data + QR) in a single message.
  */
-async function sendTicketEmail(order, pdfFullPath, pdfRelativeUrl, { correctedTime = false } = {}) {
+async function sendTicketEmail(order, pdfFullPath, pdfRelativeUrl, { correctedTime = false, correctedDetails = false } = {}) {
   const cfg = getPublicConfig();
   const brand = brandFor(order.source_web);
   const entryTime = formatTime(cfg.event_entry_time || '15:00');
   const html = layout(brand, {
-    preheader: correctedTime
+    preheader: correctedDetails ? 'Adjuntamos tu entrada corregida con el mismo código QR.' : correctedTime
       ? `El acceso y registro con QR comienzan a las ${entryTime}. Adjuntamos tu entrada actualizada.`
       : `Pago confirmado. Descarga tu entrada #${order.ticket_number} y ten el QR a mano para el ingreso.`,
-    title: correctedTime ? 'Actualizamos el horario de tu entrada' : 'Tu pago fue aprobado y tu entrada está lista',
+    title: correctedDetails ? 'Tu entrada corregida' : correctedTime ? 'Actualizamos el horario de tu entrada' : 'Tu pago fue aprobado y tu entrada está lista',
     paragraphs: [
-      correctedTime
+      correctedDetails
+        ? `Hola ${escapeHtml(firstName(order))}. Adjuntamos el PDF actualizado a nombre de <strong>${escapeHtml(order.buyer_name)}</strong>. El código QR sigue siendo el mismo. Presenta este PDF al llegar al evento.`
+        : correctedTime
         ? `Hola ${escapeHtml(firstName(order))}. El acceso y registro con QR comienzan a las <strong>${escapeHtml(entryTime)}</strong>. Te adjuntamos la entrada actualizada con el mismo código QR. Usa este PDF al llegar al evento.`
         : `Hola ${escapeHtml(firstName(order))}, gracias por apoyar <strong>${escapeHtml(cfg.event_title)}</strong>. Confirmamos tu pago y adjuntamos la entrada en PDF a nombre de <strong>${escapeHtml(order.buyer_name)}</strong>.`,
       fullEventAccess,
@@ -333,9 +336,9 @@ async function sendTicketEmail(order, pdfFullPath, pdfRelativeUrl, { correctedTi
   return sendSystemEmail({
     toEmail: order.buyer_email,
     toName: order.buyer_name,
-    subject: correctedTime ? 'Entrada actualizada: nuevo horario de acceso' : 'Muchas gracias por su apoyo, tu entrada está disponible',
+    subject: correctedDetails ? `Entrada #${order.ticket_number} corregida` : correctedTime ? 'Entrada actualizada: nuevo horario de acceso' : 'Muchas gracias por su apoyo, tu entrada está disponible',
     html,
-    type: correctedTime ? 'TICKET_TIME_CORRECTION' : 'TICKET_APPROVED',
+    type: correctedDetails ? 'TICKET_DETAILS_CORRECTION' : correctedTime ? 'TICKET_TIME_CORRECTION' : 'TICKET_APPROVED',
     orderId: order.id,
     ticketNumber: order.ticket_number,
     attachments: pdfFullPath
@@ -532,6 +535,9 @@ async function retryOrderEmail(logId) {
   if (!order || order.status !== orderEmailStates[log.type]) {
     return { ok: false, message: 'El estado del pago cambió. Este aviso ya no corresponde.' };
   }
+  if (order.status === 'APPROVED' && correctedTicketPdfFilename(order)) {
+    return { ok: false, message: 'El PDF corregido se envía desde el mapa de entradas con una sesión de superadministrador.' };
+  }
   const latest = db.prepare('SELECT id FROM email_logs WHERE order_id = ? AND type = ? ORDER BY id DESC LIMIT 1').get(log.order_id, log.type);
   const key = `${log.order_id}:${log.type}`;
   if (latest.id !== log.id || pendingRetries.has(key)) {
@@ -570,11 +576,12 @@ async function retryOrderEmail(logId) {
 // (for example, "en verificación" is not resent once the payment was approved).
 function undeliveredOrderEmails() {
   return db.prepare(`
-    SELECT l.id, l.type, l.status, o.status AS order_status
+    SELECT l.id, l.type, l.status, o.status AS order_status, o.pdf_path, o.id AS order_id, o.ticket_number
     FROM email_logs l JOIN orders o ON o.id = l.order_id
     WHERE l.id IN (SELECT MAX(id) FROM email_logs WHERE order_id IS NOT NULL GROUP BY order_id, type)
     ORDER BY l.id
-  `).all().filter(row => retryableStatuses.has(row.status) && orderEmailStates[row.type] === row.order_status);
+  `).all().filter(row => retryableStatuses.has(row.status) && orderEmailStates[row.type] === row.order_status
+    && !(row.order_status === 'APPROVED' && correctedTicketPdfFilename({ ...row, id: row.order_id })));
 }
 
 // Resends every undelivered notice in the order it was first produced.

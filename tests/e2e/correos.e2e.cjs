@@ -492,15 +492,36 @@ function parseMail(file) {
     const soldTicket = await ticketDetails();
     check('Arbitraje: aprobar emite el PDF y el QR sin volver a escribir en la hoja', approvedTicket.status === 200 && soldTicket.status === 'SOLD' &&
       soldTicket.order.pdf_path && soldTicket.order.verification_token && sheetRows.has(String(soldTicket.order.id)) && sheetWrites === sheetWritesAfterAssist);
+    const resendUrl = `${arbitrationUrl}/resend-pdf`;
+    const resend = (revision, cookie = sup.cookie) => api('POST', resendUrl, { cookie, json: { revision } });
+    const mailsBeforeEdit = mailFiles().length;
+    check('Arbitraje: el reenvío requiere que exista un PDF corregido', !soldTicket.canResendCorrectedPdf && (await resend(soldTicket.revision)).status === 409);
     const edited = await action('edit', soldTicket.revision, {
       buyer_first_name: 'Elena', buyer_last_name: 'Rodríguez', buyer_cedula: 'V-21456789', buyer_phone: '0414-5550101',
-      buyer_email: 'arbitraje@prueba.test', payment_bank: 'Banesco (0134)', payment_reference: 'ART250'
+      buyer_email: 'actualizado@prueba.test', payment_bank: 'Banesco (0134)', payment_reference: 'ART250'
     });
     const editedTicket = await ticketDetails();
     const editedPdf = await api('GET', editedTicket.order.pdf_path, { admin: true });
     check('Arbitraje: editar una venta actualiza el PDF y conserva el mismo QR', edited.status === 200 && editedTicket.order.buyer_name === 'Elena Rodríguez' &&
       editedTicket.order.verification_token === soldTicket.order.verification_token && editedTicket.order.pdf_path !== soldTicket.order.pdf_path &&
       editedPdf.status === 200 && editedPdf.data.subarray(0, 5).toString() === '%PDF-');
+    check('Arbitraje: corregir no envía y el reenvío exige superadministrador y datos vigentes', editedTicket.canResendCorrectedPdf &&
+      (await resend(editedTicket.revision, adm.cookie)).status === 403 && (await resend(soldTicket.revision)).status === 409 && mailFiles().length === mailsBeforeEdit);
+    const mailDb = new DatabaseSync(path.join(dataDir, 'entradas.sqlite'));
+    const oldNotice = mailDb.prepare("UPDATE email_logs SET status = 'ERROR' WHERE order_id = ? AND type = 'TICKET_APPROVED' RETURNING id").get(soldTicket.order.id);
+    mailDb.close();
+    const oldRetry = await api('POST', `/api/admin/mail/${oldNotice.id}/retry`, { cookie: adm.cookie, json: {} });
+    const retryOverview = await api('GET', '/api/admin/overview', { cookie: adm.cookie });
+    check('Arbitraje: el reintento general no puede enviar el PDF corregido', oldRetry.status === 409 &&
+      !retryOverview.data.retryableEmailIds.includes(oldNotice.id) && mailFiles().length === mailsBeforeEdit);
+    const manualResend = await resend(editedTicket.revision);
+    await waitMails(mailsBeforeEdit + 1);
+    const correctedEmail = parseMail(mailFiles().at(-1));
+    const attachment = /Content-Type: application\/pdf[\s\S]*?\r\n\r\n([A-Za-z0-9+/=\r\n]+)/.exec(correctedEmail.raw)?.[1];
+    check('Arbitraje: el reenvío adjunta exactamente el PDF corregido al correo actualizado', manualResend.status === 200 &&
+      mailFiles().length === mailsBeforeEdit + 1 && correctedEmail.subject === 'Entrada #250 corregida' &&
+      /^To: .*actualizado@prueba\.test/im.test(correctedEmail.raw) && Boolean(attachment) && Buffer.from(attachment, 'base64').equals(editedPdf.data) &&
+      (await ticketDetails()).order.verification_token === soldTicket.order.verification_token);
     const withoutConfirmation = await action('cancel', editedTicket.revision);
     const cancelled = await action('cancel', editedTicket.revision, { confirmation: 'ANULAR 250' });
     const oldQr = await api('GET', `/api/admin/verify-qr/${encodeURIComponent(soldTicket.order.verification_token)}`, { admin: true });

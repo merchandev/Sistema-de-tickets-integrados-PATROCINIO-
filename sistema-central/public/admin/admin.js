@@ -341,13 +341,33 @@ async function openTicketArbitration(number) {
         <div class="od-actions">
           ${order.screenshot_path ? `<a class="od-cancel" href="${escapeHtml(order.screenshot_path)}" target="_blank" rel="noopener">Ver comprobante</a>` : ''}
           ${order.pdf_path ? `<a class="od-cancel" href="${escapeHtml(order.pdf_path)}" target="_blank" rel="noopener">Abrir PDF</a>` : ''}
+          ${details.canResendCorrectedPdf ? '<button type="button" class="od-approve" data-resend-pdf>Reenviar PDF corregido</button>' : ''}
         </div>` : ''}
+      ${details.canResendCorrectedPdf ? `<p class="od-muted" data-resend-status role="status">Destinatario: ${escapeHtml(order.buyer_email)}</p>` : ''}
       ${attended ? '<p class="od-muted">La asistencia ya está registrada.</p>' : ''}
       <div class="od-actions">${actions.filter(action => action !== 'cancel' || !attended).map(action => `<button type="button" class="${action === 'cancel' ? 'od-reject' : action === 'approve' || action === 'assist' ? 'od-approve' : 'od-cancel'}" data-ticket-action="${action}">${arbitrationActions[action][0]}</button>`).join('')}</div>
       <div data-arbitration-form></div>`;
     panel.querySelectorAll('[data-ticket-action]').forEach(button => button.addEventListener('click', () => {
       renderArbitrationForm(panel.querySelector('[data-arbitration-form]'), endpoint, number, details, button.dataset.ticketAction);
     }));
+    const resend = panel.querySelector('[data-resend-pdf]');
+    resend?.addEventListener('click', async () => {
+      const status = panel.querySelector('[data-resend-status]');
+      resend.disabled = true;
+      status.textContent = `Enviando el PDF a ${order.buyer_email}…`;
+      try {
+        const response = await fetch(`${endpoint}/resend-pdf`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ revision: details.revision })
+        });
+        const result = await response.json();
+        status.textContent = result.message;
+        if (response.ok) await fetchAdminOverview();
+      } catch (_) {
+        status.textContent = 'No se pudo confirmar el reenvío. Revisa el registro de correos.';
+      } finally {
+        resend.disabled = false;
+      }
+    });
   } catch (_) {
     panel.textContent = 'No se pudo cargar la entrada. Vuelve a abrirla desde el mapa.';
   }
@@ -1138,24 +1158,14 @@ function renderEmailLogs() {
   if (!tbody) return;
 
   const logs = state.emailLogs || [];
-  const latest = new Set();
-  const emailStates = { PAYMENT_RECEIVED: 'PENDING', TICKET_APPROVED: 'APPROVED', TICKET_TIME_CORRECTION: 'APPROVED', PAYMENT_REJECTED: 'REJECTED' };
-  const canRetry = logs.map(log => {
-    const key = `${log.order_id}:${log.type}`;
-    const isLatest = !latest.has(key);
-    latest.add(key);
-    return isLatest && state.settings?.smtp_delivery_mode === 'smtp' &&
-      ['SIMULATED_OUTBOX', 'ERROR'].includes(log.status) &&
-      Object.hasOwn(emailStates, log.type) &&
-      state.orders?.some(order => order.id === log.order_id && order.status === emailStates[log.type]);
-  });
+  const retryableIds = new Set(state.retryableEmailIds);
   const statusLabels = { SENT_SMTP: 'Aceptado por SMTP', SIMULATED_OUTBOX: 'Prueba · sin entrega', ERROR: 'Error de envío' };
   if (logs.length === 0) {
     tbody.innerHTML = `<tr><td colspan="7" class="py-6 text-center text-slate-400">Aún no se han enviado correos.</td></tr>`;
     return;
   }
 
-  tbody.innerHTML = logs.map((l, idx) => `
+  tbody.innerHTML = logs.map(l => `
     <tr class="hover:bg-slate-50">
       <td class="py-2.5 px-3 text-slate-500">${l.created_at}</td>
       <td class="py-2.5 px-3"><span class="px-2 py-0.5 rounded bg-slate-100 font-mono text-[10px] font-bold">${l.type}</span></td>
@@ -1172,7 +1182,7 @@ function renderEmailLogs() {
         <button onclick="previewEmailLog(${idx})" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 rounded text-xs font-semibold">
           Ver correo
         </button>
-        ${canRetry[idx] ? `<button onclick="retryMailLog(${l.id}, this)" class="px-2.5 py-1 rounded text-xs font-semibold">Reenviar</button>` : ''}
+        ${state.settings?.smtp_delivery_mode === 'smtp' && retryableIds.has(l.id) ? `<button onclick="retryMailLog(${l.id}, this)" class="px-2.5 py-1 rounded text-xs font-semibold">Reenviar</button>` : ''}
       </td>
     </tr>
   `).join('');
