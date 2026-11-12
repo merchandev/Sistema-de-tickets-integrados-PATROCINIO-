@@ -546,7 +546,6 @@ app.post('/api/admin/orders/:id/approve', ticketRoute(async (req, res) => {
 
     // Payment confirmation and the ticket with the PDF attached, in a single email
     const emailResult = await sendTicketEmail(finalOrder, pdfFullPath, pdfRelativeUrl);
-    googleSheets.syncOrder(finalOrder);
 
     broadcastTicketsUpdate({
       name: 'admin:order_updated',
@@ -583,7 +582,6 @@ app.post('/api/admin/orders/:id/reject', ticketRoute(async (req, res) => {
     }
 
     const emailResult = await sendPaymentRejectedEmail(result.order, reason);
-    googleSheets.syncOrder(result.order);
 
     broadcastTicketsUpdate({
       name: 'admin:order_updated',

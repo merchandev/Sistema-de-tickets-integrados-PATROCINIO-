@@ -366,7 +366,7 @@
         <div class="sheet-head">
           <div>
             <h2 id="sheet-title">Hoja de control en Google Sheets</h2>
-            <p>Cada pago nuevo, aprobado o rechazado se copia en la hoja, donde el equipo lo marca como «Por verificar», «Verificado» o «Rechazado» antes de aprobarlo aquí. Cambiar el estado en la hoja no aprueba ni rechaza nada en la web.</p>
+            <p>La hoja recibe una fila cuando el comprador reporta un pago. El equipo completa manualmente «Validación en el banco» y «Validación en web». Los pagos del sistema se gestionan aquí en el panel.</p>
           </div>
           <a id="sheet-open" class="admin-secondary" href="#" target="_blank" rel="noopener">Abrir la hoja ↗</a>
         </div>
@@ -384,7 +384,7 @@
           <div class="sheet-actions">
             <button type="submit" class="admin-primary" id="sheet-save">Guardar</button>
             <button type="button" class="admin-secondary" id="sheet-test">Probar conexión</button>
-            <button type="button" class="admin-secondary" id="sheet-sync">Enviar todos los pagos a la hoja</button>
+            <button type="button" class="admin-secondary" id="sheet-sync">Copiar pagos faltantes</button>
           </div>
           <p id="sheet-status" class="sheet-status" role="status"></p>
         </form>

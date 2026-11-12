@@ -119,13 +119,15 @@ El dominio del remitente, `merchan.cloud`, tiene SPF (`include:_spf.mail.hosting
 
 ## Hoja de control en Google Sheets
 
-Cada pago nuevo, aprobado o rechazado se copia en una hoja de Google para que el equipo lo revise por fuera de la web. La columna «Validación del equipo» es una lista desplegable (Por verificar, Verificado, Rechazado) y «Notas del equipo» es libre; el sistema nunca las sobrescribe, salvo cerrar en «Verificado» o «Rechazado» una validación que seguía «Por verificar» cuando la web decide. Cambiar el estado en la hoja **no** aprueba ni rechaza nada en la web.
+Cada pago reportado por el comprador agrega una fila por ID. «Validación en el banco» y «Validación en web» son listas desplegables de revisión manual. Aprobar, rechazar o registrar la asistencia en el panel no modifica la hoja, y las ediciones en la hoja no modifican el sistema.
 
 Instalación (una vez, en la cuenta dueña de la hoja):
 
 1. En la hoja: **Extensiones → Apps Script**. Borrar el contenido, pegar `integraciones/google-sheets/Codigo.gs` y guardar.
 2. Recargar la hoja. Menú **Entradas → Configurar la hoja**, autorizar y copiar la clave de conexión.
 3. En Apps Script: **Implementar → Nueva implementación → Aplicación web**, ejecutar como «Yo», acceso «Cualquier usuario». Copiar la URL `https://script.google.com/macros/s/…/exec`.
-4. Panel → **Evento y contenido → Hoja de control en Google Sheets** (superadministrador): pegar URL y clave, guardar, «Probar conexión» y «Enviar todos los pagos a la hoja».
+4. Panel → **Evento y contenido → Hoja de control en Google Sheets** (superadministrador): pegar URL y clave, guardar, «Probar conexión» y «Copiar pagos faltantes».
+
+«Copiar pagos faltantes» requiere la versión actual de Apps Script. Para actualizarla, edita la implementación existente, elige «Nueva versión» y conserva la URL del panel. Las filas ya registradas se omiten por ID.
 
 La clave solo se guarda en el servidor y no vuelve al navegador. Cada envío deja una línea `[Hoja] …` en el registro del contenedor; un fallo de la hoja nunca bloquea un pago. La hoja contiene datos personales: compartirla solo con las personas del equipo.

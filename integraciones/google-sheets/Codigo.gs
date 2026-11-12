@@ -1,9 +1,8 @@
 /**
  * Hoja de control de pagos · Entradas de Iluminando Caminos y Hablemos de Marketing.
  *
- * El sistema de entradas envía aquí cada pago (nuevo, aprobado o rechazado) y este script crea o
- * actualiza su fila. «Validación en el banco» guarda la revisión manual del equipo.
- * «Validación en web» refleja el estado del sistema, que se administra desde el panel.
+ * El sistema envía cada pago al recibir el reporte. Cada ID se agrega una sola vez.
+ * El equipo edita manualmente «Validación en el banco» y «Validación en web».
  *
  * Instalación (una sola vez), de una de estas dos formas:
  *   A. En la hoja: Extensiones → Apps Script. Pega este archivo y guarda. Recarga la hoja, en el menú
@@ -21,15 +20,14 @@
 const NOMBRE_HOJA = 'Pagos';
 // Hoja que recibe los pagos; se usa cuando el script no está dentro de la propia hoja
 const ID_HOJA = '1-QwaXmGvrgs3RopcTrPnPhtp62gFX9J21NVxKSQLy6I';
-// Columnas visibles, en este orden; la última («ID») queda oculta y sirve para encontrar la fila de cada pago
-const ENCABEZADOS = ['Referencia', 'Monto (Bs.)', 'Banco', 'Nombre', 'Cédula', 'Entrada', 'Fecha de pago', 'Validación en el banco', 'Validación en web', 'ID'];
+// El ID queda oculto. Su posición en I también admite la implementación original del script.
+const ENCABEZADOS = ['Referencia', 'Monto (Bs.)', 'Banco', 'Nombre', 'Cédula', 'Entrada', 'Fecha de pago', 'Validación en el banco', 'ID', 'Validación en web'];
 const COL_MONTO = 2;
 const COL_BANCO = 8;
-const COL_ESTADO_WEB = 9;
-const COL_ID = 10;
+const COL_ID = 9;
+const COL_VALIDACION_WEB = 10;
 const TEXTO_COLUMNAS = [1, 3, 4, 5, 6, 7, COL_ID];
 const VALIDACIONES = ['Por verificar', 'Verificado', 'Rechazado'];
-const ESTADOS_WEB = { 'En verificación': 'Por verificar', Aprobado: 'Verificado', Rechazado: 'Rechazado' };
 
 function onOpen() {
   SpreadsheetApp.getUi()
@@ -78,19 +76,24 @@ function clave_() {
 
 function prepararEncabezados_(hoja) {
   if (hoja.getLastRow() > 0) {
-    const ancho = Math.min(hoja.getMaxColumns(), COL_ID);
+    const ancho = Math.min(hoja.getMaxColumns(), ENCABEZADOS.length);
     const encabezados = hoja.getRange(1, 1, 1, ancho).getDisplayValues()[0];
     if (ENCABEZADOS.every((titulo, i) => encabezados[i] === titulo)) return;
-    const formatoAnterior = ENCABEZADOS.slice(0, 7).every((titulo, i) => encabezados[i] === titulo)
-      && encabezados[COL_BANCO - 1] === 'Validación del equipo'
-      && encabezados[COL_ESTADO_WEB - 1] === 'ID';
-    if (!formatoAnterior) throw new Error('Los encabezados de la pestaña Pagos no coinciden con la configuración de la integración.');
-    hoja.insertColumnBefore(COL_ESTADO_WEB);
+    const baseCorrecta = ENCABEZADOS.slice(0, 7).every((titulo, i) => encabezados[i] === titulo);
+    const formatoAnterior = encabezados[7] === 'Validación del equipo' && encabezados[8] === 'ID' && !encabezados[9];
+    const columnasInvertidas = encabezados[7] === ENCABEZADOS[7]
+      && encabezados[8] === ENCABEZADOS[9] && encabezados[9] === ENCABEZADOS[8];
+    if (!baseCorrecta || (!formatoAnterior && !columnasInvertidas)) {
+      throw new Error('Los encabezados de la pestaña Pagos no coinciden con la configuración de la integración.');
+    }
+    if (columnasInvertidas) hoja.moveColumns(hoja.getRange('J:J'), COL_ID);
   }
-  if (hoja.getMaxColumns() < COL_ID) {
-    hoja.insertColumnsAfter(hoja.getMaxColumns(), COL_ID - hoja.getMaxColumns());
+  if (hoja.getMaxColumns() < ENCABEZADOS.length) {
+    hoja.insertColumnsAfter(hoja.getMaxColumns(), ENCABEZADOS.length - hoja.getMaxColumns());
   }
-  hoja.getRange(1, 1, 1, COL_ID).setValues([ENCABEZADOS]).setFontWeight('bold');
+  hoja.getRange(1, 1, 1, ENCABEZADOS.length).setValues([ENCABEZADOS]).setFontWeight('bold');
+  hoja.hideColumns(COL_ID);
+  hoja.showColumns(COL_VALIDACION_WEB);
 }
 
 /** Prepara encabezados, formatos, la lista desplegable y los colores. Se puede repetir sin perder datos. */
@@ -103,15 +106,15 @@ function configurar() {
   hoja.setFrozenRows(1);
   hoja.setFrozenColumns(0);
   hoja.setRowHeight(1, 36);
-  const anchos = [130, 120, 170, 200, 120, 110, 150, 170, 170, 60];
+  const anchos = [130, 120, 170, 200, 120, 110, 150, 170, 60, 170];
   anchos.forEach((ancho, i) => hoja.setColumnWidth(i + 1, ancho));
   hoja.hideColumns(COL_ID);
 
   const filas = Math.max(hoja.getMaxRows() - 1, 1);
   TEXTO_COLUMNAS.forEach(col => hoja.getRange(2, col, filas, 1).setNumberFormat('@'));
   hoja.getRange(2, COL_MONTO, filas, 1).setNumberFormat('#,##0.00');
-  const validaciones = hoja.getRange(2, COL_BANCO, filas, 2);
-  validaciones.setDataValidation(reglaValidacion_());
+  const validaciones = [COL_BANCO, COL_VALIDACION_WEB].map(col => hoja.getRange(2, col, filas, 1));
+  validaciones.forEach(rango => rango.setDataValidation(reglaValidacion_()));
 
   const colores = [
     ['Por verificar', '#fff4d6', '#7a5200'],
@@ -120,7 +123,7 @@ function configurar() {
   ];
   hoja.setConditionalFormatRules(colores.map(([texto, fondo, letra]) => SpreadsheetApp.newConditionalFormatRule()
     .whenTextEqualTo(texto).setBackground(fondo).setFontColor(letra).setBold(true)
-    .setRanges([validaciones]).build()));
+    .setRanges(validaciones).build()));
 
   avisar_(
     'Hoja lista',
@@ -160,42 +163,42 @@ function doPost(e) {
     const hoja = hoja_();
     prepararEncabezados_(hoja);
     const ultima = hoja.getLastRow();
-    const filaPorId = new Map();
+    const ids = new Set();
     if (ultima > 1) {
-      hoja.getRange(2, COL_ID, ultima - 1, 1).getValues().forEach(([valor], i) => {
+      hoja.getRange(2, COL_ID, ultima - 1, 1).getValues().forEach(([valor]) => {
         const id = String(valor).trim();
-        if (id) filaPorId.set(id, i + 2);
+        if (id) ids.add(id);
       });
     }
-    if (prueba) return respuesta_({ ok: true, hoja: libro_().getName(), filas: filaPorId.size });
+    if (prueba) {
+      SpreadsheetApp.flush();
+      return respuesta_({ ok: true, hoja: libro_().getName(), filas: ids.size, soloNuevos: true });
+    }
 
     let siguienteFila = ultima + 1;
     let nuevas = 0;
-    let actualizadas = 0;
+    let existentes = 0;
+    const regla = reglaValidacion_();
     cuerpo.pedidos.forEach(p => {
       const id = String(p.id || '').trim();
       if (!id) return;
-      let fila = filaPorId.get(id);
-      if (!fila) {
-        fila = siguienteFila++;
-        if (fila > hoja.getMaxRows()) hoja.insertRowsAfter(hoja.getMaxRows(), fila - hoja.getMaxRows());
-        hoja.getRange(fila, COL_ID).setNumberFormat('@').setValue(id);
-        filaPorId.set(id, fila);
-        nuevas++;
-      } else {
-        actualizadas++;
+      if (ids.has(id)) {
+        existentes++;
+        return;
       }
+      const fila = siguienteFila++;
+      if (fila > hoja.getMaxRows()) hoja.insertRowsAfter(hoja.getMaxRows(), fila - hoja.getMaxRows());
       TEXTO_COLUMNAS.forEach(col => hoja.getRange(fila, col).setNumberFormat('@'));
-      hoja.getRange(fila, 1, 1, 7).setValues([[
-        p.referencia || '', Number(p.montoBs) || 0, p.banco || '', p.nombre || '', p.cedula || '', p.entrada || '', p.fecha || ''
+      hoja.getRange(fila, COL_BANCO).setDataValidation(regla);
+      hoja.getRange(fila, COL_VALIDACION_WEB).setDataValidation(regla);
+      hoja.getRange(fila, 1, 1, ENCABEZADOS.length).setValues([[
+        p.referencia || '', Number(p.montoBs) || 0, p.banco || '', p.nombre || '', p.cedula || '', p.entrada || '', p.fecha || '', '', id, ''
       ]]);
-      const banco = hoja.getRange(fila, COL_BANCO).setDataValidation(reglaValidacion_());
-      if (!banco.getValue()) banco.setValue('Por verificar');
-      hoja.getRange(fila, COL_ESTADO_WEB).setDataValidation(reglaValidacion_())
-        .setValue(ESTADOS_WEB[p.estadoWeb] || 'Por verificar');
+      ids.add(id);
+      nuevas++;
     });
     SpreadsheetApp.flush();
-    return respuesta_({ ok: true, nuevas: nuevas, actualizadas: actualizadas });
+    return respuesta_({ ok: true, nuevas, existentes });
   } catch (err) {
     return respuesta_({ ok: false, error: String(err.message || err) });
   } finally {

@@ -1,11 +1,8 @@
 // Payment control sheet in Google Sheets (integraciones/google-sheets/Codigo.gs).
-// Every new, approved or rejected payment is sent to the sheet's Apps Script web app, which creates or
-// updates its row. The sheet is a copy for the team to review payments outside the web: changing a
-// status there never approves or rejects anything here.
+// Send reported payments to Apps Script. The team manages both validations in the sheet.
 const { db, getAllSettings, updateSettings } = require('./db');
 
 const SITE_NAMES = { 'pagina-web-1': 'Iluminando Caminos', 'pagina-web-2': 'Hablemos de Marketing' };
-const WEB_STATES = { PENDING: 'En verificación', APPROVED: 'Aprobado', REJECTED: 'Rechazado' };
 const WEB_APP_URL = /^https:\/\/script\.google\.com\/macros\/s\/[\w-]{20,}\/exec$/;
 const SHEET_URL = /^https:\/\/docs\.google\.com\/spreadsheets\/d\/[\w-]{20,}(\/[^\s]*)?$/;
 const BATCH = 100;
@@ -44,8 +41,7 @@ function toRow(order) {
     montoUsd: Number(order.amount_usd) || 0,
     tasa: Number(order.bcv_rate) || 0,
     comprobante: order.screenshot_path && base ? base + order.screenshot_path : '',
-    comentario: order.buyer_comment || '',
-    estadoWeb: WEB_STATES[order.status] || order.status || ''
+    comentario: order.buyer_comment || ''
   };
 }
 
@@ -81,8 +77,7 @@ function remember(result, what) {
 /** Sends one order in the background; a failure is logged and never affects the payment flow. */
 function syncOrder(order) {
   if (!order || !config().configured) return;
-  const fresh = db.prepare('SELECT * FROM orders WHERE id = ?').get(order.id) || order;
-  post({ accion: 'pedidos', pedidos: [toRow(fresh)] })
+  post({ accion: 'pedidos', pedidos: [toRow(order)] })
     .then(result => remember(result, `pago #${order.id}`))
     .catch(err => remember({ ok: false, message: err.message }, `pago #${order.id}`));
 }
@@ -94,21 +89,26 @@ async function testConnection() {
     : result;
 }
 
-/** Sends every order, oldest first, so the sheet holds the whole history. */
+/** Backfills missing payments through a version that skips existing rows by ID. */
 async function syncAll() {
+  const connection = await post({ accion: 'prueba' });
+  if (!connection.ok) return connection;
+  if (connection.soloNuevos !== true) {
+    return { ok: false, message: 'Publica la versión actual de Apps Script para copiar pagos faltantes sin modificar filas existentes.' };
+  }
   const orders = db.prepare('SELECT * FROM orders ORDER BY id').all();
   let nuevas = 0;
-  let actualizadas = 0;
+  let existentes = 0;
   for (let i = 0; i < orders.length; i += BATCH) {
     const result = await post({ accion: 'pedidos', pedidos: orders.slice(i, i + BATCH).map(toRow) });
     if (!result.ok) {
       remember(result, 'envío completo');
-      return { ok: false, message: `${result.message} Se enviaron ${nuevas + actualizadas} de ${orders.length} pagos.` };
+      return { ok: false, message: `${result.message} Se revisaron ${nuevas + existentes} de ${orders.length} pagos.` };
     }
     nuevas += result.nuevas || 0;
-    actualizadas += result.actualizadas || 0;
+    existentes += result.existentes || 0;
   }
-  const done = { ok: true, message: `Hoja al día: ${orders.length} pago(s) enviados (${nuevas} nuevos, ${actualizadas} actualizados).` };
+  const done = { ok: true, message: `Hoja al día. Pagos agregados: ${nuevas}. Filas existentes: ${existentes}.` };
   remember(done, 'envío completo');
   return done;
 }

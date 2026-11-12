@@ -404,6 +404,7 @@ function parseMail(file) {
     const http = require('node:http');
     const SHEET_KEY = crypto.randomBytes(12).toString('hex');
     const sheetRows = new Map();
+    let sheetWrites = 0;
     const sheetResults = new Map();
     const sheetApp = http.createServer((req, res) => {
       if (req.method === 'GET' && req.url.startsWith('/resultado/')) {
@@ -416,11 +417,16 @@ function parseMail(file) {
         const body = JSON.parse(raw || '{}');
         let result;
         if (body.clave !== SHEET_KEY) result = { ok: false, error: 'Clave de conexión incorrecta' };
-        else if (body.accion === 'prueba') result = { ok: true, hoja: 'CONTROL DE ENTRADAS', filas: sheetRows.size };
+        else if (body.accion === 'prueba') result = { ok: true, hoja: 'CONTROL DE ENTRADAS', filas: sheetRows.size, soloNuevos: true };
         else {
-          let nuevas = 0, actualizadas = 0;
-          for (const p of body.pedidos) { sheetRows.has(String(p.id)) ? actualizadas++ : nuevas++; sheetRows.set(String(p.id), p); }
-          result = { ok: true, nuevas, actualizadas };
+          sheetWrites++;
+          let nuevas = 0, existentes = 0;
+          for (const p of body.pedidos) {
+            if (sheetRows.has(String(p.id))) { existentes++; continue; }
+            sheetRows.set(String(p.id), p);
+            nuevas++;
+          }
+          result = { ok: true, nuevas, existentes };
         }
         const where = `/resultado/${sheetResults.size + 1}`;
         sheetResults.set(where, JSON.stringify(result));
@@ -444,11 +450,17 @@ function parseMail(file) {
     const totalOrders = (await api('GET', '/api/admin/overview', { admin: true })).data.orders.length;
     const syncAll = await api('POST', '/api/admin/sheets/sync-all', { cookie: sup.cookie, json: {} });
     check('Hoja: enviar todos los pagos', syncAll.status === 200 && sheetRows.size === totalOrders && totalOrders > 0, syncAll.data.message);
-    check('Hoja: estados de la web en la fila', [...sheetRows.values()].some(r => r.estadoWeb === 'Aprobado') && [...sheetRows.values()].some(r => r.estadoWeb === 'Rechazado'));
+    check('Hoja: las validaciones son manuales', [...sheetRows.values()].every(r => !('estadoWeb' in r)));
     const sheetReport = await api('POST', '/api/public/payment-reports', { form: buyerForm({ buyer_email: 'hoja@prueba.test', buyer_first_name: 'Hoja', buyer_last_name: 'Prueba' }) });
     let sheetRow;
     for (let i = 0; i < 40 && !sheetRow; i++) { await sleep(150); sheetRow = sheetRows.get(String(sheetReport.data.order.id)); }
-    check('Hoja: un pago nuevo llega solo', Boolean(sheetRow) && sheetRow.estadoWeb === 'En verificación' && sheetRow.correo === 'hoja@prueba.test' && /^Por asignar/.test(sheetRow.entrada) && sheetRow.comprobante.startsWith(BASE + '/storage/uploads/'), JSON.stringify(sheetRow || {}).slice(0, 160));
+    check('Hoja: un pago nuevo llega solo', Boolean(sheetRow) && !('estadoWeb' in sheetRow) && sheetRow.correo === 'hoja@prueba.test' && /^Por asignar/.test(sheetRow.entrada) && sheetRow.comprobante.startsWith(BASE + '/storage/uploads/'));
+    const writesBeforeReview = sheetWrites;
+    const rejectedSheetPayment = await api('POST', `/api/admin/orders/${sheetReport.data.order.id}/reject`, { admin: true, json: { reason: 'Prueba de la hoja' } });
+    await sleep(200);
+    check('Hoja: rechazar un pago no envía otra escritura', rejectedSheetPayment.status === 200 && sheetWrites === writesBeforeReview);
+    const replay = await api('POST', '/api/admin/sheets/sync-all', { cookie: sup.cookie, json: {} });
+    check('Hoja: la recuperación omite filas existentes', replay.status === 200 && /Pagos agregados: 0/.test(replay.data.message) && sheetRows.get(String(sheetReport.data.order.id)) === sheetRow);
     sheetApp.close();
 
     check('Log del servidor sin errores inesperados', !/Error (approving|rejecting|submitting)|Unhandled|TypeError/.test(serverLog));
