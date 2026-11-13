@@ -311,7 +311,7 @@ function sendInBackground(send) {
 function saveScreenshot(req, label) {
   if (req.file) return `/storage/uploads/${req.file.filename}`;
   if (!req.body.screenshot_base64) return '';
-  const filename = `pago-${label}-${Date.now()}.png`;
+  const filename = `pago-${label}-${randomUUID()}.png`;
   fs.writeFileSync(path.join(uploadsDir, filename), Buffer.from(req.body.screenshot_base64.replace(/^data:image\/\w+;base64,/, ''), 'base64'));
   return `/storage/uploads/${filename}`;
 }
@@ -319,19 +319,37 @@ const validScreenshot = (req) => !req.body.screenshot_base64 || /^data:image\/pn
 const hasScreenshot = (req) => Boolean(req.file || req.body.screenshot_base64);
 const MISSING_SCREENSHOT = { ok: false, field: 'screenshot', message: 'Adjunta la captura del pago (imagen PNG, JPG o WebP de hasta 10 MB).' };
 
-function existingPayment(req, sessionId, source, payment) {
-  if (!sessionId) return null;
+function existingPayment(payment) {
   const order = db.prepare(`
     SELECT id, ticket_number, status FROM orders
-    WHERE session_id = ? AND source_web = ? AND buyer_cedula = ? AND buyer_email = ?
-      AND payment_bank = ? AND payment_reference = ? AND status IN ('PENDING', 'APPROVED')
+    WHERE upper(replace(replace(buyer_cedula, '-', ''), ' ', '')) = upper(replace(?, '-', ''))
+      AND lower(buyer_email) = ? AND trim(payment_bank) = ? COLLATE NOCASE
+      AND payment_reference = ? COLLATE NOCASE AND status IN ('PENDING', 'APPROVED')
     ORDER BY id DESC LIMIT 1
-  `).get(sessionId, source, payment.buyer_cedula, payment.buyer_email, payment.payment_bank, payment.payment_reference);
+  `).get(payment.buyer_cedula, payment.buyer_email, payment.payment_bank, payment.payment_reference);
   if (!order) return null;
-  if (req.file) fs.unlink(req.file.path, () => {});
   return {
     ok: true, order,
     message: order.status === 'APPROVED' ? 'Este pago ya fue aprobado.' : 'Ya recibimos este pago. Está pendiente de verificación.'
+  };
+}
+
+function discardUnstoredProof(req, screenshotPath) {
+  const file = req.file?.path || (screenshotPath && path.join(uploadsDir, path.basename(screenshotPath)));
+  if (file) fs.unlink(file, () => {});
+}
+
+function notifyPaymentReceived(order) {
+  sendInBackground(() => sendPaymentSubmittedEmail(order));
+  googleSheets.syncOrder(order);
+  broadcastTicketsUpdate({ name: 'admin:order_created' });
+}
+
+function paymentReportReceipt(order) {
+  return {
+    ok: true,
+    message: `Recibimos tu reporte de pago #${order.id}. Te avisaremos a ${order.buyer_email} cuando se verifique y se asigne una entrada.`,
+    order: { id: order.id, status: order.status }
   };
 }
 
@@ -339,6 +357,8 @@ function existingPayment(req, sessionId, source, payment) {
  * Payment form of the checkout popup: buyer data + Pago Móvil reference for the ticket locked by this session.
  */
 app.post('/api/public/orders', requireSalesOpen, ticketRoute(async (req, res) => {
+  let screenshotPath;
+  let stored = false;
   try {
     const source = resolveSalesSource(req);
     if (!source) return res.status(403).json({ok:false, code:'INVALID_SOURCE', message:'Reporta el pago desde una de las páginas de venta.'});
@@ -349,48 +369,47 @@ app.post('/api/public/orders', requireSalesOpen, ticketRoute(async (req, res) =>
     }
     const form = parsePaymentForm(req.body);
     if (!form.ok) return res.status(400).json({ ok: false, field: form.field, message: form.message });
+    const existing = existingPayment(form.data);
+    if (existing) return res.json(existing);
     if (!validScreenshot(req)) return res.status(400).json({ ok: false, field: 'screenshot', message: 'La captura no es una imagen válida.' });
     if (!hasScreenshot(req)) return res.status(400).json(MISSING_SCREENSHOT);
-    const existing = existingPayment(req, sessionId, source, form.data);
-    if (existing) return res.json(existing);
 
     const config = getPublicConfig();
-    const submitResult = submitOrderAtomic({
-      ticket_number: ticketNumber,
+    screenshotPath = saveScreenshot(req, 'ticket-' + ticketNumber);
+    const payment = {
+      source_web: source,
       session_id: sessionId,
       ...form.data,
-      screenshot_path: saveScreenshot(req, `ticket-${ticketNumber}`),
+      screenshot_path: screenshotPath,
       amount_usd: config.ticket_price_usd,
       bcv_rate: config.bcv_rate,
       amount_ves: config.ticket_price_ves
-    });
-
+    };
+    const submitResult = submitOrderAtomic({ ...payment, ticket_number: ticketNumber });
     if (!submitResult.success) {
-      return res.status(409).json({
-        ok: false,
-        code: submitResult.code,
-        message: submitResult.message
-      });
+      const report = submitPaymentReport({ ...payment, requested_ticket: ticketNumber,
+        buyer_comment: 'Pago enviado cuando la reserva ya no estaba vigente.' });
+      stored = true;
+      res.status(201).json(paymentReportReceipt(report));
+      notifyPaymentReceived(report);
+      return;
     }
 
-    // Real-time update for both pages and the dashboard; the "Pago en verificación" email goes out in
-    // the background so the buyer gets the confirmation without waiting for the mail server.
-    broadcastTicketsUpdate({
-      name: 'admin:order_created',
-      payload: submitResult.order
-    });
-    sendInBackground(() => sendPaymentSubmittedEmail(submitResult.order));
-    googleSheets.syncOrder(submitResult.order);
+    stored = true;
 
     const { id, buyer_email: email, status } = submitResult.order;
-    return res.status(201).json({
+    res.status(201).json({
       ok: true,
-      message: `Recibimos el pago de tu entrada #${ticketNumber}. Te enviamos un correo a ${email}: la verificación puede tardar hasta 24 horas y, al aprobarse, recibirás tu entrada en PDF.`,
+      message: `Recibimos el pago de tu entrada #${ticketNumber}. Te avisaremos a ${email}: la verificación puede tardar hasta 24 horas y, al aprobarse, recibirás tu entrada en PDF.`,
       order: { id, ticket_number: ticketNumber, buyer_email: email, status }
     });
+    notifyPaymentReceived(submitResult.order);
   } catch (err) {
     console.error('Error submitting order:', err);
+    if (res.headersSent) return;
     return res.status(500).json({ ok: false, message: 'Error interno al procesar la compra.' });
+  } finally {
+    if (!stored) discardUnstoredProof(req, screenshotPath);
   }
 }, upload.single('screenshot')));
 
@@ -399,6 +418,8 @@ app.post('/api/public/orders', requireSalesOpen, ticketRoute(async (req, res) =>
  * No ticket is held: the administrator assigns an available one when approving it.
  */
 app.post('/api/public/payment-reports', requireSalesOpen, ticketRoute(async (req, res) => {
+  let screenshotPath;
+  let stored = false;
   try {
     const source = resolveSalesSource(req);
     if (!source) return res.status(403).json({ok:false, code:'INVALID_SOURCE', message:'Reporta el pago desde una de las páginas de venta.'});
@@ -408,18 +429,19 @@ app.post('/api/public/payment-reports', requireSalesOpen, ticketRoute(async (req
     if (String(req.body.requested_ticket ?? '').trim() && !requested) return res.status(400).json({ ok: false, field: 'requested_ticket', message: 'Revisa el número de entrada o deja el campo vacío si no lo tienes.' });
     const comment = typeof req.body.buyer_comment === 'string' ? req.body.buyer_comment.trim().slice(0, 500) : '';
     if (comment.length < 3) return res.status(400).json({ ok: false, field: 'buyer_comment', message: 'Cuéntanos brevemente qué pasó con tu pago.' });
+    const existing = existingPayment(form.data);
+    if (existing) return res.json(existing);
     if (!validScreenshot(req)) return res.status(400).json({ ok: false, field: 'screenshot', message: 'La captura no es una imagen válida.' });
     if (!hasScreenshot(req)) return res.status(400).json(MISSING_SCREENSHOT);
 
     const config = getPublicConfig();
     const sessionId = typeof req.body.session_id === 'string' && req.body.session_id.length <= 254 ? req.body.session_id : '';
-    const existing = existingPayment(req, sessionId, source, form.data);
-    if (existing) return res.json(existing);
+    screenshotPath = saveScreenshot(req, 'reporte');
     const order = submitPaymentReport({
       source_web: source,
       session_id: sessionId || 'reporte',
       ...form.data,
-      screenshot_path: saveScreenshot(req, 'reporte'),
+      screenshot_path: screenshotPath,
       amount_usd: config.ticket_price_usd,
       bcv_rate: config.bcv_rate,
       amount_ves: config.ticket_price_ves,
@@ -427,19 +449,16 @@ app.post('/api/public/payment-reports', requireSalesOpen, ticketRoute(async (req
       buyer_comment: comment
     });
 
+    stored = true;
+    res.status(201).json(paymentReportReceipt(order));
     if (sessionId) unlockTicketAtomic(null, sessionId);
-    broadcastTicketsUpdate({ name: 'admin:order_created' });
-    sendInBackground(() => sendPaymentSubmittedEmail(order));
-    googleSheets.syncOrder(order);
-
-    return res.status(201).json({
-      ok: true,
-      message: `Recibimos tu reporte de pago. Te enviamos un correo a ${order.buyer_email}: la verificación puede tardar hasta 24 horas y, al aprobarse, recibirás tu entrada en PDF.`,
-      order: { id: order.id, status: order.status }
-    });
+    notifyPaymentReceived(order);
   } catch (err) {
     console.error('Error submitting payment report:', err);
+    if (res.headersSent) return;
     return res.status(500).json({ ok: false, message: 'Error interno al registrar el reporte de pago.' });
+  } finally {
+    if (!stored) discardUnstoredProof(req, screenshotPath);
   }
 }, upload.single('screenshot')));
 

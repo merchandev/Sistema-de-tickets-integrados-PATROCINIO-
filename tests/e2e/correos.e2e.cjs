@@ -152,6 +152,11 @@ function parseMail(file) {
     const order = await api('POST', '/api/public/orders', { form: buyerForm(checkout) });
     const repeatPayment = await api('POST', '/api/public/orders', { form: buyerForm(checkout) });
     check('Reintentar un pago ya recibido conserva la misma orden', repeatPayment.status === 200 && repeatPayment.data.order?.id === order.data.order?.id);
+    const crossSiteRetry = await api('POST', '/api/public/payment-reports', { form: buyerForm({ ...checkout,
+      session_id: 'sess_after_reload', source_web: 'pagina-web-2', screenshot: null }) });
+    check('Recupera la misma orden desde otra sesión y la otra web', crossSiteRetry.status === 200 && crossSiteRetry.data.order?.id === order.data.order?.id);
+    const typo = await api('POST', '/api/public/orders', { form: buyerForm({ ...checkout, buyer_email: 'comprador@gmail.comr' }) });
+    check('Advierte sobre el dominio de Gmail mal escrito', typo.status === 400 && typo.data.field === 'buyer_email');
     check('Enviar pago desde el popup', order.status === 201, `respuesta en ${order.ms} ms`);
     check('Respuesta rápida (correo en segundo plano)', order.ms < 1500, `${order.ms} ms`);
     await waitMails(2);
@@ -547,6 +552,15 @@ function parseMail(file) {
     const otherTicket = await api('GET', `/api/admin/verify-qr/${encodeURIComponent(token)}`, { admin: true });
     check('Arbitraje: anulación expresa libera solo la entrada elegida e invalida su QR', withoutConfirmation.status === 400 &&
       cancelled.status === 200 && (await ticketDetails()).status === 'AVAILABLE' && oldQr.data.valid === false && otherTicket.data.valid === true && sheetWrites === sheetWritesAfterAssist);
+    const latePayment = { ticket_number: '001', session_id: 'sess_expired_checkout', payment_reference: 'EXPIRED-001', buyer_email: 'expirado@prueba.test' };
+    const late = await api('POST', '/api/public/orders', { form: buyerForm(latePayment) });
+    const lateRetry = await api('POST', '/api/public/orders', { form: buyerForm(latePayment) });
+    const afterLate = (await api('GET', '/api/admin/overview', { admin: true })).data;
+    const storedReport = afterLate.orders.find(o => o.id === late.data.order?.id);
+    check('El comprobante se registra como reporte si la reserva expiró, sin duplicar ni tomar la entrada de otro comprador',
+      late.status === 201 && lateRetry.status === 200 && lateRetry.data.order?.id === storedReport?.id &&
+      storedReport?.status === 'PENDING' && storedReport.report_kind === 'REPORT' && storedReport.ticket_number === '' &&
+      storedReport.requested_ticket === '001' && Boolean(storedReport.screenshot_path) && afterLate.orders.find(o => o.id === order.data.order.id)?.status === 'APPROVED');
     sheetApp.close();
 
     check('Log del servidor sin errores inesperados', !/Error (approving|rejecting|submitting)|Unhandled|TypeError/.test(serverLog));

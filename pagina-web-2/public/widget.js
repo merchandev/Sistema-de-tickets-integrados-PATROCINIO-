@@ -390,7 +390,6 @@
     }
 
     const btn = $('btn-submit-order');
-    const idleText = btn.textContent;
     const ticketNumber = myLockedTicket;
     btn.disabled = true;
     btn.textContent = 'Enviando…';
@@ -405,9 +404,11 @@
 
       const res = await fetch(`${CFG.CENTRAL_API_URL}/api/public/${isReport ? 'payment-reports' : 'orders'}`, {
         method: 'POST',
-        body: formData
+        body: formData,
+        signal: AbortSignal.timeout(60000)
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => null);
+      if (!data) throw new Error('Respuesta de pago inválida');
 
       if (!isReport && res.status === 409) {
         // The reservation was lost before sending: keep the data and offer the payment report.
@@ -417,7 +418,7 @@
         return;
       }
       if (!res.ok || !data.ok) {
-        showFormError(data.message || 'No se pudo enviar el pago. Revisa los datos e inténtalo de nuevo.', data.field);
+        showFormError(data.message || 'No pudimos confirmar el registro. Si ya pagaste, vuelve a enviar el mismo comprobante.', data.field);
         return;
       }
 
@@ -434,11 +435,12 @@
       $('pay-done').hidden = false;
       $('pay-done-close').focus();
     } catch (err) {
-      showFormError('No pudimos conectar con el servidor. Revisa tu conexión e inténtalo de nuevo.');
+      if (!isReport && !myLockedTicket) switchToReportAfterExpiry(ticketNumber);
+      showFormError('No pudimos confirmar si recibimos el pago. Si ya pagaste, vuelve a enviar el mismo comprobante sin hacer otro pago.');
     } finally {
       paySubmitting = false;
       btn.disabled = false;
-      btn.textContent = idleText;
+      btn.textContent = payMode === 'report' ? 'Enviar reporte de pago' : 'Enviar pago para verificación';
     }
   });
 

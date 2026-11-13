@@ -20,6 +20,7 @@ function parsePaymentForm(body = {}) {
   if (!/^[VEJPG]?-?\d{5,10}$/.test(cedula)) return fail('buyer_cedula', 'Revisa el número de cédula (ejemplo: V-12345678).');
   if (!/^\+?[\d\s()-]+$/.test(phone) || phoneDigits.length < 10 || phoneDigits.length > 13) return fail('buyer_phone', 'Revisa el teléfono (ejemplo: 0414-1234567).');
   if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return fail('buyer_email', 'Revisa el correo electrónico.');
+  if (email.endsWith('@gmail.comr')) return fail('buyer_email', 'Revisa tu correo. Si usas Gmail, el dominio termina en gmail.com.');
   if (bank.length < 2 || bank.length > 80) return fail('payment_bank', 'Indica el banco desde el que pagaste.');
   if (!/^[A-Za-z0-9-]{4,30}$/.test(reference)) return fail('payment_reference', 'Revisa el número de referencia del pago (solo números y letras).');
 
