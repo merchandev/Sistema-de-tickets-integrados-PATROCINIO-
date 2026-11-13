@@ -2326,3 +2326,15 @@ button.is-read-only:disabled { opacity: .45; cursor: not-allowed; }
 /* Admins see only the button that opens the sheet */
 .sheet-card [hidden] { display: none; }
 .sheet-card.is-admin-view .sheet-head p { display: none; }
+
+#tab-panel-bank .order-filters label {
+  display: grid;
+  gap: 5px;
+  font-size: 13px;
+}
+#tab-panel-bank input[type="date"] {
+  min-height: 40px;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}

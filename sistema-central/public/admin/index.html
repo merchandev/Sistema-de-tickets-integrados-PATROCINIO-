@@ -6,7 +6,7 @@
   <title>Panel de administración | Sistema de entradas</title>
   <link rel="icon" type="image/png" href="/admin/brands/espressivo-venezuela.png?v=3" />
   <link rel="stylesheet" href="/admin/utilities.css" />
-  <link rel="stylesheet" href="/admin/admin.css?v=pdf-resend-history" />
+  <link rel="stylesheet" href="/admin/admin.css?v=bank-reconciliation" />
   <link rel="stylesheet" href="/admin/blog.css?v=seo-2" />
   <script src="/socket.io/socket.io.js"></script>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
@@ -22,6 +22,7 @@
     </a>
     <nav class="admin-nav" aria-label="Secciones del dashboard">
       <button type="button" onclick="switchTab('orders')" id="tab-btn-orders" class="tab-btn active" aria-current="page"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18v12H3z M3 10h18 M6 15h4"/></svg> Pagos y ventas <span id="badge-pending-orders" class="nav-count">0</span></button>
+      <button type="button" onclick="switchTab('bank')" id="tab-btn-bank" class="tab-btn">Conciliación bancaria</button>
       <button type="button" onclick="switchTab('seats')" id="tab-btn-seats" class="tab-btn"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h6v6H4z M14 4h6v6h-6z M4 14h6v6H4z M14 14h6v6h-6z"/></svg> Mapa de entradas</button>
       <button type="button" onclick="switchTab('pdf')" id="tab-btn-pdf" class="tab-btn"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6z M14 3v5h4 M9 13h6 M9 17h6"/></svg> Diseño de entrada</button>
       <button type="button" onclick="switchTab('qr')" id="tab-btn-qr" class="tab-btn"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5 M15 4h5v5 M20 15v5h-5 M9 20H4v-5 M9 9h6v6H9z"/></svg> Control de acceso</button>
@@ -33,6 +34,7 @@
     </nav>
     <div class="mobile-nav"><label for="admin-section">Sección</label><select id="admin-section" onchange="switchTab(this.value)">
       <option value="orders">Pagos y ventas</option>
+      <option value="bank">Conciliación bancaria</option>
       <option value="seats">Mapa de entradas</option>
       <option value="pdf">Diseño de entrada</option>
       <option value="qr">Control de acceso</option>
@@ -112,6 +114,7 @@
         <div class="text-xs text-slate-500 font-medium">Recaudación verificada</div>
         <div id="kpi-revenue-usd" class="text-xl font-bold text-slate-900 mt-1">$0.00</div>
         <div id="kpi-revenue-ves" class="text-[11px] text-emerald-700 font-semibold">Bs. 0.00</div>
+        <button type="button" class="admin-secondary mt-2" onclick="switchTab('bank')">Ver pagos bancarios</button>
       </div>
     </section>
 
@@ -184,6 +187,31 @@
                 <td colspan="8" class="py-8 text-center text-slate-400">Cargando órdenes...</td>
               </tr>
             </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section id="tab-panel-bank" class="hidden space-y-4" aria-labelledby="bank-title">
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-4">
+        <div>
+          <h2 id="bank-title" class="text-lg font-bold">Pagos bancarios</h2>
+          <p class="text-sm text-slate-500">Importes guardados al registrar cada pago. Coteja las referencias con los movimientos de la cuenta.</p>
+        </div>
+        <div class="order-filters">
+          <label>Fecha del reporte <input type="date" id="bank-date" onchange="renderBankPayments()"></label>
+          <label>Banco de origen <select id="bank-filter" onchange="renderBankPayments()"><option value="">Todos</option></select></label>
+          <label>Estado <select id="bank-status" onchange="renderBankPayments()">
+            <option value="APPROVED">Aprobados</option><option value="PENDING">Por verificar</option>
+            <option value="ALL">Todos</option><option value="REJECTED">Rechazados</option><option value="CANCELLED">Anulados</option>
+          </select></label>
+        </div>
+        <p id="bank-total" class="font-semibold" aria-live="polite"></p>
+        <ul id="bank-breakdown" class="text-sm text-slate-600"></ul>
+        <div class="orders-container">
+          <table class="orders-table w-full text-left border-collapse text-sm">
+            <thead><tr><th>Fecha del reporte</th><th>Entrada</th><th>Banco de origen</th><th>Referencia</th><th>Cédula</th><th>Monto guardado</th><th>Estado</th></tr></thead>
+            <tbody id="bank-rows"></tbody>
           </table>
         </div>
       </div>
@@ -690,7 +718,7 @@
 
   <script src="/admin/blog-turndown.js"></script>
   <script src="/admin/blog.js?v=seo-1"></script>
-  <script src="/admin/admin.js?v=reservation-15m"></script>
+  <script src="/admin/admin.js?v=bank-reconciliation"></script>
   <script src="/admin/sponsors.js"></script>
   <script src="/admin/hoja-google.js"></script>
 </body>

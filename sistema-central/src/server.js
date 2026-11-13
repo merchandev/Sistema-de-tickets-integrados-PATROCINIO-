@@ -540,6 +540,7 @@ app.get('/api/admin/overview', (req, res) => {
     revenue_usd: 0,
     revenue_ves: 0
   };
+  let verifiedVesCents = 0;
   const salesBySource = Object.fromEntries(['pagina-web-1', 'pagina-web-2', 'unknown'].map(source => [source, {sold:0, pending:0, rejected:0, revenue_usd:0, revenue_ves:0}]));
 
   for (const t of ticketsState.tickets) {
@@ -556,13 +557,17 @@ app.get('/api/admin/overview', (req, res) => {
     if (o.status === 'APPROVED') {
       summary.sold++;
       summary.revenue_usd += Number(o.amount_usd || 0);
-      summary.revenue_ves += Number(o.amount_ves || 0);
+      const paidVesCents = Math.round(Number(o.amount_ves || 0) * 100);
+      summary.revenue_ves += paidVesCents;
       counts.revenue_usd += Number(o.amount_usd || 0);
-      counts.revenue_ves += Number(o.amount_ves || 0);
+      verifiedVesCents += paidVesCents;
       if (o.source_web === 'pagina-web-1') counts.sold_web_1++;
       if (o.source_web === 'pagina-web-2') counts.sold_web_2++;
     }
   }
+
+  counts.revenue_ves = verifiedVesCents / 100;
+  for (const source of Object.values(salesBySource)) source.revenue_ves /= 100;
 
   res.json({
     ok: true,

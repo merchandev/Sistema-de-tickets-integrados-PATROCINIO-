@@ -92,6 +92,7 @@ async function fetchAdminOverview() {
     state = data;
     renderHeaderAndKpis();
     renderOrdersTable();
+    renderBankPayments();
     renderSeatsMap();
     renderEmailLogs();
     renderNotifications();
@@ -135,6 +136,48 @@ function renderHeaderAndKpis() {
   const salesState = document.getElementById('sales-state');
   salesState.textContent = cfg.sales_enabled === false ? 'Ventas en preparación' : 'Venta de entradas abierta';
   salesState.classList.toggle('is-open', cfg.sales_enabled !== false);
+}
+
+const bankDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Caracas', year: 'numeric', month: '2-digit', day: '2-digit' });
+const vesFormat = new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+function renderBankPayments() {
+  const bankFilter = document.getElementById('bank-filter');
+  const bank = bankFilter.value;
+  const date = document.getElementById('bank-date').value;
+  const status = document.getElementById('bank-status').value;
+  const bankName = order => order.payment_bank?.trim() || 'Sin banco indicado';
+  const orders = state.orders || [];
+  const banks = [...new Set(orders.map(bankName))].sort((a, b) => a.localeCompare(b, 'es'));
+  bankFilter.replaceChildren(new Option('Todos', ''), ...banks.map(name => new Option(name, name)));
+  bankFilter.value = banks.includes(bank) ? bank : '';
+
+  const rows = orders.filter(order => {
+    const reported = parseDbDate(order.created_at);
+    return (!date || (reported && !Number.isNaN(reported.getTime()) && bankDate.format(reported) === date))
+      && (!bankFilter.value || bankName(order) === bankFilter.value)
+      && (status === 'ALL' || order.status === status);
+  });
+  const approvedByBank = new Map();
+  let verifiedCents = 0;
+  for (const order of rows) {
+    if (order.status !== 'APPROVED') continue;
+    const cents = Math.round(Number(order.amount_ves || 0) * 100);
+    const name = bankName(order);
+    approvedByBank.set(name, (approvedByBank.get(name) || 0) + cents);
+    verifiedCents += cents;
+  }
+  document.getElementById('bank-total').textContent = 'Total aprobado en esta vista · Bs. ' + vesFormat.format(verifiedCents / 100);
+  document.getElementById('bank-breakdown').innerHTML = [...approvedByBank].map(([name, cents]) =>
+    '<li>' + escapeHtml(name) + ' · Bs. ' + vesFormat.format(cents / 100) + '</li>').join('');
+  const labels = { APPROVED: 'Aprobado', PENDING: 'Por verificar', REJECTED: 'Rechazado', CANCELLED: 'Anulado' };
+  const cell = (label, value) => '<td data-label="' + label + '">' + escapeHtml(value || '—') + '</td>';
+  document.getElementById('bank-rows').innerHTML = rows.map(order => '<tr>' +
+    cell('Fecha del reporte', formatDateTime(order.created_at)) +
+    cell('Entrada', order.ticket_number ? '#' + order.ticket_number : 'Por asignar') +
+    cell('Banco de origen', bankName(order)) + cell('Referencia', order.payment_reference) +
+    cell('Cédula', order.buyer_cedula) + cell('Monto guardado', 'Bs. ' + vesFormat.format(Number(order.amount_ves))) +
+    cell('Estado', labels[order.status]) + '</tr>').join('') || '<tr><td colspan="7" class="empty-title">No hay pagos para estos filtros.</td></tr>';
 }
 
 function renderOrdersTable() {
@@ -1254,6 +1297,7 @@ function previewEmailLog(index) {
 }
 
 const sectionTitles = {
+  bank: 'Conciliación bancaria',
   orders: 'Pagos y ventas',
   seats: 'Mapa de entradas',
   pdf: 'Diseño de entrada',

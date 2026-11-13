@@ -199,6 +199,12 @@ function parseMail(file) {
     check('El panel tampoco puede saltar una entrada libre', (await api('POST', `/api/admin/orders/${report.data.order.id}/approve`, { admin: true, json: { ticket_number: '003' } })).status === 400);
     const approveReport = await api('POST', `/api/admin/orders/${report.data.order.id}/approve`, { admin: true, json: {} });
     check('Aprobar reporte asigna automáticamente la primera libre', approveReport.status === 200 && approveReport.data.order.ticket_number === '002');
+    const changedRate = await api('PUT', '/api/admin/settings', { admin: true, json: { bcv_manual_rate: '911.6243' } });
+    const historicalRevenue = (await api('GET', '/api/admin/overview', { admin: true })).data;
+    check('La recaudación suma los importes históricos de las órdenes aprobadas', changedRate.status === 200 &&
+      historicalRevenue.publicConfig.bcv_rate === 911.6243 && historicalRevenue.counts.revenue_ves === 8911.06 &&
+      historicalRevenue.salesBySource['pagina-web-1'].revenue_ves === 4455.53 && historicalRevenue.salesBySource['pagina-web-2'].revenue_ves === 4455.53);
+    await api('PUT', '/api/admin/settings', { admin: true, json: { bcv_manual_rate: '891.1054' } });
     await waitMails(5);
 
     const legacyToken = 'TK-002-12345678-ABCDEF012345';
