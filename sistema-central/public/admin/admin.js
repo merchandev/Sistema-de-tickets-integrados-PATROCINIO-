@@ -339,7 +339,7 @@ async function openTicketArbitration(number) {
         ${field('Correo', order.buyer_email)}${field('Teléfono', order.buyer_phone)}${field('Banco', order.payment_bank)}${field('Referencia', order.payment_reference)}
         ${field('Monto reportado', `Bs. ${Number(order.amount_ves).toFixed(2)}`)}</div>
         <div class="od-actions">
-          ${order.screenshot_path ? `<a class="od-cancel" href="${escapeHtml(order.screenshot_path)}" target="_blank" rel="noopener">Ver comprobante</a>` : ''}
+          ${order.screenshot_path ? `<button type="button" class="od-cancel" onclick="viewScreenshot(${Number(order.id)})">Ver comprobante</button>` : ''}
           ${order.pdf_path ? `<a class="od-cancel" href="${escapeHtml(order.pdf_path)}" target="_blank" rel="noopener">Abrir PDF</a>` : ''}
           ${details.canResendCorrectedPdf ? '<button type="button" class="od-approve" data-resend-pdf>Reenviar PDF corregido</button>' : ''}
         </div>` : ''}
@@ -534,7 +534,7 @@ function openOrderDetail(orderId) {
         ${isReport ? field('Entrada solicitada', o.requested_ticket ? `#${o.requested_ticket}` : 'Sin preferencia') : ''}
         ${o.buyer_comment ? `<div class="od-field od-wide"><span>Comentario</span><strong>${escapeHtml(o.buyer_comment)}</strong></div>` : ''}
       </div>
-      ${o.screenshot_path ? `<a class="od-proof" href="${escapeHtml(o.screenshot_path)}" target="_blank" rel="noopener">${proofPreview(o.screenshot_path, 'Comprobante de pago adjunto')}Abrir comprobante ↗</a>` : '<p class="od-muted">El comprador no adjuntó captura. Verifica la referencia en los movimientos de la cuenta.</p>'}
+      ${o.screenshot_path ? `<a class="od-proof" href="${escapeHtml(o.screenshot_path)}" target="_blank" rel="noopener">${proofPreview(o, 'Comprobante de pago adjunto')}Abrir comprobante ↗</a>` : '<p class="od-muted">El comprador no adjuntó captura. Verifica la referencia en los movimientos de la cuenta.</p>'}
       ${actions}
     </div>
   `);
@@ -608,9 +608,11 @@ async function rejectOrder(event, orderId) {
   }
 }
 
-function proofPreview(url, label) {
-  if (/\.heic$/i.test(url)) return '<p class="od-muted">Descarga el comprobante HEIC para abrirlo.</p>';
-  return '<img src="' + escapeHtml(url) + '" alt="' + label + '" class="max-h-[65vh] mx-auto rounded-lg border border-slate-200 shadow" />';
+function proofPreview(order, label) {
+  const heic = /\.heic$/i.test(order.screenshot_path);
+  const url = heic ? '/api/admin/orders/' + Number(order.id) + '/proof-preview' : order.screenshot_path;
+  return '<img src="' + escapeHtml(url) + '" alt="' + escapeHtml(label) + '" class="max-h-[65vh] mx-auto rounded-lg border border-slate-200 shadow"' +
+    (heic ? ' onerror="this.hidden=true; this.nextElementSibling.hidden=false" /><span class="od-muted" hidden>No se pudo cargar la vista previa. Puedes abrir el archivo original.</span>' : ' />');
 }
 
 function viewScreenshot(orderId) {
@@ -620,7 +622,7 @@ function viewScreenshot(orderId) {
     `Comprobante · ${orderTitle(order)} (Ref: ${order.payment_reference})`,
     `
       <div class="space-y-3 text-center">
-        ${proofPreview(order.screenshot_path, 'Captura de pago')}
+        ${proofPreview(order, 'Captura de pago')}
         <div>
           <a href="${escapeHtml(order.screenshot_path)}" target="_blank" class="text-xs text-blue-600 hover:underline font-semibold">Abrir o descargar comprobante ↗</a>
         </div>

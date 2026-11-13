@@ -1,4 +1,7 @@
 FROM node:24.11.1-bookworm-slim
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libvips-tools \
+    && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci --omit=dev && npm cache clean --force

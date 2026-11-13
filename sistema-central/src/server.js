@@ -6,6 +6,7 @@ const fs = require('node:fs');
 const { randomUUID } = require('node:crypto');
 const cors = require('cors');
 const multer = require('multer');
+const { convertHeicPreview } = require('./proofPreview');
 const { MAX_PROOF_BYTES, INVALID_PROOF, PROOF_EXTENSIONS, validScreenshot } = require('./paymentProof');
 const { Server } = require('socket.io');
 
@@ -160,6 +161,29 @@ app.use('/storage/uploads', express.static(uploadsDir, {
     }
   }
 }));
+
+let previewInProgress = false;
+app.get('/api/admin/orders/:id/proof-preview', async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
+  const id = Number(req.params.id);
+  if (!Number.isSafeInteger(id) || id <= 0) return res.sendStatus(404);
+  const order = db.prepare('SELECT screenshot_path FROM orders WHERE id = ?').get(id);
+  const filename = /^\/storage\/uploads\/([\w-]+\.heic)$/i.exec(order?.screenshot_path || '')?.[1];
+  if (!filename) return res.sendStatus(404);
+  if (previewInProgress) return res.sendStatus(503);
+
+  previewInProgress = true;
+  try {
+    const image = await convertHeicPreview(path.join(uploadsDir, filename));
+    return res.set('X-Content-Type-Options', 'nosniff').type('jpeg').send(image);
+  } catch (err) {
+    console.warn('HEIC preview failed for order', id, err.code || err.name);
+    return res.sendStatus(422);
+  } finally {
+    previewInProgress = false;
+  }
+});
+
 app.use('/storage/tickets', express.static(ticketsDir));
 const pdfJsDir = path.join(__dirname, '..', 'node_modules', 'pdfjs-dist');
 app.get('/admin/pdfjs/:file(pdf.min.mjs|pdf.worker.min.mjs)', (req, res) => {
