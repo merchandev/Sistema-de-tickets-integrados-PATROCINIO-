@@ -6,6 +6,7 @@ const fs = require('node:fs');
 const { randomUUID } = require('node:crypto');
 const cors = require('cors');
 const multer = require('multer');
+const { MAX_PROOF_BYTES, INVALID_PROOF, PROOF_EXTENSIONS, validScreenshot } = require('./paymentProof');
 const { Server } = require('socket.io');
 
 const {
@@ -110,6 +111,9 @@ function ticketRoute(handler, before) {
     }
     return handler(req, res);
   }).catch(err => {
+    if (err.code === 'INVALID_PAYMENT_PROOF') {
+      return res.status(400).json({ ok: false, field: 'screenshot', message: INVALID_PROOF });
+    }
     if (err instanceof multer.MulterError) {
       const tooLarge = err.code === 'LIMIT_FILE_SIZE';
       return res.status(tooLarge ? 413 : 400).json({
@@ -125,15 +129,18 @@ function ticketRoute(handler, before) {
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, uploadsDir),
   filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname || '.png') || '.png';
+    const ext = path.extname(file.originalname).toLowerCase();
     const safeTicket = String(req.body.ticket_number || '000').replace(/[^0-9]/g, '');
     cb(null, `pago-ticket-${safeTicket}-${Date.now()}-${randomUUID()}${ext}`);
   }
 });
 const upload = multer({
   storage,
-  fileFilter: (_req, file, cb) => cb(null, ['image/png', 'image/jpeg', 'image/webp'].includes(file.mimetype) && /\.(png|jpe?g|webp)$/i.test(file.originalname)),
-  limits: { fileSize: 10 * 1024 * 1024 } // 10 MB max
+  fileFilter: (_req, file, cb) => {
+    if (PROOF_EXTENSIONS.test(file.originalname)) return cb(null, true);
+    return cb(Object.assign(new Error(INVALID_PROOF), { code: 'INVALID_PAYMENT_PROOF' }));
+  },
+  limits: { fileSize: MAX_PROOF_BYTES }
 });
 
 app.use(cors());
@@ -144,7 +151,15 @@ require('./sponsors').registerSponsorRoutes(app, {db, storageDir:process.env.BLO
 const googleSheets = require('./googleSheets');
 
 // Static assets
-app.use('/storage/uploads', express.static(uploadsDir));
+app.use('/storage/uploads', express.static(uploadsDir, {
+  setHeaders(res, filePath) {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    if (path.extname(filePath) === '.heic') {
+      res.setHeader('Content-Type', 'image/heic');
+      res.setHeader('Content-Disposition', 'attachment');
+    }
+  }
+}));
 app.use('/storage/tickets', express.static(ticketsDir));
 const pdfJsDir = path.join(__dirname, '..', 'node_modules', 'pdfjs-dist');
 app.get('/admin/pdfjs/:file(pdf.min.mjs|pdf.worker.min.mjs)', (req, res) => {
@@ -315,9 +330,8 @@ function saveScreenshot(req, label) {
   fs.writeFileSync(path.join(uploadsDir, filename), Buffer.from(req.body.screenshot_base64.replace(/^data:image\/\w+;base64,/, ''), 'base64'));
   return `/storage/uploads/${filename}`;
 }
-const validScreenshot = (req) => !req.body.screenshot_base64 || /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(req.body.screenshot_base64);
 const hasScreenshot = (req) => Boolean(req.file || req.body.screenshot_base64);
-const MISSING_SCREENSHOT = { ok: false, field: 'screenshot', message: 'Adjunta la captura del pago (imagen PNG, JPG o WebP de hasta 10 MB).' };
+const MISSING_SCREENSHOT = { ok: false, field: 'screenshot', message: INVALID_PROOF };
 
 function existingPayment(payment) {
   const order = db.prepare(`
@@ -371,7 +385,7 @@ app.post('/api/public/orders', requireSalesOpen, ticketRoute(async (req, res) =>
     if (!form.ok) return res.status(400).json({ ok: false, field: form.field, message: form.message });
     const existing = existingPayment(form.data);
     if (existing) return res.json(existing);
-    if (!validScreenshot(req)) return res.status(400).json({ ok: false, field: 'screenshot', message: 'La captura no es una imagen válida.' });
+    if (!validScreenshot(req)) return res.status(400).json(MISSING_SCREENSHOT);
     if (!hasScreenshot(req)) return res.status(400).json(MISSING_SCREENSHOT);
 
     const config = getPublicConfig();
@@ -431,7 +445,7 @@ app.post('/api/public/payment-reports', requireSalesOpen, ticketRoute(async (req
     if (comment.length < 3) return res.status(400).json({ ok: false, field: 'buyer_comment', message: 'Cuéntanos brevemente qué pasó con tu pago.' });
     const existing = existingPayment(form.data);
     if (existing) return res.json(existing);
-    if (!validScreenshot(req)) return res.status(400).json({ ok: false, field: 'screenshot', message: 'La captura no es una imagen válida.' });
+    if (!validScreenshot(req)) return res.status(400).json(MISSING_SCREENSHOT);
     if (!hasScreenshot(req)) return res.status(400).json(MISSING_SCREENSHOT);
 
     const config = getPublicConfig();
@@ -863,6 +877,7 @@ app.post('/api/admin/tickets/:number/arbitration', requireTicketArbitration, tic
 
     let payment;
     if (action === 'assist' || action === 'edit') {
+      if (req.file && !validScreenshot(req)) return res.status(400).json(MISSING_SCREENSHOT);
       const parsed = parsePaymentForm(req.body);
       if (!parsed.ok) return res.status(400).json(parsed);
       payment = parsed.data;

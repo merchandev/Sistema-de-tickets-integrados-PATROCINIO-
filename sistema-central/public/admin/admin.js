@@ -411,7 +411,7 @@ function renderArbitrationForm(container, endpoint, number, { order, revision },
       ${input('buyer_email', 'Correo electrónico', 'email')}${input('payment_bank', 'Banco de origen')}${input('payment_reference', 'Referencia bancaria')}
       ${action === 'edit' ? `<label>Teléfono utilizado para pagar<input name="payment_phone" type="tel" value="${escapeHtml(order?.payment_phone)}"></label>` : ''}
       ${action === 'assist' ? '<label>Página de origen<select name="source" required><option value="">Elige una página</option><option value="pagina-web-1">Iluminando Caminos</option><option value="pagina-web-2">Hablemos de Marketing</option></select></label>' : ''}
-      <label>Comprobante ${action === 'edit' ? '(opcional)' : ''}<input name="screenshot" type="file" accept="image/png,image/jpeg,image/webp" ${action === 'assist' ? 'required' : ''}></label>
+      <label>Comprobante ${action === 'edit' ? '(opcional)' : ''}<input name="screenshot" type="file" accept=".png,.jpg,.jpeg,.heic,image/png,image/jpeg,image/heic" ${action === 'assist' ? 'required' : ''}></label>
       ${order?.report_kind === 'REPORT' ? `<label>Comentario del reporte<textarea name="buyer_comment" rows="2" maxlength="500">${escapeHtml(order.buyer_comment)}</textarea></label>` : ''}
     </div>` : ''}
     <label>Motivo de la intervención<textarea name="reason" rows="2" minlength="3" maxlength="500" required></textarea></label>
@@ -534,7 +534,7 @@ function openOrderDetail(orderId) {
         ${isReport ? field('Entrada solicitada', o.requested_ticket ? `#${o.requested_ticket}` : 'Sin preferencia') : ''}
         ${o.buyer_comment ? `<div class="od-field od-wide"><span>Comentario</span><strong>${escapeHtml(o.buyer_comment)}</strong></div>` : ''}
       </div>
-      ${o.screenshot_path ? `<a class="od-proof" href="${escapeHtml(o.screenshot_path)}" target="_blank" rel="noopener"><img src="${escapeHtml(o.screenshot_path)}" alt="Comprobante de pago adjunto" />Abrir comprobante en tamaño original ↗</a>` : '<p class="od-muted">El comprador no adjuntó captura. Verifica la referencia en los movimientos de la cuenta.</p>'}
+      ${o.screenshot_path ? `<a class="od-proof" href="${escapeHtml(o.screenshot_path)}" target="_blank" rel="noopener">${proofPreview(o.screenshot_path, 'Comprobante de pago adjunto')}Abrir comprobante ↗</a>` : '<p class="od-muted">El comprador no adjuntó captura. Verifica la referencia en los movimientos de la cuenta.</p>'}
       ${actions}
     </div>
   `);
@@ -608,6 +608,11 @@ async function rejectOrder(event, orderId) {
   }
 }
 
+function proofPreview(url, label) {
+  if (/\.heic$/i.test(url)) return '<p class="od-muted">Descarga el comprobante HEIC para abrirlo.</p>';
+  return '<img src="' + escapeHtml(url) + '" alt="' + label + '" class="max-h-[65vh] mx-auto rounded-lg border border-slate-200 shadow" />';
+}
+
 function viewScreenshot(orderId) {
   const order = (state.orders || []).find(o => o.id === orderId);
   if (!order?.screenshot_path) return;
@@ -615,9 +620,9 @@ function viewScreenshot(orderId) {
     `Comprobante · ${orderTitle(order)} (Ref: ${order.payment_reference})`,
     `
       <div class="space-y-3 text-center">
-        <img src="${escapeHtml(order.screenshot_path)}" alt="Captura de pago" class="max-h-[65vh] mx-auto rounded-lg border border-slate-200 shadow" />
+        ${proofPreview(order.screenshot_path, 'Captura de pago')}
         <div>
-          <a href="${escapeHtml(order.screenshot_path)}" target="_blank" class="text-xs text-blue-600 hover:underline font-semibold">Abrir imagen en tamaño original ↗</a>
+          <a href="${escapeHtml(order.screenshot_path)}" target="_blank" class="text-xs text-blue-600 hover:underline font-semibold">Abrir o descargar comprobante ↗</a>
         </div>
       </div>
     `

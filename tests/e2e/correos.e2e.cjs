@@ -149,6 +149,15 @@ function parseMail(file) {
     const noCapture = await api('POST', '/api/public/orders', { form: buyerForm({ ticket_number: '001', session_id: 'sess_e2e_checkout_1', screenshot: null }) });
     check('La captura del pago es obligatoria', noCapture.status === 400 && noCapture.data.field === 'screenshot', noCapture.data.message);
     const checkout = { ticket_number: '001', session_id: 'sess_e2e_checkout_1', payment_reference: 'CONFIRM-E2E-001' };
+    for (const [name, type, bytes] of [
+      ['pago.pdf', 'application/pdf', '%PDF-1.7'], ['pago.webp', 'image/webp', 'RIFFfakeWEBP'],
+      ['renombrado.png', 'image/png', '%PDF-1.7'], ['renombrado.heic', 'image/heic', 'RIFFfakeWEBP']
+    ]) {
+      const proofForm = buyerForm(checkout);
+      proofForm.set('screenshot', new Blob([bytes], { type }), name);
+      const invalidProof = await api('POST', '/api/public/orders', { form: proofForm });
+      check('El servidor rechaza comprobante ' + name, invalidProof.status === 400 && invalidProof.data.field === 'screenshot');
+    }
     const order = await api('POST', '/api/public/orders', { form: buyerForm(checkout) });
     const repeatPayment = await api('POST', '/api/public/orders', { form: buyerForm(checkout) });
     check('Reintentar un pago ya recibido conserva la misma orden', repeatPayment.status === 200 && repeatPayment.data.order?.id === order.data.order?.id);

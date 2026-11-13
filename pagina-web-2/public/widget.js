@@ -381,7 +381,7 @@
     if (!form.reportValidity()) return;
     const capture = captureInput.files[0];
     if (!capture) return showFormError('Adjunta la captura del pago.', 'screenshot');
-    if (!/^image\/(png|jpeg|webp)$/.test(capture.type)) return showFormError('La captura debe ser una imagen PNG, JPG o WebP.', 'screenshot');
+    if (!/\.(png|jpe?g|heic)$/i.test(capture.name)) return showFormError('La captura debe ser una imagen PNG, JPG, JPEG o HEIC.', 'screenshot');
     if (capture.size > MAX_CAPTURE_BYTES) return showFormError('La captura pesa más de 10 MB. Envía una imagen más liviana.', 'screenshot');
     const isReport = payMode === 'report';
     if (!isReport && !myLockedTicket) {
