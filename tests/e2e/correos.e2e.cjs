@@ -128,7 +128,7 @@ function parseMail(file) {
 
     // --- 1. Checkout from Iluminando Caminos, then approval ---
     const lock = await api('POST', '/api/public/tickets/lock', { json: { ticket_number: '250', session_id: 'sess_e2e_checkout_1', source_web: 'pagina-web-1' } });
-    check('Asignar la primera entrada sin aceptar números elegidos', lock.status === 200 && lock.data.ticket.ticket_number === '001' && lock.data.ticket.locked_until - lock.data.serverTime === 360000, lock.data.message);
+    check('Asignar la primera entrada sin aceptar números elegidos', lock.status === 200 && lock.data.ticket.ticket_number === '001' && lock.data.ticket.locked_until - lock.data.serverTime === 900000, lock.data.message);
     const candidates = ['pagina-web-1', 'pagina-web-2'];
     const parallel = await Promise.all(candidates.map((source, i) => api('POST', '/api/public/tickets/lock', { json: { source_web: source, session_id: 'sess_e2e_parallel_' + i } })));
     check('Asignaciones simultáneas entre ambas webs son consecutivas y únicas', parallel.every(res => res.status === 200) && parallel.map(res => res.data.ticket.ticket_number).sort().join(',') === '002,003');

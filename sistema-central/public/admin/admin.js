@@ -985,7 +985,7 @@ function populateCmsAndSmtpForms() {
   document.getElementById('cms-concert-end').value = s.concert_end || 'Por definir';
   document.getElementById('cms-event-location').value = s.event_location || '';
   document.getElementById('cms-price-usd').value = s.ticket_price_usd || '5.00';
-  document.getElementById('cms-lock-seconds').value = s.lock_duration_seconds || '360';
+  document.getElementById('cms-lock-seconds').value = s.lock_duration_seconds || '900';
   document.getElementById('cms-bcv-mode').value = s.bcv_mode || 'auto';
   document.getElementById('cms-bcv-manual').value = s.bcv_manual_rate || '45.50';
 
