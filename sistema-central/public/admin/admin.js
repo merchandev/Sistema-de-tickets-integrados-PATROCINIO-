@@ -559,7 +559,7 @@ function openOrderDetail(orderId) {
         </div>
         <span class="od-status ${o.status.toLowerCase()}">${statusText}</span>
       </div>
-      ${duplicates.length ? `<p class="od-warning">La referencia ${escapeHtml(o.payment_reference)} también aparece en: ${duplicates.map(d => escapeHtml(orderTitle(d))).join(', ')}. Revisa que no sea el mismo pago reportado dos veces.</p>` : ''}
+      ${duplicates.length ? `<p class="od-warning">La referencia ${escapeHtml(o.payment_reference)} también aparece en: ${duplicates.map(d => escapeHtml(orderTitle(d))).join(', ')}. Una transferencia puede pagar hasta 11 entradas: confirma que el monto cubra todas.</p>` : ''}
       <h5>Comprador</h5>
       <div class="od-grid">
         ${field('Nombre', o.buyer_first_name || o.buyer_name)}

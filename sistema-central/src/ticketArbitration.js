@@ -1,5 +1,5 @@
 const { createHash, randomUUID } = require('node:crypto');
-const { db, getPublicConfig, recordTicketPayment } = require('./db');
+const { db, getPublicConfig, recordTicketPayment, MAX_TICKETS_PER_REFERENCE, activeReferenceUses, referenceLimitMessage } = require('./db');
 
 db.exec(`CREATE TABLE IF NOT EXISTS ticket_arbitration_log (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -64,11 +64,9 @@ function setAvailability(number, status) {
     WHERE ticket_number = ?`).run(status, status === 'LOCKED' ? Date.now() : null, number);
 }
 
-function duplicatePayment(payment, orderId) {
-  return db.prepare(`SELECT 1 FROM orders WHERE status IN ('PENDING', 'APPROVED')
-    AND id != ? AND payment_reference = ? COLLATE NOCASE AND trim(payment_bank) = ? COLLATE NOCASE`).get(
-    orderId ?? 0, payment.payment_reference, payment.payment_bank
-  );
+// A transfer may pay several tickets, up to the per-reference limit.
+function referenceFull(payment, orderId) {
+  return activeReferenceUses(payment.payment_reference, payment.payment_bank, orderId) >= MAX_TICKETS_PER_REFERENCE;
 }
 
 function applyAction(number, { revision, action, reason, actor, payment, source, screenshot, pdfPath }) {
@@ -89,7 +87,7 @@ function applyAction(number, { revision, action, reason, actor, payment, source,
       db.prepare("UPDATE orders SET status = 'CANCELLED', admin_notes = ? WHERE id = ?").run(reason, order.id);
       setAvailability(number, 'AVAILABLE');
     } else if (action === 'assist' && (ticket.status === 'AVAILABLE' || manualHold)) {
-      if (duplicatePayment(payment)) return { ok: false, message: 'Ya hay un pago activo con ese banco y referencia. Revísalo en Pagos y ventas.' };
+      if (referenceFull(payment)) return { ok: false, message: referenceLimitMessage(payment.payment_reference) };
       const config = getPublicConfig();
       affected = recordTicketPayment({ ticket_number: number, locked_by_source: source }, {
         ...payment, session_id: `assisted-${randomUUID()}`, screenshot_path: screenshot,
@@ -97,8 +95,8 @@ function applyAction(number, { revision, action, reason, actor, payment, source,
       });
     } else if (action === 'edit' && order && ['PENDING', 'SOLD'].includes(ticket.status)) {
       const changedPayment = payment.payment_bank !== order.payment_bank || payment.payment_reference !== order.payment_reference;
-      if (changedPayment && duplicatePayment(payment, order.id)) {
-        return { ok: false, message: 'Ya hay otro pago activo con ese banco y referencia.' };
+      if (changedPayment && referenceFull(payment, order.id)) {
+        return { ok: false, message: referenceLimitMessage(payment.payment_reference) };
       }
       db.prepare(`UPDATE orders SET buyer_name = ?, buyer_first_name = ?, buyer_last_name = ?, buyer_cedula = ?,
         buyer_phone = ?, buyer_email = ?, payment_phone = ?, payment_bank = ?, payment_reference = ?,

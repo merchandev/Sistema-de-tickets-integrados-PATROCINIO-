@@ -20,6 +20,9 @@ const {
   unlockTicketAtomic,
   submitOrderAtomic,
   submitPaymentReport,
+  MAX_TICKETS_PER_REFERENCE,
+  activeReferenceUses,
+  referenceLimitMessage,
   approveOrderAtomic,
   rejectOrderAtomic,
   getReservationState,
@@ -357,14 +360,21 @@ function saveScreenshot(req, label) {
 const hasScreenshot = (req) => Boolean(req.file || req.body.screenshot_base64);
 const MISSING_SCREENSHOT = { ok: false, field: 'screenshot', message: INVALID_PROOF };
 
-function existingPayment(payment) {
+// The buy widget sends one key per purchase attempt and keeps it until the payment is received,
+// so resending the form (lost connection, reload) returns the same order instead of a new one.
+// Buyers may repeat names, ID numbers and references: each new attempt is a new ticket.
+function submissionKey(req) {
+  const key = typeof req.body.submission_id === 'string' ? req.body.submission_id.trim() : '';
+  return /^[A-Za-z0-9_-]{8,80}$/.test(key) ? key : null;
+}
+
+function existingPayment(submissionId) {
+  if (!submissionId) return null;
   const order = db.prepare(`
     SELECT id, ticket_number, status FROM orders
-    WHERE upper(replace(replace(buyer_cedula, '-', ''), ' ', '')) = upper(replace(?, '-', ''))
-      AND lower(buyer_email) = ? AND trim(payment_bank) = ? COLLATE NOCASE
-      AND payment_reference = ? COLLATE NOCASE AND status IN ('PENDING', 'APPROVED')
+    WHERE submission_id = ? AND status IN ('PENDING', 'APPROVED')
     ORDER BY id DESC LIMIT 1
-  `).get(payment.buyer_cedula, payment.buyer_email, payment.payment_bank, payment.payment_reference);
+  `).get(submissionId);
   if (!order) return null;
   return {
     ok: true, order,
@@ -407,8 +417,12 @@ app.post('/api/public/orders', requireSalesOpen, ticketRoute(async (req, res) =>
     }
     const form = parsePaymentForm(req.body);
     if (!form.ok) return res.status(400).json({ ok: false, field: form.field, message: form.message });
-    const existing = existingPayment(form.data);
+    const submissionId = submissionKey(req);
+    const existing = existingPayment(submissionId);
     if (existing) return res.json(existing);
+    if (activeReferenceUses(form.data.payment_reference, form.data.payment_bank) >= MAX_TICKETS_PER_REFERENCE) {
+      return res.status(400).json({ ok: false, field: 'payment_reference', message: referenceLimitMessage(form.data.payment_reference) });
+    }
     if (!validScreenshot(req)) return res.status(400).json(MISSING_SCREENSHOT);
     if (!hasScreenshot(req)) return res.status(400).json(MISSING_SCREENSHOT);
 
@@ -417,6 +431,7 @@ app.post('/api/public/orders', requireSalesOpen, ticketRoute(async (req, res) =>
     const payment = {
       source_web: source,
       session_id: sessionId,
+      submission_id: submissionId,
       ...form.data,
       screenshot_path: screenshotPath,
       amount_usd: config.ticket_price_usd,
@@ -467,8 +482,12 @@ app.post('/api/public/payment-reports', requireSalesOpen, ticketRoute(async (req
     if (String(req.body.requested_ticket ?? '').trim() && !requested) return res.status(400).json({ ok: false, field: 'requested_ticket', message: 'Revisa el número de entrada o deja el campo vacío si no lo tienes.' });
     const comment = typeof req.body.buyer_comment === 'string' ? req.body.buyer_comment.trim().slice(0, 500) : '';
     if (comment.length < 3) return res.status(400).json({ ok: false, field: 'buyer_comment', message: 'Cuéntanos brevemente qué pasó con tu pago.' });
-    const existing = existingPayment(form.data);
+    const submissionId = submissionKey(req);
+    const existing = existingPayment(submissionId);
     if (existing) return res.json(existing);
+    if (activeReferenceUses(form.data.payment_reference, form.data.payment_bank) >= MAX_TICKETS_PER_REFERENCE) {
+      return res.status(400).json({ ok: false, field: 'payment_reference', message: referenceLimitMessage(form.data.payment_reference) });
+    }
     if (!validScreenshot(req)) return res.status(400).json(MISSING_SCREENSHOT);
     if (!hasScreenshot(req)) return res.status(400).json(MISSING_SCREENSHOT);
 
@@ -478,6 +497,7 @@ app.post('/api/public/payment-reports', requireSalesOpen, ticketRoute(async (req
     const order = submitPaymentReport({
       source_web: source,
       session_id: sessionId || 'reporte',
+      submission_id: submissionId,
       ...form.data,
       screenshot_path: screenshotPath,
       amount_usd: config.ticket_price_usd,

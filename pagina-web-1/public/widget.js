@@ -50,6 +50,15 @@
     renderResume();
   }
 
+  // One key per purchase attempt, kept with the pending purchase until the payment is received:
+  // resending the same form returns the same order, while a new purchase gets a new ticket.
+  function submissionKey() {
+    if (purchaseIntent?.submission) return purchaseIntent.submission;
+    const key = crypto.randomUUID?.() || ('envio_' + Math.random().toString(36).slice(2) + '_' + Date.now());
+    setPurchaseIntent({ ticket: null, ...purchaseIntent, submission: key });
+    return key;
+  }
+
   function renderResume() {
     const showResume = Boolean(purchaseIntent) && !myLockedTicket;
     $('purchase-resume').hidden = !showResume;
@@ -232,7 +241,7 @@
       myLockedTicket = data.ticket.ticket_number;
       myQuote = data.pricing;
       setLockDeadline(data.ticket.locked_until, data.serverTime);
-      setPurchaseIntent({ ticket: myLockedTicket });
+      setPurchaseIntent({ ...purchaseIntent, ticket: myLockedTicket });
       showAssignment(myLockedTicket);
       if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) await new Promise(resolve => setTimeout(resolve, 550));
       if (myLockedTicket) {
@@ -400,6 +409,7 @@
       if (!isReport) formData.append('ticket_number', ticketNumber);
       formData.append('source_web', CFG.SOURCE_WEB);
       formData.append('session_id', sessionId);
+      formData.append('submission_id', submissionKey());
       if (!formData.get('screenshot')?.size) formData.delete('screenshot');
 
       const res = await fetch(`${CFG.CENTRAL_API_URL}/api/public/${isReport ? 'payment-reports' : 'orders'}`, {

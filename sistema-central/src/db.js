@@ -106,10 +106,13 @@ for (const [column, type] of [
   ['report_kind', "TEXT NOT NULL DEFAULT 'CHECKOUT'"],
   ['requested_ticket', 'TEXT'],
   ['buyer_comment', 'TEXT'],
-  ['checked_in_at', 'TEXT']
+  ['checked_in_at', 'TEXT'],
+  // Key the buy widget keeps for one purchase attempt, so a resent form returns the same order.
+  ['submission_id', 'TEXT']
 ]) {
   if (!db.prepare('PRAGMA table_info(orders)').all().some(c => c.name === column)) db.exec(`ALTER TABLE orders ADD COLUMN ${column} ${type}`);
 }
+db.exec('CREATE INDEX IF NOT EXISTS orders_submission_id ON orders(submission_id) WHERE submission_id IS NOT NULL');
 
 // Pago Móvil account of the event, shown in the checkout popup.
 const EVENT_PAYMENT_METHODS = JSON.stringify({
@@ -593,8 +596,8 @@ function recordTicketPayment(ticket, orderData) {
       ticket_number, source_web, session_id,
       buyer_name, buyer_first_name, buyer_last_name, buyer_cedula, buyer_phone, buyer_email,
       payment_phone, payment_reference, payment_bank, screenshot_path,
-      amount_usd, bcv_rate, amount_ves, status
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')
+      amount_usd, bcv_rate, amount_ves, status, submission_id
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', ?)
   `).run(
     ticket.ticket_number,
     ticket.locked_by_source,
@@ -611,7 +614,8 @@ function recordTicketPayment(ticket, orderData) {
     orderData.screenshot_path,
     ticket.quoted_usd ?? orderData.amount_usd,
     ticket.quoted_rate ?? orderData.bcv_rate,
-    ticket.quoted_ves ?? orderData.amount_ves
+    ticket.quoted_ves ?? orderData.amount_ves,
+    orderData.submission_id || null
   );
 
   const orderId = Number(insertResult.lastInsertRowid);
@@ -630,6 +634,19 @@ function recordTicketPayment(ticket, orderData) {
   return db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
 }
 
+// One Pago Móvil transfer may pay several tickets: the same bank and reference can back up to 11 active orders.
+const MAX_TICKETS_PER_REFERENCE = 11;
+
+function activeReferenceUses(reference, bank, excludeOrderId = 0) {
+  return db.prepare(`SELECT COUNT(*) AS uses FROM orders WHERE status IN ('PENDING', 'APPROVED') AND id != ?
+    AND payment_reference = ? COLLATE NOCASE AND trim(coalesce(payment_bank, '')) = trim(?) COLLATE NOCASE`)
+    .get(excludeOrderId ?? 0, reference, bank || '').uses;
+}
+
+function referenceLimitMessage(reference) {
+  return `La referencia ${reference} ya se usó en ${MAX_TICKETS_PER_REFERENCE} entradas, que es el máximo por pago. Si compraste más entradas, haz otro pago.`;
+}
+
 /**
  * Records a payment reported outside the checkout popup (for example after the reservation expired).
  * It does not hold any ticket: an administrator assigns an available one when approving it.
@@ -640,8 +657,8 @@ function submitPaymentReport(report) {
       ticket_number, source_web, session_id,
       buyer_name, buyer_first_name, buyer_last_name, buyer_cedula, buyer_phone, buyer_email,
       payment_phone, payment_reference, payment_bank, screenshot_path,
-      amount_usd, bcv_rate, amount_ves, status, report_kind, requested_ticket, buyer_comment
-    ) VALUES ('', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', 'REPORT', ?, ?)
+      amount_usd, bcv_rate, amount_ves, status, report_kind, requested_ticket, buyer_comment, submission_id
+    ) VALUES ('', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', 'REPORT', ?, ?, ?)
   `).run(
     report.source_web,
     report.session_id,
@@ -659,7 +676,8 @@ function submitPaymentReport(report) {
     report.bcv_rate,
     report.amount_ves,
     report.requested_ticket || null,
-    report.buyer_comment || null
+    report.buyer_comment || null,
+    report.submission_id || null
   );
   return db.prepare('SELECT * FROM orders WHERE id = ?').get(Number(result.lastInsertRowid));
 }
@@ -848,6 +866,9 @@ module.exports = {
   submitOrderAtomic,
   recordTicketPayment,
   submitPaymentReport,
+  MAX_TICKETS_PER_REFERENCE,
+  activeReferenceUses,
+  referenceLimitMessage,
   approveOrderAtomic,
   rejectOrderAtomic,
   getReservationState,

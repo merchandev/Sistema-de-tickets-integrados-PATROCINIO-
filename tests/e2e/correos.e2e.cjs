@@ -148,7 +148,7 @@ function parseMail(file) {
     check('Validación de cédula', badOrder.status === 400 && badOrder.data.field === 'buyer_cedula');
     const noCapture = await api('POST', '/api/public/orders', { form: buyerForm({ ticket_number: '001', session_id: 'sess_e2e_checkout_1', screenshot: null }) });
     check('La captura del pago es obligatoria', noCapture.status === 400 && noCapture.data.field === 'screenshot', noCapture.data.message);
-    const checkout = { ticket_number: '001', session_id: 'sess_e2e_checkout_1', payment_reference: 'CONFIRM-E2E-001' };
+    const checkout = { ticket_number: '001', session_id: 'sess_e2e_checkout_1', payment_reference: 'CONFIRM-E2E-001', submission_id: 'envio-e2e-checkout-001' };
     for (const [name, type, bytes] of [
       ['pago.pdf', 'application/pdf', '%PDF-1.7'], ['pago.webp', 'image/webp', 'RIFFfakeWEBP'],
       ['renombrado.png', 'image/png', '%PDF-1.7'], ['renombrado.heic', 'image/heic', 'RIFFfakeWEBP']
@@ -163,7 +163,7 @@ function parseMail(file) {
     check('Reintentar un pago ya recibido conserva la misma orden', repeatPayment.status === 200 && repeatPayment.data.order?.id === order.data.order?.id);
     const crossSiteRetry = await api('POST', '/api/public/payment-reports', { form: buyerForm({ ...checkout,
       session_id: 'sess_after_reload', source_web: 'pagina-web-2', screenshot: null }) });
-    check('Recupera la misma orden desde otra sesión y la otra web', crossSiteRetry.status === 200 && crossSiteRetry.data.order?.id === order.data.order?.id);
+    check('Recupera la misma orden desde otra sesión con la misma clave de envío', crossSiteRetry.status === 200 && crossSiteRetry.data.order?.id === order.data.order?.id);
     const typo = await api('POST', '/api/public/orders', { form: buyerForm({ ...checkout, buyer_email: 'comprador@gmail.comr' }) });
     check('Advierte sobre el dominio de Gmail mal escrito', typo.status === 400 && typo.data.field === 'buyer_email');
     check('Enviar pago desde el popup', order.status === 201, `respuesta en ${order.ms} ms`);
@@ -567,7 +567,7 @@ function parseMail(file) {
     const otherTicket = await api('GET', `/api/admin/verify-qr/${encodeURIComponent(token)}`, { admin: true });
     check('Arbitraje: anulación expresa libera solo la entrada elegida e invalida su QR', withoutConfirmation.status === 400 &&
       cancelled.status === 200 && (await ticketDetails()).status === 'AVAILABLE' && oldQr.data.valid === false && otherTicket.data.valid === true && sheetWrites === sheetWritesAfterAssist);
-    const latePayment = { ticket_number: '001', session_id: 'sess_expired_checkout', payment_reference: 'EXPIRED-001', buyer_email: 'expirado@prueba.test' };
+    const latePayment = { ticket_number: '001', session_id: 'sess_expired_checkout', payment_reference: 'EXPIRED-001', buyer_email: 'expirado@prueba.test', submission_id: 'envio-e2e-expired-001' };
     const late = await api('POST', '/api/public/orders', { form: buyerForm(latePayment) });
     const lateRetry = await api('POST', '/api/public/orders', { form: buyerForm(latePayment) });
     const afterLate = (await api('GET', '/api/admin/overview', { admin: true })).data;
@@ -576,6 +576,20 @@ function parseMail(file) {
       late.status === 201 && lateRetry.status === 200 && lateRetry.data.order?.id === storedReport?.id &&
       storedReport?.status === 'PENDING' && storedReport.report_kind === 'REPORT' && storedReport.ticket_number === '' &&
       storedReport.requested_ticket === '001' && Boolean(storedReport.screenshot_path) && afterLate.orders.find(o => o.id === order.data.order.id)?.status === 'APPROVED');
+
+    // --- Several tickets for the same buyer: repeated name, ID number and reference, up to 11 per reference ---
+    const multi = { session_id: 'sess_multi', payment_reference: 'MULTI-11', buyer_email: 'multi@prueba.test', requested_ticket: null };
+    const multiReports = [];
+    for (let i = 0; i < 12; i++) {
+      multiReports.push(await api('POST', '/api/public/payment-reports', { form: buyerForm({ ...multi, submission_id: 'envio-multi-' + String(i).padStart(2, '0') }) }));
+    }
+    const multiIds = new Set(multiReports.slice(0, 11).map(r => r.data.order?.id));
+    check('El mismo nombre, cédula y referencia sirven para comprar varias entradas (hasta 11)',
+      multiReports.slice(0, 11).every(r => r.status === 201) && multiIds.size === 11, multiReports.map(r => r.status).join(','));
+    check('La entrada 12 con la misma referencia se rechaza', multiReports[11].status === 400 && multiReports[11].data.field === 'payment_reference', multiReports[11].data.message);
+    const otherBank = await api('POST', '/api/public/payment-reports', { form: buyerForm({ ...multi, payment_bank: 'Mercantil (0105)', submission_id: 'envio-multi-otro-banco' }) });
+    check('El tope de 11 cuenta por banco y referencia', otherBank.status === 201);
+
     sheetApp.close();
 
     check('Log del servidor sin errores inesperados', !/Error (approving|rejecting|submitting)|Unhandled|TypeError/.test(serverLog));

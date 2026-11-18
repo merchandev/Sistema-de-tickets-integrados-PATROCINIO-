@@ -111,7 +111,7 @@
               <label>Banco desde el que pagaste
                 <input name="payment_bank" type="text" list="bank-list" required maxlength="80" placeholder="Elige o escribe tu banco" />
               </label>
-              <label>Número de referencia
+              <label>Número de referencia <small>si pagaste varias entradas en una transferencia, usa la misma (hasta 11)</small>
                 <input name="payment_reference" type="text" inputmode="numeric" required maxlength="30" placeholder="Ej: 123456789" pattern="[A-Za-z0-9\-]{4,30}" title="Solo números y letras, como aparece en tu comprobante" />
               </label>
               <label class="report-only" hidden>Número de entrada <small>opcional si no lo tienes</small>
@@ -173,7 +173,7 @@
         <div class="assignment-copy">
           <p class="assignment-kicker">Cupo total: 250 entradas</p>
           <h2 id="assignment-title">Reserva tu entrada</h2>
-          <p>Te asignaremos una entrada por orden de solicitud y la reservaremos mientras reportas el pago.</p>
+          <p>Te asignaremos una entrada por orden de solicitud y la reservaremos mientras reportas el pago. Puedes comprar todas las que necesites, una a la vez.</p>
           <div id="purchase-resume" hidden>
             <p>Hay una compra sin terminar en este navegador. Puedes retomarla o reportar un pago que ya hiciste.</p>
           </div>
@@ -234,7 +234,7 @@
     </div>
   </footer>
 
-  <script src="/widget.js?v=payment-proof-formats"></script>
+  <script src="/widget.js?v=multiple-tickets"></script>
   <script src="/design.js?v=assignment"></script>
 </body>
 </html>
