@@ -18,3 +18,15 @@ test('Calcula bolivares con redondeo decimal del total y sin truncar tasa', () =
   assert.equal(calculateVes('0.10','0.15000000'),0.02);
   assert.throws(()=>calculateVes(5,'NaN'));
 });
+test('La tasa oficial sigue vigente 24 horas o mientras su fecha valor no haya pasado', () => {
+  const {officialRateCurrent, caracasDate} = require('../sistema-central/src/bcvRate');
+  const now = new Date('2026-11-21T12:00:00-04:00');
+  const old = '2026-11-19T00:00:00Z';
+  assert.equal(officialRateCurrent({bcv_is_official:true, bcv_last_updated:old, bcv_value_date:'2026-11-23'}, now), true);
+  assert.equal(officialRateCurrent({bcv_is_official:true, bcv_last_updated:old, bcv_value_date:'2026-11-21'}, now), true);
+  assert.equal(officialRateCurrent({bcv_is_official:true, bcv_last_updated:old, bcv_value_date:'2026-11-20'}, now), false);
+  assert.equal(officialRateCurrent({bcv_is_official:true, bcv_last_updated:old, bcv_value_date:''}, now), false);
+  assert.equal(officialRateCurrent({bcv_is_official:true, bcv_last_updated:new Date(now - 3600e3).toISOString(), bcv_value_date:'2026-11-01'}, now), true);
+  assert.equal(officialRateCurrent({bcv_is_official:false, bcv_last_updated:now.toISOString(), bcv_value_date:'2026-11-30'}, now), false);
+  assert.equal(caracasDate(new Date('2026-11-21T03:30:00Z')), '2026-11-20');
+});

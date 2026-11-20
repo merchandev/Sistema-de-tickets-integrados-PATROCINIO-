@@ -29,6 +29,7 @@ const {
   getAllTicketsForAdmin
 } = require('./db');
 const { scrapeBcvRate } = require('./bcvScraper');
+const { officialRateCurrent } = require('./bcvRate');
 const { generateTicketPdf, generateDemoTicketPdf, correctedTicketPdfFilename } = require('./pdfGenerator');
 const { parsePaymentForm, parseTicketNumber } = require('./paymentForm');
 const { resetTickets } = require('./ticketReset');
@@ -286,7 +287,7 @@ app.post('/api/public/tickets/lock', requireSalesOpen, ticketRoute(async (req, r
     if (res.destroyed) return;
     if (assignment.cancelled) return res.status(409).json({ok:false, code:'RESERVATION_CANCELLED', message:'Se canceló la solicitud de entrada.'});
     const current = getPublicConfig();
-    if (current.bcv_mode !== 'manual' && (!current.bcv_is_official || Date.now() - Date.parse(current.bcv_last_updated) > 24*60*60*1000)) return res.status(503).json({ok:false, code:'BCV_UNAVAILABLE', message:'No hay una tasa oficial BCV reciente confirmada. Intenta nuevamente mas tarde.'});
+    if (current.bcv_mode !== 'manual' && !officialRateCurrent(current)) return res.status(503).json({ok:false, code:'BCV_UNAVAILABLE', message:'No hay una tasa oficial BCV reciente confirmada. Intenta nuevamente más tarde.'});
 
     const result = lockTicketAtomic(null, session_id, source);
     if (!result.success) {
