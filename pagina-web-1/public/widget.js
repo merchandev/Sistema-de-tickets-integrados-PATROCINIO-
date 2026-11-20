@@ -367,6 +367,63 @@
   });
   form.addEventListener('reset', () => setTimeout(showCapture));
 
+  // Mobile data in Venezuela can be very slow and the proxy cuts uploads that take over 60 seconds,
+  // so the capture is reduced to a light JPEG that keeps the text readable before sending it.
+  const CAPTURE_TARGET_BYTES = 100 * 1024;
+  async function lightCapture(file) {
+    if (file.size <= CAPTURE_TARGET_BYTES && /\.jpe?g$/i.test(file.name)) return file;
+    let bitmap;
+    try { bitmap = await createImageBitmap(file); } catch (_) { return file; }
+    try {
+      const canvas = document.createElement('canvas');
+      const toJpeg = (quality) => new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', quality));
+      let width = Math.min(bitmap.width, 1000);
+      let best = null;
+      for (const quality of [0.72, 0.6, 0.6, 0.55]) {
+        const scale = Math.min(width / bitmap.width, 2200 / bitmap.height, 1);
+        canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+        canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+        const blob = await toJpeg(quality);
+        if (blob && (!best || blob.size < best.size)) best = blob;
+        if (best && best.size <= CAPTURE_TARGET_BYTES) break;
+        width = Math.round(width * 0.85);
+      }
+      if (!best || best.size >= file.size) return file;
+      return new File([best], file.name.replace(/\.[^.]+$/, '') + '.jpg', { type: 'image/jpeg' });
+    } catch (_) {
+      return file;
+    } finally {
+      bitmap.close?.();
+    }
+  }
+
+  // Sends the form showing the upload progress. It gives up only if the upload stalls,
+  // not after a fixed time, so a slow but working connection can finish.
+  function sendPayment(url, formData, onProgress) {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      let stall;
+      const watch = (ms) => { clearTimeout(stall); stall = setTimeout(() => xhr.abort(), ms); };
+      xhr.open('POST', url);
+      xhr.timeout = 180000;
+      xhr.upload.onprogress = (event) => { watch(45000); if (event.lengthComputable) onProgress(event.loaded / event.total); };
+      xhr.upload.onload = () => { onProgress(1); watch(60000); };
+      xhr.onload = () => {
+        clearTimeout(stall);
+        let data = null;
+        try { data = JSON.parse(xhr.responseText); } catch (_) {}
+        resolve({ status: xhr.status, ok: xhr.status >= 200 && xhr.status < 300, data });
+      };
+      xhr.onerror = xhr.ontimeout = xhr.onabort = () => { clearTimeout(stall); reject(new Error('Conexión interrumpida')); };
+      watch(45000);
+      xhr.send(formData);
+    });
+  }
+
   function showFormError(message, field) {
     const box = $('pay-error');
     box.textContent = message;
@@ -405,19 +462,26 @@
     paySubmitting = true;
 
     try {
+      btn.textContent = 'Preparando la captura…';
       const formData = new FormData(form);
       if (!isReport) formData.append('ticket_number', ticketNumber);
       formData.append('source_web', CFG.SOURCE_WEB);
       formData.append('session_id', sessionId);
       formData.append('submission_id', submissionKey());
-      if (!formData.get('screenshot')?.size) formData.delete('screenshot');
+      formData.set('screenshot', await lightCapture(capture));
 
-      const res = await fetch(`${CFG.CENTRAL_API_URL}/api/public/${isReport ? 'payment-reports' : 'orders'}`, {
-        method: 'POST',
-        body: formData,
-        signal: AbortSignal.timeout(60000)
-      });
-      const data = await res.json().catch(() => null);
+      // The submission key makes a resend safe: if the first one arrived, the server returns that same order.
+      const url = `${CFG.CENTRAL_API_URL}/api/public/${isReport ? 'payment-reports' : 'orders'}`;
+      const progress = (share) => { btn.textContent = share < 1 ? `Enviando… ${Math.round(share * 100)} %` : 'Confirmando…'; };
+      let res;
+      try {
+        res = await sendPayment(url, formData, progress);
+      } catch (_) {
+        btn.textContent = 'Reintentando…';
+        await new Promise(resolve => setTimeout(resolve, 2500));
+        res = await sendPayment(url, formData, progress);
+      }
+      const data = res.data;
       if (!data) throw new Error('Respuesta de pago inválida');
 
       if (!isReport && res.status === 409) {
@@ -446,7 +510,7 @@
       $('pay-done-close').focus();
     } catch (err) {
       if (!isReport && !myLockedTicket) switchToReportAfterExpiry(ticketNumber);
-      showFormError('No pudimos confirmar si recibimos el pago. Si ya pagaste, vuelve a enviar el mismo comprobante sin hacer otro pago.');
+      showFormError('Tu conexión está muy lenta o se cortó y no pudimos confirmar el envío. Toca «Enviar» otra vez con el mismo comprobante: si ya lo recibimos, no se duplicará. No hagas otro pago.');
     } finally {
       paySubmitting = false;
       btn.disabled = false;
