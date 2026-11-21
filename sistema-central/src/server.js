@@ -35,7 +35,7 @@ const { parsePaymentForm, parseTicketNumber } = require('./paymentForm');
 const { resetTickets } = require('./ticketReset');
 const ticketArbitration = require('./ticketArbitration');
 const campaigns = require('./campaigns');
-const { registerWhatsappNoticeRoutes, whatsappNumber, ticketPdfSignature } = require('./whatsappNotices');
+const { registerWhatsappNoticeRoutes, whatsappNumber, ticketPdfSignature, scheduleLine } = require('./whatsappNotices');
 const {
   sendPaymentSubmittedEmail,
   sendTicketEmail,
@@ -971,6 +971,7 @@ app.post('/api/admin/access/tickets/:number/whatsapp', (req, res) => {
   const text = [
     `Hola ${name}, te enviamos tu entrada #${number} para ${cfg.event_title}.`,
     `El acceso y registro comienzan a las ${twelveHour(cfg.event_entry_time || '15:00')} en ${String(cfg.event_location || '').trim().replace(/[.\s]+$/, '')}.`,
+    scheduleLine(cfg),
     `Descarga tu entrada en PDF aquí: ${link}`,
     'Muestra el código QR y tu cédula en el acceso. ¡Te esperamos!'
   ].join('\n\n');

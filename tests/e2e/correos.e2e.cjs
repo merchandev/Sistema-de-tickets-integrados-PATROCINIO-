@@ -442,7 +442,7 @@ function parseMail(file) {
     const wa = await api('POST', `/api/admin/access/tickets/${doorNumber}/whatsapp`, { cookie: ctl.cookie, json: { phone: '0414-123.45.67' } });
     check('WhatsApp: valida el número y arma el mensaje para ese número con el enlace del PDF', waBad.status === 400 && waBad.data.field === 'phone' &&
       wa.status === 200 && wa.data.url.startsWith('https://wa.me/584141234567?text=') && decodeURIComponent(wa.data.url.split('text=')[1]).includes(wa.data.link) &&
-      new RegExp(`entrada #${doorNumber}`).test(wa.data.text), wa.data.message || wa.data.text);
+      new RegExp(`entrada #${doorNumber}`).test(wa.data.text) && /concierto arranca a las 7:00 PM/.test(wa.data.text), wa.data.message || wa.data.text);
     const publicPath = new URL(wa.data.link).pathname;
     const publicPdf = await api('GET', publicPath);
     const forged = await api('GET', publicPath.replace(/\/[^/]+\.pdf$/, '/' + 'A'.repeat(32) + '.pdf'));
@@ -452,7 +452,7 @@ function parseMail(file) {
     const waFirst = waList.data.recipients?.[0];
     const waText = waFirst ? decodeURIComponent(waFirst.url.split('text=')[1]) : '';
     check('Avisos por WhatsApp: un mensaje por número con nombre, entradas y enlace al PDF', waList.status === 200 && waList.data.total >= 1 &&
-      waList.data.sent === 0 && /^https:\/\/wa\.me\/\d{10,15}\?text=/.test(waFirst.url) && /¡Hoy es el evento!/.test(waText) && /\/verify\/entrada\/\d+\/[\w-]{32}\.pdf/.test(waText), waText.slice(0, 160));
+      waList.data.sent === 0 && /^https:\/\/wa\.me\/\d{10,15}\?text=/.test(waFirst.url) && /¡Hoy es el evento!/.test(waText) && /Las conferencias comienzan a las 4:00 PM y el concierto arranca a las 7:00 PM./.test(waText) && /\/verify\/entrada\/\d+\/[\w-]{32}\.pdf/.test(waText), waText.slice(0, 160));
     const waMark = await api('POST', '/api/admin/whatsapp/notices/REMINDER_TODAY/mark', { cookie: adm.cookie, json: { phone: waFirst.phone } });
     const waAfter = (await api('GET', '/api/admin/whatsapp/notices/REMINDER_TODAY', { cookie: sup.cookie })).data;
     const waOther = (await api('GET', '/api/admin/whatsapp/notices/EVENT_STARTED', { cookie: sup.cookie })).data;

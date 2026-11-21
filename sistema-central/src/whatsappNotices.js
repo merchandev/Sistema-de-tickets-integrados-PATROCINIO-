@@ -41,6 +41,9 @@ const twelveHour = (time) => {
 };
 const joinNames = (names) => names.length > 1 ? `${names.slice(0, -1).join(', ')} y ${names.at(-1)}` : names[0];
 
+// "Las conferencias comienzan a las 4:00 PM y el concierto arranca a las 7:00 PM."
+const scheduleLine = (cfg) => `Las conferencias comienzan a las ${twelveHour(cfg.conference_start || '16:00')} y el concierto arranca a las ${twelveHour(cfg.concert_start || '19:00')}.`;
+
 function noticeText(notice, group, baseUrl, cfg = getPublicConfig()) {
   const names = joinNames([...new Set(group.orders.map(o => o.buyer_first_name || String(o.buyer_name || '').split(' ')[0]))]);
   const tickets = group.orders.map(o => `#${o.ticket_number}`);
@@ -51,10 +54,10 @@ function noticeText(notice, group, baseUrl, cfg = getPublicConfig()) {
   const opening = {
     REMINDER_TODAY: `¡Hoy es el evento! Hola ${names}, te esperamos hoy en ${place} para ${cfg.event_title}. El acceso y registro comienzan a las ${entry}.`,
     REMINDER_REGISTRATION: `Hola ${names}, te recordamos que hoy a las ${entry} abre el registro de ${cfg.event_title} en ${place}. Llega con tiempo para entrar sin filas.`,
-    EVENT_STARTED: `¡Ya comenzamos! Hola ${names}, las puertas de ${cfg.event_title} ya están abiertas en ${place}. Conferencias desde las ${twelveHour(cfg.conference_start || '16:00')} y concierto desde las ${twelveHour(cfg.concert_start || '19:00')}.`
+    EVENT_STARTED: `¡Ya comenzamos! Hola ${names}, las puertas de ${cfg.event_title} ya están abiertas en ${place}.`
   }[notice];
   const links = group.orders.map(o => (group.orders.length > 1 ? `#${o.ticket_number}: ` : '') + ticketPdfLink(baseUrl, o)).join('\n');
-  return [opening, `Muestra el código QR de ${ticketsText} y tu cédula en el acceso.`, `Si no tienes tu entrada a mano, descárgala aquí:\n${links}`].join('\n\n');
+  return [opening, scheduleLine(cfg), `Muestra el código QR de ${ticketsText} y tu cédula en el acceso.`, `Si no tienes tu entrada a mano, descárgala aquí:\n${links}`].join('\n\n');
 }
 
 // Approved tickets grouped by WhatsApp number, with whether this notice was already sent to it.
@@ -126,4 +129,4 @@ function registerWhatsappNoticeRoutes(app, { baseUrl }) {
   });
 }
 
-module.exports = { registerWhatsappNoticeRoutes, whatsappNumber, ticketPdfSignature, ticketPdfLink, NOTICES };
+module.exports = { registerWhatsappNoticeRoutes, whatsappNumber, ticketPdfSignature, ticketPdfLink, scheduleLine, NOTICES };
