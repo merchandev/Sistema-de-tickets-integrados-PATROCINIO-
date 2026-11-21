@@ -484,6 +484,27 @@
               <div class="text-xs text-slate-500 mt-0.5">Aviso de puertas abiertas (conferencias 4 PM + concierto 7 PM)</div>
             </button>
           </div>
+
+          <!-- Event notices by WhatsApp: one prepared chat per registered number -->
+          <section class="wa-notices" aria-labelledby="wa-notices-title">
+            <h3 id="wa-notices-title">Avisos por WhatsApp</h3>
+            <p>Envía el aviso a cada número registrado desde tu WhatsApp: «Enviar siguiente» abre el chat con el mensaje listo (nombre, entradas y enlace al PDF); solo pulsa enviar y vuelve aquí. Lo que envía cualquier persona del equipo queda marcado para no repetirlo.</p>
+            <div class="wa-notice-tabs" role="tablist">
+              <button type="button" role="tab" data-notice="REMINDER_TODAY" onclick="loadWaNotice('REMINDER_TODAY')">🎉 Hoy es el evento</button>
+              <button type="button" role="tab" data-notice="REMINDER_REGISTRATION" onclick="loadWaNotice('REMINDER_REGISTRATION')">🕒 Registro 3:00 PM</button>
+              <button type="button" role="tab" data-notice="EVENT_STARTED" onclick="loadWaNotice('EVENT_STARTED')">🚀 Ya comenzamos</button>
+            </div>
+            <div class="wa-notice-summary">
+              <div class="wa-notice-progress"><strong id="wa-notice-count">—</strong><div class="resend-bar"><span id="wa-notice-bar" style="width:0%"></span></div></div>
+              <button type="button" class="wa-next" id="wa-next" onclick="sendNextWa()">Enviar siguiente</button>
+            </div>
+            <div class="wa-notice-tools">
+              <input id="wa-notice-search" type="search" placeholder="Buscar nombre, entrada o teléfono" aria-label="Buscar en la lista de WhatsApp" oninput="renderWaNotice()" />
+              <label><input type="checkbox" id="wa-notice-pending" onchange="renderWaNotice()" checked /> Solo pendientes</label>
+              <a href="/api/admin/whatsapp/contacts.vcf" download>Descargar contactos (.vcf)</a>
+            </div>
+            <ul id="wa-notice-list" class="wa-notice-list"><li class="wa-empty">Elige un aviso para ver la lista.</li></ul>
+          </section>
         </div>
 
         <!-- Mail account: SMTP sends, IMAP (optional) keeps a copy in the Sent folder -->
@@ -784,7 +805,7 @@
 
   <script src="/admin/blog-turndown.js"></script>
   <script src="/admin/blog.js?v=seo-1"></script>
-  <script src="/admin/admin.js?v=whatsapp-share"></script>
+  <script src="/admin/admin.js?v=whatsapp-notices"></script>
   <script src="/admin/sponsors.js"></script>
   <script src="/admin/hoja-google.js"></script>
 </body>

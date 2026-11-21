@@ -2442,3 +2442,40 @@ button.is-read-only:disabled { opacity: .45; cursor: not-allowed; }
 .campaign-toggle.is-on { background: #eefaf3; border: 1px solid #c9ead6; color: #1f7a4d; }
 .campaign-toggle button { border: 1px solid currentColor; background: #fff; color: inherit; border-radius: 8px; padding: 5px 12px; font-weight: 700; cursor: pointer; }
 .campaign-toggle button[disabled] { opacity: .6; cursor: progress; }
+
+/* Event notices by WhatsApp */
+.wa-notices { margin-top: 18px; padding-top: 16px; border-top: 1px solid #e7e2ec; display: grid; gap: 10px; }
+.wa-notices h3 { margin: 0; font-size: 15px; font-weight: 750; color: #1f1a24; }
+.wa-notices > p { margin: 0; font-size: 12px; color: #6b6275; line-height: 1.5; }
+.wa-notice-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.wa-notice-tabs button { flex: 1 1 0; min-width: 0; padding: 8px 10px; border: 1px solid #d6d0dc; border-radius: 10px; background: #fff; font-size: 12px; font-weight: 650; cursor: pointer; white-space: nowrap; }
+.wa-notice-tabs button[aria-selected="true"] { background: #1f7a4d; border-color: #1f7a4d; color: #fff; }
+.wa-notice-summary { display: flex; align-items: center; gap: 12px; }
+.wa-notice-progress { flex: 1; display: grid; gap: 6px; font-size: 12px; }
+.wa-notice-progress .resend-bar { background: #e3efe8; max-width: none; }
+.wa-next { flex: none; padding: 9px 14px; border: 0; border-radius: 10px; background: #1f7a4d; color: #fff; font-size: 13px; font-weight: 700; cursor: pointer; }
+.wa-next[disabled] { background: #9fbfae; cursor: default; }
+.wa-notice-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: 12px; }
+.wa-notice-tools input[type="search"] { flex: 1 1 180px; min-width: 0; border: 1px solid #d6d0dc; border-radius: 8px; padding: 6px 10px; font-size: 13px; }
+.wa-notice-tools label { display: flex; align-items: center; gap: 5px; }
+.wa-notice-tools a { color: #1f4f7a; font-weight: 650; }
+.wa-notice-list { list-style: none; margin: 0; padding: 0; border: 1px solid #e7e2ec; border-radius: 10px; max-height: 420px; overflow-y: auto; }
+.wa-notice-list li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 12px; border-bottom: 1px solid #f0edf3; }
+.wa-notice-list li:last-child { border-bottom: 0; }
+.wa-notice-list li.is-sent { background: #f4fbf7; }
+.wa-who { display: grid; gap: 2px; min-width: 0; font-size: 13px; }
+.wa-who span { font-size: 12px; color: #4b4453; }
+.wa-who small { font-size: 11px; color: #1f7a4d; }
+.wa-actions { display: flex; gap: 6px; flex: none; }
+.wa-actions .door-pdf-btn { min-height: 34px; padding: 6px 10px; font-size: 12px; }
+.wa-empty { justify-content: center !important; color: #8a8293; font-size: 13px; }
+@media (max-width: 640px) {
+  .wa-notice-list li { flex-direction: column; align-items: stretch; }
+  .wa-actions .door-pdf-btn { flex: 1 1 0; }
+}
+/* Narrow card: tabs wrap, each number on its own block with the buttons below */
+.wa-notice-tabs button { white-space: normal; line-height: 1.25; }
+.wa-notice-list li { flex-direction: column; align-items: stretch; }
+.wa-actions .door-pdf-btn { flex: 1 1 0; }
+.wa-notice-summary { flex-wrap: wrap; }
+.wa-notice-summary .wa-next { flex: 1 1 100%; }

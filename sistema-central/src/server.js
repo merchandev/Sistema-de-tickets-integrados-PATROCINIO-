@@ -35,6 +35,7 @@ const { parsePaymentForm, parseTicketNumber } = require('./paymentForm');
 const { resetTickets } = require('./ticketReset');
 const ticketArbitration = require('./ticketArbitration');
 const campaigns = require('./campaigns');
+const { registerWhatsappNoticeRoutes, whatsappNumber, ticketPdfSignature } = require('./whatsappNotices');
 const {
   sendPaymentSubmittedEmail,
   sendTicketEmail,
@@ -935,10 +936,6 @@ app.post('/api/admin/access/tickets/:number/send-email', ticketRoute(async (req,
 
 // Public link to one ticket's PDF for a WhatsApp message, signed so it cannot be guessed and valid only
 // while the ticket stays sold to that order (a new QR or a cancellation invalidates it).
-function ticketPdfSignature(order) {
-  const key = getAllSettings().secret_hmac_key || 'entradas';
-  return crypto.createHmac('sha256', key).update(`pdf:${order.id}:${order.verification_token}`).digest('base64url').slice(0, 32);
-}
 app.get('/verify/entrada/:id/:signature', (req, res) => {
   const order = db.prepare(`SELECT o.* FROM orders o JOIN tickets t ON t.current_order_id = o.id AND t.status = 'SOLD'
     WHERE o.id = ? AND o.status = 'APPROVED'`).get(Number(req.params.id) || 0);
@@ -955,14 +952,6 @@ app.get('/verify/entrada/:id/:signature', (req, res) => {
   return res.type('application/pdf').sendFile(file);
 });
 
-// "0414-123.45.67" -> "584141234567"; numbers with country code keep it.
-function whatsappNumber(value) {
-  const raw = String(value || '').trim();
-  let digits = raw.replace(/\D/g, '');
-  if (raw.startsWith('+') || digits.startsWith('58')) return digits.length >= 10 && digits.length <= 15 ? digits : null;
-  if (digits.startsWith('0')) digits = digits.slice(1);
-  return digits.length === 10 ? `58${digits}` : null;
-}
 const twelveHour = (time) => {
   const m = /^(\d{1,2}):(\d{2})$/.exec(String(time || ''));
   return m ? `${Number(m[1]) % 12 || 12}:${m[2]} ${Number(m[1]) >= 12 ? 'PM' : 'AM'}` : time || '';
@@ -988,6 +977,9 @@ app.post('/api/admin/access/tickets/:number/whatsapp', (req, res) => {
   console.log(`[Puerta] ${req.adminUser} preparó el WhatsApp de la entrada #${number}`);
   return res.json({ ok: true, url: `https://wa.me/${phone}?text=${encodeURIComponent(text)}`, link, text });
 });
+
+// Event notices by WhatsApp for every registered number (see whatsappNotices.js)
+registerWhatsappNoticeRoutes(app, { baseUrl: PUBLIC_BASE_URL });
 
 // Who checked in each ticket and when, newest first.
 app.get('/api/admin/access/history', (req, res) => {

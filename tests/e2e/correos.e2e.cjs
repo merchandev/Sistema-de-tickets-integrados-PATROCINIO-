@@ -448,6 +448,20 @@ function parseMail(file) {
     const forged = await api('GET', publicPath.replace(/\/[^/]+\.pdf$/, '/' + 'A'.repeat(32) + '.pdf'));
     check('El enlace del PDF abre la entrada sin sesión y no se puede adivinar', publicPdf.status === 200 && publicPdf.data.subarray(0, 5).toString() === '%PDF-' &&
       forged.status === 404 && (await api('GET', publicPath.replace(`/entrada/${wa.data.link.split('/entrada/')[1].split('/')[0]}/`, '/entrada/99999/'))).status === 404);
+    const waList = await api('GET', '/api/admin/whatsapp/notices/REMINDER_TODAY', { cookie: adm.cookie });
+    const waFirst = waList.data.recipients?.[0];
+    const waText = waFirst ? decodeURIComponent(waFirst.url.split('text=')[1]) : '';
+    check('Avisos por WhatsApp: un mensaje por número con nombre, entradas y enlace al PDF', waList.status === 200 && waList.data.total >= 1 &&
+      waList.data.sent === 0 && /^https:\/\/wa\.me\/\d{10,15}\?text=/.test(waFirst.url) && /¡Hoy es el evento!/.test(waText) && /\/verify\/entrada\/\d+\/[\w-]{32}\.pdf/.test(waText), waText.slice(0, 160));
+    const waMark = await api('POST', '/api/admin/whatsapp/notices/REMINDER_TODAY/mark', { cookie: adm.cookie, json: { phone: waFirst.phone } });
+    const waAfter = (await api('GET', '/api/admin/whatsapp/notices/REMINDER_TODAY', { cookie: sup.cookie })).data;
+    const waOther = (await api('GET', '/api/admin/whatsapp/notices/EVENT_STARTED', { cookie: sup.cookie })).data;
+    check('Lo enviado por WhatsApp queda marcado para todo el equipo, por aviso', waMark.data.sent === 1 && waAfter.recipients.find(r => r.phone === waFirst.phone)?.sentBy === 'admin@marketing.test' && waOther.sent === 0);
+    const waUnmark = await api('POST', '/api/admin/whatsapp/notices/REMINDER_TODAY/mark', { cookie: adm.cookie, json: { phone: waFirst.phone, sent: false } });
+    const vcf = await api('GET', '/api/admin/whatsapp/contacts.vcf', { cookie: adm.cookie });
+    check('Se puede desmarcar y descargar los contactos en .vcf', waUnmark.data.sent === 0 && vcf.status === 200 && /BEGIN:VCARD[\s\S]*TEL;TYPE=CELL:\+\d+/.test(vcf.data.toString()));
+    check('Control de acceso no ve la lista de WhatsApp ni los contactos', (await api('GET', '/api/admin/whatsapp/notices/REMINDER_TODAY', { cookie: ctl.cookie })).status === 403 &&
+      (await api('GET', '/api/admin/whatsapp/contacts.vcf', { cookie: ctl.cookie })).status === 403);
     const mailsBeforeSend = mailFiles().length;
     const forcedSend = await api('POST', `/api/admin/access/tickets/${doorNumber}/send-email`, { cookie: ctl.cookie, json: {} });
     await waitMails(mailsBeforeSend + 1);

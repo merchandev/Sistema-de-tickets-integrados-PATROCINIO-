@@ -1432,6 +1432,74 @@ function renderCampaignSchedule() {
   box.innerHTML = `${toggle}<ul>${rows}</ul>${info.automatic ? '' : '<p class="campaign-paused">El envío automático está desactivado en este servidor.</p>'}`;
 }
 
+// ============================================================================
+// EVENT NOTICES BY WHATSAPP
+// ============================================================================
+let waNotice = 'REMINDER_TODAY';
+let waData = null;
+async function loadWaNotice(notice = waNotice) {
+  waNotice = notice;
+  document.querySelectorAll('.wa-notice-tabs [data-notice]').forEach(tab => tab.setAttribute('aria-selected', String(tab.dataset.notice === notice)));
+  try {
+    const res = await fetch(`/api/admin/whatsapp/notices/${notice}`);
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.message);
+    if (notice !== waNotice) return;
+    waData = data;
+    renderWaNotice();
+  } catch (err) {
+    document.getElementById('wa-notice-list').innerHTML = `<li class="wa-empty">No se pudo cargar la lista. ${escapeHtml(err.message || '')}</li>`;
+  }
+}
+
+function renderWaNotice() {
+  if (!waData) return;
+  const sent = waData.recipients.filter(r => r.sentAt).length;
+  document.getElementById('wa-notice-count').textContent = `${sent} de ${waData.total} números enviados · «${waData.label}»`;
+  document.getElementById('wa-notice-bar').style.width = `${waData.total ? Math.round(sent / waData.total * 100) : 0}%`;
+  document.getElementById('wa-next').disabled = sent === waData.total;
+  document.getElementById('wa-next').textContent = sent === waData.total ? 'Todos enviados' : 'Enviar siguiente';
+  const query = document.getElementById('wa-notice-search').value.trim().toLowerCase();
+  const onlyPending = document.getElementById('wa-notice-pending').checked;
+  const rows = waData.recipients.filter(r => (!onlyPending || !r.sentAt) &&
+    (!query || [r.display, r.phone, ...r.names, ...r.tickets].some(v => String(v).toLowerCase().includes(query))));
+  const list = document.getElementById('wa-notice-list');
+  if (!rows.length) {
+    list.innerHTML = `<li class="wa-empty">${onlyPending && sent === waData.total ? 'Este aviso ya se envió a todos los números.' : 'Ningún número coincide.'}</li>`;
+    return;
+  }
+  list.innerHTML = rows.map(r => `<li class="${r.sentAt ? 'is-sent' : ''}">
+    <div class="wa-who"><strong>${escapeHtml(r.names.join(', '))}</strong>
+      <span>${r.tickets.map(t => '#' + escapeHtml(t)).join(' ')} · ${escapeHtml(r.display)}</span>
+      ${r.sentAt ? `<small>Enviado por ${escapeHtml(r.sentBy)} · ${escapeHtml(formatDateTime(r.sentAt))}</small>` : ''}</div>
+    <div class="wa-actions">
+      <button type="button" class="door-pdf-btn is-primary" onclick="openWa('${escapeHtml(r.phone)}')">${r.sentAt ? 'Abrir de nuevo' : 'Abrir WhatsApp'}</button>
+      <button type="button" class="door-pdf-btn" onclick="markWa('${escapeHtml(r.phone)}', ${r.sentAt ? 'false' : 'true'})">${r.sentAt ? 'Desmarcar' : 'Marcar enviado'}</button>
+    </div>
+  </li>`).join('');
+}
+
+// Opens the chat with the message ready and marks the number as done for the whole team
+async function openWa(phone) {
+  const item = waData?.recipients.find(r => r.phone === phone);
+  if (!item) return;
+  window.open(item.url, '_blank', 'noopener');
+  await markWa(phone, true);
+}
+async function markWa(phone, sent) {
+  try {
+    const res = await fetch(`/api/admin/whatsapp/notices/${waNotice}/mark`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone, sent }) });
+    if (!(await res.json()).ok) throw new Error();
+  } catch (_) {
+    showToast('No se pudo guardar la marca. Revisa tu conexión.');
+  }
+  await loadWaNotice(waNotice);
+}
+function sendNextWa() {
+  const next = waData?.recipients.find(r => !r.sentAt);
+  if (next) openWa(next.phone);
+}
+
 async function toggleCampaigns(pause, button) {
   if (!pause && !confirm('¿Reanudar los recordatorios automáticos? Saldrán a la hora programada a quienes todavía no los recibieron.')) return;
   button.disabled = true;
@@ -1593,6 +1661,7 @@ function switchTab(tabName) {
   if (tabName === 'pdf') updateTicketDemo();
   if (tabName === 'users') loadUsers();
   if (tabName === 'history') loadAccessHistory();
+  if (tabName === 'smtp') loadWaNotice();
   if (tabName === 'sponsors') window.loadSponsors?.();
   if (tabName !== 'orders') window.scrollTo({top: 0});
 }
