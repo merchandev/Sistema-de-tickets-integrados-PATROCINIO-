@@ -1135,9 +1135,37 @@ function renderMailAlert() {
   if (mode !== 'smtp') {
     box.innerHTML = `<div><strong>Los correos no están llegando a los compradores.</strong><span>${mode === 'mailpit' ? 'El servidor de correo guardado es Mailpit, un buzón de pruebas.' : 'No hay un servidor de correo configurado.'}${waiting}</span></div><button type="button" onclick="switchTab('smtp')">Configurar correo</button>`;
   } else if (pending) {
-    box.innerHTML = `<div><strong>${pending} aviso${pending === 1 ? '' : 's'} sin entregar.</strong><span>El servidor de correo ya está configurado: reenvíalos para que lleguen a los compradores.</span></div><button type="button" onclick="retryPendingEmails(this)">Reenviar ahora</button>`;
+    const r = state.mailResend || { pending, delivered: 0, total: pending };
+    const share = r.total ? Math.round((r.delivered / r.total) * 100) : 0;
+    const timer = r.nextCheckAt ? `<b id="resend-countdown" data-at="${escapeHtml(r.nextCheckAt)}">${countdown(r.nextCheckAt)}</b>` : '';
+    const phase = r.sending ? 'Reenviando ahora, uno a uno…'
+      : r.pausedUntil ? `El proveedor de correo limitó el envío. Se reintenta solo en ${timer}.`
+      : `Se reenvían solos cada ${r.intervalMinutes || 3} minutos hasta que lleguen.${timer ? ` Próxima verificación en ${timer}.` : ''}`;
+    box.innerHTML = `<div class="mail-resend">
+        <strong>${pending} aviso${pending === 1 ? '' : 's'} sin entregar${r.delivered ? ` · ${r.delivered} entregado${r.delivered === 1 ? '' : 's'} en este reenvío` : ''}.</strong>
+        <div class="resend-bar" role="progressbar" aria-label="Avance del reenvío" aria-valuemin="0" aria-valuemax="${r.total}" aria-valuenow="${r.delivered}"><span style="width:${Math.max(share, r.sending ? 3 : 0)}%"></span></div>
+        <span>${phase}</span>
+      </div><button type="button" onclick="retryPendingEmails(this)"${r.sending ? ' disabled' : ''}>${r.sending ? 'Reenviando…' : 'Reenviar ahora'}</button>`;
   }
   box.hidden = mode === 'smtp' && !pending;
+  scheduleMailRefresh(mode === 'smtp' && pending > 0);
+}
+
+function countdown(iso) {
+  const seconds = Math.max(0, Math.round((Date.parse(iso) - Date.now()) / 1000));
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+}
+// While notices are pending, the banner refreshes itself and counts down to the next check
+let mailRefreshTimer = null;
+function scheduleMailRefresh(active) {
+  if (!active) { clearInterval(mailRefreshTimer); mailRefreshTimer = null; return; }
+  if (mailRefreshTimer) return;
+  let ticks = 0;
+  mailRefreshTimer = setInterval(() => {
+    const el = document.getElementById('resend-countdown');
+    if (el) el.textContent = countdown(el.dataset.at);
+    if (++ticks % 20 === 0) fetchAdminOverview();
+  }, 1000);
 }
 
 async function retryPendingEmails(button) {
@@ -1146,7 +1174,9 @@ async function retryPendingEmails(button) {
   try {
     const res = await fetch('/api/admin/mail/retry-pending', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
     const data = await res.json();
+    if (data.resend) state.mailResend = { ...data.resend, sending: data.ok && data.pending > 0 };
     showToast(data.message);
+    renderMailAlert();
   } catch (_) {
     showToast('No se pudieron reenviar los avisos. Revisa Correos y avisos.');
   }

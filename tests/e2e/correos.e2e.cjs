@@ -302,8 +302,12 @@ function parseMail(file) {
     check('No reenvía mientras siga Mailpit', (await api('POST', '/api/admin/mail/retry-pending', { admin: true, json: {} })).status === 409);
     await api('PUT', '/api/admin/settings', { admin: true, json: { smtp_host: '127.0.0.1', smtp_port: String(SMTP_PORT) } });
     const bulk = await api('POST', '/api/admin/mail/retry-pending', { admin: true, json: {} });
-    check('«Reenviar ahora» entrega los avisos pendientes', bulk.status === 200 && bulk.data.sent === 1, bulk.data.message);
+    check('«Reenviar ahora» pone en marcha el reenvío de los avisos pendientes', bulk.status === 200 && bulk.data.pending === 1 && bulk.data.resend?.total === 1, bulk.data.message);
     check('El aviso reenviado llega al buzón', (await waitMails(9)) === 9 && /^Estamos verificando tu pago$/.test(parseMail(mailFiles()[8]).subject));
+    await sleep(300);
+    const resendAfter = (await api('GET', '/api/admin/overview', { admin: true })).data.mailResend;
+    check('La barra de reenvío queda vacía cuando todo llegó', resendAfter.pending === 0 && resendAfter.nextCheckAt === null, JSON.stringify(resendAfter));
+    check('Sin avisos pendientes, «Reenviar ahora» lo dice', /No hay avisos pendientes/.test((await api('POST', '/api/admin/mail/retry-pending', { admin: true, json: {} })).data.message));
     check('Ya no quedan avisos pendientes', (await api('GET', '/api/admin/overview', { admin: true })).data.undeliveredEmails === 0);
 
     for (const campaignKey of ['REMINDER_2_DAYS', 'REMINDER_1_DAY', 'REMINDER_TODAY', 'REMINDER_REGISTRATION', 'EVENT_STARTED']) {

@@ -42,8 +42,7 @@ const {
   testMailConnections,
   mailDeliveryMode,
   retryOrderEmail,
-  undeliveredOrderEmails,
-  retryUndeliveredOrderEmails
+  undeliveredOrderEmails
 } = require('./mailer');
 
 const PORT = parseInt(process.env.PORT || '4000', 10);
@@ -630,6 +629,7 @@ app.get('/api/admin/overview', (req, res) => {
     emailLogs,
     campaigns: campaignHistory,
     campaignSchedule: campaigns.status(),
+    mailResend: campaigns.resendStatus(),
     undeliveredEmails: undelivered.length,
     retryableEmailIds: undelivered.map(log => log.id)
   });
@@ -1092,24 +1092,13 @@ app.post('/api/admin/mail/test', superadminOnly, ticketRoute(async (req, res) =>
 }));
 
 // Resends every buyer notice that never left (saved while the mail server was Mailpit or failing).
-app.post('/api/admin/mail/retry-pending', ticketRoute(async (req, res) => {
+// "Reenviar ahora": starts resending every undelivered notice in the background (campaigns.js), one by
+// one; the panel follows the progress. The same resend also runs on its own every 3 minutes.
+app.post('/api/admin/mail/retry-pending', (req, res) => {
   if (!req.is('application/json')) return res.status(415).json({ ok: false, message: 'Se requiere una solicitud JSON.' });
-  if (mailDeliveryMode() !== 'smtp') return res.status(409).json({ ok: false, message: 'Configura y prueba un servidor SMTP real antes de reenviar.' });
-  try {
-    const { sent, failed } = await retryUndeliveredOrderEmails();
-    return res.json({
-      ok: failed.length === 0,
-      sent,
-      failed: failed.length,
-      message: failed.length
-        ? `Se reenviaron ${sent} aviso(s); ${failed.length} no se pudieron enviar. Revisa el registro de correos.`
-        : `Se reenviaron ${sent} aviso(s) a los compradores.`
-    });
-  } catch (err) {
-    console.error('Error retrying pending emails:', err.message);
-    return res.status(500).json({ ok: false, message: 'No se pudieron reenviar los avisos.' });
-  }
-}));
+  const { status = 200, ...result } = campaigns.forceResend();
+  return res.status(status).json({ ...result, resend: campaigns.resendStatus() });
+});
 
 app.post('/api/admin/mail/:id/retry', ticketRoute(async (req, res) => {
   if (!req.is('application/json')) return res.status(415).json({ ok: false, message: 'Se requiere una solicitud JSON.' });
@@ -1191,7 +1180,13 @@ setInterval(() => {
   }
 }, 1000);
 
-// Scheduled event reminders and automatic resends of undelivered notices (see campaigns.js)
+// Scheduled event reminders and automatic resends of undelivered notices (see campaigns.js); the panel
+// refreshes as messages go out, at most every 2 seconds.
+let mailProgressTimer = null;
+campaigns.onProgress(() => {
+  if (mailProgressTimer) return;
+  mailProgressTimer = setTimeout(() => { mailProgressTimer = null; io.to('admins').emit('admin:order_updated', { changed: true }); }, 2000);
+});
 campaigns.start();
 
 // Initial BCV scrape on startup + periodic refresh every 15 minutes

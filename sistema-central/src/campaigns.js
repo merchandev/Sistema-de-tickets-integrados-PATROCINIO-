@@ -13,14 +13,13 @@ const { db, getPublicConfig } = require('./db');
 const mailer = require('./mailer');
 
 const PACE_MS = Number(process.env.CAMPAIGN_PACE_MS || 8000);
-const COOLDOWN_MS = Number(process.env.MAIL_COOLDOWN_MS || 10 * 60 * 1000);
+const COOLDOWN_MS = Number(process.env.MAIL_COOLDOWN_MS || 3 * 60 * 1000);
 const TICK_MS = Number(process.env.CAMPAIGN_TICK_MS || 30 * 1000);
 const AUTO = process.env.CAMPAIGNS_AUTO !== 'false';
 const QUIET_FROM = '22:00';
 const QUIET_TO = '06:00';
-// Undelivered payment and ticket notices are retried this many times, at least this far apart.
-const RESEND_MAX_ATTEMPTS = 8;
-const RESEND_GAP_MS = 10 * 60 * 1000;
+// Undelivered payment and ticket notices are retried every 3 minutes until they reach the buyer.
+const RESEND_GAP_MS = Number(process.env.MAIL_RESEND_GAP_MS || 3 * 60 * 1000);
 
 const LABELS = {
   REMINDER_2_DAYS: 'Faltan 2 días',
@@ -101,32 +100,49 @@ function recordCampaign(campaignKey, triggeredBy, delivered) {
   else db.prepare('INSERT INTO notification_campaigns (campaign_key, triggered_by, recipients_count) VALUES (?, ?, ?)').run(campaignKey, triggeredBy, delivered);
 }
 
-const state = { running: false, blockedUntil: 0, lastError: '', manual: new Set(), current: null, sent: 0 };
+const state = { running: false, blockedUntil: 0, lastError: '', manual: new Set(), current: null, sent: 0,
+  force: false, resendDelivered: 0, resending: false, lastCheck: 0 };
+let progressListener = () => {};
+const progress = () => { try { progressListener(); } catch (_) { /* the panel refreshes on its own */ } };
 
 function noteFailure(errorMessage) {
   state.lastError = errorMessage || '';
   if (RATE_LIMITED.test(errorMessage || '')) {
     state.blockedUntil = Date.now() + COOLDOWN_MS;
     console.warn(`[Campañas] El proveedor de correo limitó el envío. Se reanuda en ${Math.round(COOLDOWN_MS / 60000)} min.`);
+    progress();
     return true;
   }
   return false;
 }
 const blocked = () => Date.now() < state.blockedUntil;
 
-// Payment and ticket notices that never reached the buyer, retried automatically with a limit.
+const lastAttempt = (row) => Date.parse(`${String(db.prepare('SELECT MAX(created_at) AS last FROM email_logs WHERE order_id = ? AND type = ?').get(row.order_id, row.type).last).replace(' ', 'T')}Z`);
+
+// Payment and ticket notices that never reached the buyer (every ticket of every order, even when a
+// buyer used the same address several times), retried every 3 minutes until delivered.
 async function resendUndelivered() {
-  for (const row of mailer.undeliveredOrderEmails()) {
+  const force = state.force;
+  state.force = false;
+  state.lastCheck = Date.now();
+  const rows = mailer.undeliveredOrderEmails();
+  if (!rows.length) { state.resendDelivered = 0; return; }
+  state.resending = true;
+  try {
+  for (const row of rows) {
     if (blocked()) return;
-    const attempts = db.prepare(`SELECT COUNT(*) AS n, MAX(created_at) AS last FROM email_logs WHERE order_id = ? AND type = ?`).get(row.order_id, row.type);
-    if (attempts.n >= RESEND_MAX_ATTEMPTS) continue;
-    if (Date.now() - Date.parse(`${String(attempts.last).replace(' ', 'T')}Z`) < RESEND_GAP_MS) continue;
+    if (!force && Date.now() - lastAttempt(row) < RESEND_GAP_MS) continue;
     const result = await mailer.retryOrderEmail(row.id);
     // Only a new attempt that failed says something about the provider (not an order that changed)
     const latest = db.prepare('SELECT id, status, error_message FROM email_logs WHERE order_id = ? AND type = ? ORDER BY id DESC LIMIT 1').get(row.order_id, row.type);
     if (latest.id === row.id) continue;
-    if (!result.ok && latest.status === 'ERROR' && noteFailure(latest.error_message)) return;
+    if (result.ok) { state.resendDelivered++; progress(); }
+    else if (latest.status === 'ERROR' && noteFailure(latest.error_message)) return;
     await sleep(PACE_MS);
+  }
+  } finally {
+    state.resending = false;
+    progress();
   }
 }
 
@@ -137,7 +153,7 @@ async function sendCampaign(campaignKey, triggeredBy, stillWanted) {
       if (blocked() || !stillWanted()) break;
       state.current = campaignKey;
       const result = await mailer.sendCampaignEmail(campaignKey, orders);
-      if (result.status === 'SENT_SMTP') { delivered++; state.sent++; }
+      if (result.status === 'SENT_SMTP') { delivered++; state.sent++; progress(); }
       else if (noteFailure(result.errorMessage)) break;
       await sleep(PACE_MS);
     }
@@ -153,6 +169,7 @@ async function tick() {
   state.running = true;
   try {
     if (mailer.mailDeliveryMode() !== 'smtp' || blocked()) return;
+    state.lastCheck = Date.now();
     await resendUndelivered();
     for (const key of [...state.manual]) {
       if (blocked()) return;
@@ -181,6 +198,35 @@ function queueCampaign(campaignKey) {
   return { ok: true, pending, message: `«${LABELS[campaignKey]}» se está enviando a ${pending} comprador(es) que aún no lo recibieron, uno a uno (unos ${minutes} min). Si el proveedor limita el envío, se reanuda solo.` };
 }
 
+// "Reenviar ahora": retry every undelivered notice right away, without waiting for the 3-minute gap.
+function forceResend() {
+  if (mailer.mailDeliveryMode() !== 'smtp') return { ok: false, status: 409, message: 'Configura y prueba un servidor SMTP real antes de reenviar.' };
+  const pending = mailer.undeliveredOrderEmails().length;
+  if (!pending) return { ok: true, pending, message: 'No hay avisos pendientes: todos llegaron a los compradores.' };
+  state.force = true;
+  state.blockedUntil = 0;
+  setImmediate(tick);
+  return { ok: true, pending, message: `Reenviando ${pending} aviso(s) pendiente(s), uno a uno. La barra muestra el avance; si el proveedor limita el envío, se reintenta solo cada 3 minutos.` };
+}
+
+// Progress of the automatic resends for the panel's banner
+function resendStatus(now = Date.now()) {
+  const rows = mailer.undeliveredOrderEmails();
+  const pending = rows.length;
+  if (!pending && !state.resending) state.resendDelivered = 0;
+  const due = rows.map(row => lastAttempt(row) + RESEND_GAP_MS);
+  const next = Math.max(state.blockedUntil, due.length ? Math.min(...due) : 0, state.lastCheck + TICK_MS);
+  return {
+    pending,
+    delivered: state.resendDelivered,
+    total: pending + state.resendDelivered,
+    sending: state.resending,
+    pausedUntil: state.blockedUntil > now ? new Date(state.blockedUntil).toISOString() : null,
+    nextCheckAt: pending ? new Date(Math.max(next, now)).toISOString() : null,
+    intervalMinutes: Math.round(RESEND_GAP_MS / 60000)
+  };
+}
+
 function status(now = new Date()) {
   const cfg = getPublicConfig();
   return {
@@ -201,4 +247,6 @@ function start() {
   setTimeout(tick, 5000);
 }
 
-module.exports = { start, tick, queueCampaign, status, schedule, activeCampaign, caracasClock, pendingRecipients, RATE_LIMITED };
+const onProgress = (fn) => { progressListener = fn; };
+
+module.exports = { start, tick, queueCampaign, forceResend, resendStatus, onProgress, status, schedule, activeCampaign, caracasClock, pendingRecipients, RATE_LIMITED };

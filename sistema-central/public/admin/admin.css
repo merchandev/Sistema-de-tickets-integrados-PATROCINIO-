@@ -2398,3 +2398,9 @@ button.is-read-only:disabled { opacity: .45; cursor: not-allowed; }
 .campaign-state { font-size: 12px; font-weight: 650; color: #4b4453; text-align: right; }
 .campaign-schedule li.is-active .campaign-state { color: #1f7a4d; }
 .campaign-paused { margin: 8px 0 0; font-size: 12px; color: #8a5a00; background: #fff6e0; border: 1px solid #f0dca6; border-radius: 8px; padding: 6px 10px; }
+
+/* Undelivered notices: progress of the automatic resend */
+.mail-resend { display: grid; gap: 6px; flex: 1; min-width: 0; }
+.resend-bar { height: 8px; border-radius: 999px; background: #f3d6d6; overflow: hidden; max-width: 520px; }
+.resend-bar span { display: block; height: 100%; background: #1f7a4d; border-radius: inherit; transition: width .4s ease; }
+.mail-alert button[disabled] { opacity: .65; cursor: progress; }
