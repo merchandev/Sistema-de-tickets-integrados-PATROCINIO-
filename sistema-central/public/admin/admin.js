@@ -1043,7 +1043,9 @@ async function verifyQrToken(rawToken, { silent = false } = {}) {
     const res = await fetch(`/api/admin/verify-qr/${encoded}`);
     const data = await res.json();
 
-    if (!silent) playTone(data.valid ? 'valid' : 'invalid');
+    const alreadyScanned = Boolean(data.valid && (data.order.checked_in_at || data.order.checked_in_conference || data.order.checked_in_concert));
+    if (!silent) playTone(data.valid && !alreadyScanned ? 'valid' : 'invalid');
+    if (alreadyScanned && !silent) showAlreadyScanned(data.order);
     if (!data.valid) {
       box.className = 'p-6 rounded-xl border-2 border-red-500 bg-red-50 text-red-900 space-y-2';
       box.innerHTML = `
@@ -1055,11 +1057,15 @@ async function verifyQrToken(rawToken, { silent = false } = {}) {
 
     const o = data.order;
     const attendanceRecorded = o.checked_in_at || o.checked_in_conference || o.checked_in_concert;
-    box.className = 'p-6 rounded-xl border-2 border-emerald-500 bg-emerald-50/60 text-slate-900 space-y-4 text-left';
+    box.className = attendanceRecorded
+      ? 'p-6 rounded-xl border-2 border-amber-500 bg-amber-50 text-slate-900 space-y-4 text-left'
+      : 'p-6 rounded-xl border-2 border-emerald-500 bg-emerald-50/60 text-slate-900 space-y-4 text-left';
     box.innerHTML = `
       <div class="flex items-center justify-between border-b border-emerald-200 pb-3">
         <div>
-          <span class="px-2.5 py-1 rounded-full text-xs font-extrabold bg-emerald-600 text-white">✓ QR VÁLIDO Y AUTÉNTICO</span>
+          ${attendanceRecorded
+            ? '<span class="scan-badge-warn">⚠ YA ESCANEADA · NO PERMITIR UN SEGUNDO INGRESO</span>'
+            : '<span class="px-2.5 py-1 rounded-full text-xs font-extrabold bg-emerald-600 text-white">✓ QR VÁLIDO Y AUTÉNTICO</span>'}
           <h4 class="text-xl font-black text-slate-900 mt-2">ENTRADA #${o.ticket_number}</h4>
         </div>
         <div class="text-right text-xs text-slate-500">
@@ -1113,7 +1119,8 @@ async function checkInAttendee(button) {
     const data = await res.json();
     if (!data.ok) {
       playTone('invalid');
-      alert(data.message);
+      if (data.alreadyCheckedIn && data.order) showAlreadyScanned(data.order);
+      else alert(data.message);
     } else {
       playTone('valid');
     }
@@ -1124,6 +1131,30 @@ async function checkInAttendee(button) {
   } finally {
     button.disabled = false;
   }
+}
+
+// Popup when a ticket that already entered is scanned again: when, and who registered it.
+function showAlreadyScanned(order) {
+  const body = document.getElementById('modal-body');
+  const modal = document.getElementById('admin-modal');
+  // The camera reads the same code every few seconds: keep one popup open for it
+  if (!modal.classList.contains('hidden') && body.querySelector(`[data-scanned-token="${CSS.escape(order.verification_token || '')}"]`)) return;
+  const when = order.checked_in_at ? parseDbDate(order.checked_in_at) : null;
+  navigator.vibrate?.([250, 120, 250, 120, 400]);
+  openModal('Entrada ya escaneada', `
+    <div class="scan-alert" data-scanned-token="${escapeHtml(order.verification_token || '')}" role="alert">
+      <div class="scan-alert-icon" aria-hidden="true">⚠</div>
+      <p class="scan-alert-title">La entrada #${escapeHtml(order.ticket_number)} ya fue escaneada</p>
+      <p class="scan-alert-sub">No permitas un segundo ingreso con este código.</p>
+      <dl class="scan-alert-grid">
+        <div><dt>Titular</dt><dd>${escapeHtml(order.buyer_name || '—')}</dd></div>
+        <div><dt>Cédula</dt><dd>${escapeHtml(order.buyer_cedula || '—')}</dd></div>
+        <div><dt>Fecha</dt><dd>${when ? escapeHtml(when.toLocaleDateString('es-VE', { day: 'numeric', month: 'long', year: 'numeric' })) : '—'}</dd></div>
+        <div><dt>Hora</dt><dd>${when ? escapeHtml(when.toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit', second: '2-digit' })) : 'Registrada antes del control por usuario'}</dd></div>
+        <div class="is-wide"><dt>Escaneada por</dt><dd>${escapeHtml(order.checked_in_by || 'No registrado')}</dd></div>
+      </dl>
+      <button type="button" class="scan-alert-ok" onclick="closeModal()">Entendido</button>
+    </div>`);
 }
 
 function toggleQrCamera() {

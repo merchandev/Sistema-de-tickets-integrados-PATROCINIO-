@@ -2479,3 +2479,18 @@ button.is-read-only:disabled { opacity: .45; cursor: not-allowed; }
 .wa-actions .door-pdf-btn { flex: 1 1 0; }
 .wa-notice-summary { flex-wrap: wrap; }
 .wa-notice-summary .wa-next { flex: 1 1 100%; }
+
+/* Popup: ticket already scanned at the door */
+.scan-alert { display: grid; gap: 10px; text-align: center; padding: 6px 2px 2px; }
+.scan-alert-icon { width: 64px; height: 64px; margin: 0 auto; border-radius: 50%; display: grid; place-items: center; font-size: 34px; background: #fde8e8; color: #b42318; animation: scan-alert-pulse 1s ease-in-out 3; }
+.scan-alert-title { margin: 0; font-size: 20px; font-weight: 800; color: #b42318; }
+.scan-alert-sub { margin: 0; font-size: 14px; color: #7a271a; }
+.scan-alert-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 4px 0 0; padding: 12px; border: 1px solid #f4c7c3; border-radius: 12px; background: #fff5f4; text-align: left; }
+.scan-alert-grid div.is-wide { grid-column: 1 / -1; }
+.scan-alert-grid dt { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #8a5a55; }
+.scan-alert-grid dd { margin: 2px 0 0; font-size: 15px; font-weight: 700; color: #2d1a18; overflow-wrap: anywhere; }
+.scan-alert-ok { min-height: 46px; border: 0; border-radius: 12px; background: #b42318; color: #fff; font-size: 15px; font-weight: 800; cursor: pointer; }
+.scan-alert-ok:hover { background: #912018; }
+@keyframes scan-alert-pulse { 50% { transform: scale(1.12); } }
+@media (prefers-reduced-motion: reduce) { .scan-alert-icon { animation: none; } }
+.scan-badge-warn { display: inline-block; padding: 4px 10px; border-radius: 999px; background: #b42318; color: #fff; font-size: 11px; font-weight: 800; letter-spacing: .02em; }
