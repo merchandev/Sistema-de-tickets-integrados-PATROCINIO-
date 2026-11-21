@@ -2404,3 +2404,14 @@ button.is-read-only:disabled { opacity: .45; cursor: not-allowed; }
 .resend-bar { height: 8px; border-radius: 999px; background: #f3d6d6; overflow: hidden; max-width: 520px; }
 .resend-bar span { display: block; height: 100%; background: #1f7a4d; border-radius: inherit; transition: width .4s ease; }
 .mail-alert button[disabled] { opacity: .65; cursor: progress; }
+
+/* Door staff: open or share the ticket PDF from the map */
+.door-pdf { padding: 12px; border: 1px solid #e7e2ec; border-radius: 10px; display: grid; gap: 8px; }
+.door-pdf p { margin: 0; font-size: 12px; color: #4b4453; }
+.door-pdf-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.door-pdf-btn { display: inline-flex; align-items: center; justify-content: center; min-height: 40px; padding: 8px 14px; border: 1px solid #d6d0dc; border-radius: 10px; background: #fff; color: #2d2633; font-size: 13px; font-weight: 650; text-decoration: none; cursor: pointer; }
+.door-pdf-btn:hover { background: #f6f3f8; }
+.door-pdf-btn.is-primary { background: #1f7a4d; border-color: #1f7a4d; color: #fff; }
+.door-pdf-btn.is-primary:hover { background: #18633e; }
+.door-pdf-btn[disabled] { opacity: .6; cursor: progress; }
+@media (max-width: 640px) { .door-pdf-btn { flex: 1 1 100%; } }

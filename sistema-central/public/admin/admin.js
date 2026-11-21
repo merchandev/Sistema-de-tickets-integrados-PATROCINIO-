@@ -346,7 +346,40 @@ function inspectDoorSeat(ticket) {
         <div><strong>Origen:</strong> ${sourceBadge(ticket.order_source)}</div>
       </div>` : ''}
       ${arrivalLine(ticket) || (ticket.status === 'SOLD' ? '<div class="p-3 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-600">Todavía no se ha escaneado en la entrada.</div>' : '')}
+      ${ticket.status === 'SOLD' ? `<div class="door-pdf">
+        <p>¿El invitado no pudo descargar su entrada? Ábrela o compártela por WhatsApp.</p>
+        <div class="door-pdf-actions">
+          <a class="door-pdf-btn" href="${ticketPdfUrl(ticket.ticket_number)}" target="_blank" rel="noopener">Ver entrada en PDF</a>
+          <a class="door-pdf-btn" href="${ticketPdfUrl(ticket.ticket_number)}?descargar=1" download="Entrada-${ticket.ticket_number}.pdf">Descargar</a>
+          <button type="button" class="door-pdf-btn is-primary" onclick="shareTicketPdf('${ticket.ticket_number}', this)">Compartir por WhatsApp</button>
+        </div>
+      </div>` : ''}
     </div>`);
+}
+
+const ticketPdfUrl = (number) => `/api/admin/access/tickets/${encodeURIComponent(number)}/pdf`;
+
+// Shares the PDF itself from the phone (WhatsApp appears in the share sheet); where the browser cannot
+// share files, it downloads it so it can be attached in WhatsApp.
+async function shareTicketPdf(number, button) {
+  button.disabled = true;
+  try {
+    const res = await fetch(ticketPdfUrl(number));
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || 'No se pudo obtener el PDF.');
+    const file = new File([await res.blob()], `Entrada-${number}.pdf`, { type: 'application/pdf' });
+    if (navigator.canShare?.({ files: [file] })) {
+      await navigator.share({ files: [file], title: `Entrada #${number}`, text: `Tu entrada #${number}. Muéstrala con tu cédula en el acceso.` }).catch(err => { if (err.name !== 'AbortError') throw err; });
+      return;
+    }
+    const link = Object.assign(document.createElement('a'), { href: URL.createObjectURL(file), download: file.name });
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href), 10000);
+    showToast('Este navegador no comparte archivos: se descargó el PDF para que lo adjuntes en WhatsApp.');
+  } catch (err) {
+    showToast(err.message || 'No se pudo compartir la entrada.');
+  } finally {
+    button.disabled = false;
+  }
 }
 
 function inspectSeat(ticketNumber) {

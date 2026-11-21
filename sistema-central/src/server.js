@@ -88,6 +88,7 @@ app.use(['/admin', '/api/admin', '/storage'], adminAuth.requireAdmin);
 const ACCESS_STAFF_ROUTES = [
   ['GET', /^\/api\/admin\/session$/],
   ['GET', /^\/api\/admin\/access\/(map|history)$/],
+  ['GET', /^\/api\/admin\/access\/tickets\/\d{1,3}\/pdf$/],
   ['GET', /^\/api\/admin\/verify-qr\/[^/]+$/],
   ['POST', /^\/api\/admin\/verify-qr\/[^/]+\/checkin$/],
   ['PUT', /^\/api\/admin\/account$/]
@@ -865,6 +866,23 @@ app.get('/api/admin/access/map', (req, res) => {
   }));
   const checkedIn = safe.filter(t => t.checked_in_at).length;
   res.json({ ok: true, serverTime, tickets: safe, counts: { sold: safe.filter(t => t.status === 'SOLD').length, checkedIn } });
+});
+
+// PDF of a sold ticket (the current one, corrected if it was reissued), so the door staff can send it
+// to a guest who could not download it. ?descargar=1 saves it instead of opening it.
+app.get('/api/admin/access/tickets/:number/pdf', (req, res) => {
+  const number = parseTicketNumber(req.params.number);
+  const order = number && db.prepare(`
+    SELECT o.id, o.ticket_number, o.pdf_path FROM tickets t JOIN orders o ON o.id = t.current_order_id
+    WHERE t.ticket_number = ? AND t.status = 'SOLD' AND o.status = 'APPROVED'
+  `).get(number);
+  const filename = /^\/storage\/tickets\/([\w-]+\.pdf)$/.exec(order?.pdf_path || '')?.[1];
+  const file = filename && path.join(ticketsDir, filename);
+  if (!file || !fs.existsSync(file)) return res.status(404).json({ ok: false, message: 'Esta entrada no tiene un PDF emitido.' });
+  console.log(`[Puerta] ${req.adminUser} abrió el PDF de la entrada #${number}`);
+  res.setHeader('Cache-Control', 'private, no-store');
+  res.setHeader('Content-Disposition', `${req.query.descargar ? 'attachment' : 'inline'}; filename="Entrada-${number}.pdf"`);
+  return res.type('application/pdf').sendFile(file);
 });
 
 // Who checked in each ticket and when, newest first.

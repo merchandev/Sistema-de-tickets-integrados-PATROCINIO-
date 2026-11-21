@@ -426,6 +426,14 @@ function parseMail(file) {
       accessHistory[0].checked_in_by === 'control1@marketing.test' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(accessHistory[0].checked_in_at) && accessHistory.some(e => e.ticket_number === '001'));
     const admTickets = (await api('GET', '/api/admin/overview', { cookie: adm.cookie })).data.tickets;
     check('Los administradores también ven la entrada escaneada', admTickets.find(t => t.ticket_number === doorNumber)?.checked_in_by === 'control1@marketing.test');
+    const doorPdf = await api('GET', `/api/admin/access/tickets/${doorNumber}/pdf`, { cookie: ctl.cookie });
+    const doorPdfDownload = await api('GET', `/api/admin/access/tickets/${doorNumber}/pdf?descargar=1`, { cookie: ctl.cookie });
+    check('Control de acceso abre y descarga el PDF de una entrada vendida', doorPdf.status === 200 && (doorPdf.headers.get('content-type') || '').startsWith('application/pdf') && /pdf/.test(doorPdf.headers.get('content-type') || '') &&
+      doorPdf.data.subarray(0, 5).toString() === '%PDF-' && /inline; filename="Entrada-/.test(doorPdf.headers.get('content-disposition') || '') &&
+      /attachment/.test(doorPdfDownload.headers.get('content-disposition') || '') && /no-store/.test(doorPdf.headers.get('cache-control') || ''));
+    const freeTicket = doorMap.tickets.find(t => t.status === 'AVAILABLE').ticket_number;
+    check('No hay PDF de una entrada sin vender ni de un número inválido', (await api('GET', `/api/admin/access/tickets/${freeTicket}/pdf`, { cookie: ctl.cookie })).status === 404 &&
+      (await api('GET', '/api/admin/access/tickets/999/pdf', { cookie: ctl.cookie })).status === 404 && (await api('GET', '/api/admin/access/tickets/abc/pdf', { cookie: ctl.cookie })).status === 403);
     check('Control de acceso cambia su propia contraseña', (await api('PUT', '/api/admin/account', { cookie: ctl.cookie, json: { current_password: ctlPass, new_password: ctlPass + '-2' } })).status === 200);
     check('La lista de usuarios muestra el rol de control', (await api('GET', '/api/admin/users', { cookie: sup.cookie })).data.users.some(u => u.email === 'control1@marketing.test' && u.role === 'control'));
 
