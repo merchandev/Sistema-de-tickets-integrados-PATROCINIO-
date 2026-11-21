@@ -434,6 +434,17 @@ function parseMail(file) {
     const freeTicket = doorMap.tickets.find(t => t.status === 'AVAILABLE').ticket_number;
     check('No hay PDF de una entrada sin vender ni de un número inválido', (await api('GET', `/api/admin/access/tickets/${freeTicket}/pdf`, { cookie: ctl.cookie })).status === 404 &&
       (await api('GET', '/api/admin/access/tickets/999/pdf', { cookie: ctl.cookie })).status === 404 && (await api('GET', '/api/admin/access/tickets/abc/pdf', { cookie: ctl.cookie })).status === 403);
+    const mailsBeforeSend = mailFiles().length;
+    const forcedSend = await api('POST', `/api/admin/access/tickets/${doorNumber}/send-email`, { cookie: ctl.cookie, json: {} });
+    await waitMails(mailsBeforeSend + 1);
+    const forcedMail = mailFiles().length > mailsBeforeSend ? parseMail(mailFiles()[mailFiles().length - 1]) : null;
+    check('Control de acceso envía la entrada por correo desde el mapa, sin ver el correo completo', forcedSend.status === 200 &&
+      /•••@prueba\.test/.test(forcedSend.data.message) && !forcedSend.data.message.includes('puerta@prueba.test') &&
+      forcedMail?.subject === 'Muchas gracias por su apoyo, tu entrada está disponible' && /ENTRADA-\d{3}\.pdf/.test(fs.readFileSync(path.join(mailDir, mailFiles()[mailFiles().length - 1]), 'utf8')), forcedSend.data.message);
+    const secondSend = await api('POST', `/api/admin/access/tickets/${doorNumber}/send-email`, { cookie: adm.cookie, json: {} });
+    check('No se puede reenviar la misma entrada dos veces en un minuto', secondSend.status === 429 && mailFiles().length === mailsBeforeSend + 1, secondSend.data.message);
+    check('El mapa de control muestra el correo enmascarado de la entrada vendida', /^pu•••@prueba\.test$/.test(doorMap.tickets.find(t => t.ticket_number === doorNumber)?.email_hint || ''));
+    check('No se envía una entrada sin vender', (await api('POST', `/api/admin/access/tickets/${freeTicket}/send-email`, { cookie: ctl.cookie, json: {} })).status === 404);
     check('Control de acceso cambia su propia contraseña', (await api('PUT', '/api/admin/account', { cookie: ctl.cookie, json: { current_password: ctlPass, new_password: ctlPass + '-2' } })).status === 200);
     check('La lista de usuarios muestra el rol de control', (await api('GET', '/api/admin/users', { cookie: sup.cookie })).data.users.some(u => u.email === 'control1@marketing.test' && u.role === 'control'));
 

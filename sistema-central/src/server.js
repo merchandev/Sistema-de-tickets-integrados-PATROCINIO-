@@ -89,6 +89,7 @@ const ACCESS_STAFF_ROUTES = [
   ['GET', /^\/api\/admin\/session$/],
   ['GET', /^\/api\/admin\/access\/(map|history)$/],
   ['GET', /^\/api\/admin\/access\/tickets\/\d{1,3}\/pdf$/],
+  ['POST', /^\/api\/admin\/access\/tickets\/\d{1,3}\/send-email$/],
   ['GET', /^\/api\/admin\/verify-qr\/[^/]+$/],
   ['POST', /^\/api\/admin\/verify-qr\/[^/]+\/checkin$/],
   ['PUT', /^\/api\/admin\/account$/]
@@ -862,6 +863,7 @@ app.get('/api/admin/access/map', (req, res) => {
     ticket_number: t.ticket_number, status: t.status, locked_until: t.locked_until, remaining_seconds: t.remaining_seconds,
     locked_by_source: t.locked_by_source, checked_in_at: t.checked_in_at, checked_in_by: t.checked_in_by,
     buyer_name: t.status === 'SOLD' ? t.buyer_name : null, buyer_cedula: t.status === 'SOLD' ? t.buyer_cedula : null,
+    email_hint: t.status === 'SOLD' ? maskEmail(t.buyer_email) : null,
     order_source: t.status === 'SOLD' ? t.order_source : null
   }));
   const checkedIn = safe.filter(t => t.checked_in_at).length;
@@ -884,6 +886,52 @@ app.get('/api/admin/access/tickets/:number/pdf', (req, res) => {
   res.setHeader('Content-Disposition', `${req.query.descargar ? 'attachment' : 'inline'}; filename="Entrada-${number}.pdf"`);
   return res.type('application/pdf').sendFile(file);
 });
+
+// "ana.perez@gmail.com" -> "an•••@gmail.com": enough for the door to confirm the address with the guest.
+function maskEmail(email) {
+  const [user, domain] = String(email || '').split('@');
+  if (!user || !domain) return null;
+  return `${user.slice(0, Math.min(2, user.length))}•••@${domain}`;
+}
+
+// Sends the ticket email with its current PDF again (the corrected one if it was reissued), from the map.
+// If the provider refuses it, the notice stays pending and the automatic resend keeps trying.
+const forcedSends = new Map();
+const FORCED_SEND_GAP_MS = 60 * 1000;
+app.post('/api/admin/access/tickets/:number/send-email', ticketRoute(async (req, res) => {
+  const number = parseTicketNumber(req.params.number);
+  const order = number && db.prepare(`
+    SELECT o.* FROM tickets t JOIN orders o ON o.id = t.current_order_id
+    WHERE t.ticket_number = ? AND t.status = 'SOLD' AND o.status = 'APPROVED'
+  `).get(number);
+  const filename = /^\/storage\/tickets\/([\w-]+\.pdf)$/.exec(order?.pdf_path || '')?.[1];
+  const pdfPath = filename && path.join(ticketsDir, filename);
+  if (!order || !pdfPath || !fs.existsSync(pdfPath)) return res.status(404).json({ ok: false, message: 'Esta entrada no tiene un PDF emitido para enviar.' });
+  if (mailDeliveryMode() !== 'smtp') return res.status(409).json({ ok: false, message: 'Configura un servidor SMTP real antes de enviar entradas.' });
+  const recipient = isAccessStaff(req) ? maskEmail(order.buyer_email) : order.buyer_email;
+  const lastSend = forcedSends.get(order.id) || 0;
+  if (issuingOrders.has(order.id) || Date.now() - lastSend < FORCED_SEND_GAP_MS) {
+    return res.status(429).json({ ok: false, message: `La entrada #${number} se acaba de enviar. Espera un minuto antes de enviarla de nuevo.` });
+  }
+  issuingOrders.add(order.id);
+  forcedSends.set(order.id, Date.now());
+  try {
+    const corrected = Boolean(correctedTicketPdfFilename(order));
+    const result = await sendTicketEmail(order, pdfPath, order.pdf_path, { correctedDetails: corrected });
+    console.log(`[Puerta] ${req.adminUser} envió por correo la entrada #${number}: ${result.status}`);
+    broadcastTicketsUpdate({ name: 'admin:order_updated' });
+    if (result.status === 'SENT_SMTP') return res.json({ ok: true, message: `Listo: el servidor de correo aceptó la entrada #${number} para ${recipient}. Pídele al invitado que revise también la carpeta de spam.` });
+    const limited = campaigns.RATE_LIMITED.test(result.errorMessage || '');
+    return res.status(502).json({ ok: false, message: limited
+      ? `El proveedor de correo está limitando los envíos. La entrada #${number} quedó en cola y se reintenta sola cada 3 minutos; mientras tanto puedes compartir el PDF por WhatsApp.`
+      : `No se pudo enviar la entrada #${number} a ${recipient}: ${result.errorMessage || 'error desconocido'}.` });
+  } catch (err) {
+    console.error('Error sending ticket from the map:', err);
+    return res.status(500).json({ ok: false, message: 'No se pudo confirmar el envío. Revisa el registro de correos.' });
+  } finally {
+    issuingOrders.delete(order.id);
+  }
+}));
 
 // Who checked in each ticket and when, newest first.
 app.get('/api/admin/access/history', (req, res) => {

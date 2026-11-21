@@ -352,12 +352,38 @@ function inspectDoorSeat(ticket) {
           <a class="door-pdf-btn" href="${ticketPdfUrl(ticket.ticket_number)}" target="_blank" rel="noopener">Ver entrada en PDF</a>
           <a class="door-pdf-btn" href="${ticketPdfUrl(ticket.ticket_number)}?descargar=1" download="Entrada-${ticket.ticket_number}.pdf">Descargar</a>
           <button type="button" class="door-pdf-btn is-primary" onclick="shareTicketPdf('${ticket.ticket_number}', this)">Compartir por WhatsApp</button>
+          <button type="button" class="door-pdf-btn" onclick="sendTicketByEmail('${ticket.ticket_number}', this, '${escapeHtml(ticket.email_hint || '')}')">Enviar por correo</button>
         </div>
+        <p class="door-pdf-status" role="status" hidden></p>
       </div>` : ''}
     </div>`);
 }
 
 const ticketPdfUrl = (number) => `/api/admin/access/tickets/${encodeURIComponent(number)}/pdf`;
+
+// Sends the ticket email with its PDF again, from any role's ticket detail
+async function sendTicketByEmail(number, button, recipient) {
+  if (!confirm(`¿Enviar la entrada #${number} en PDF${recipient ? ` a ${recipient}` : ' al correo del comprador'}?`)) return;
+  const status = button.closest('.door-pdf, .od-send')?.querySelector('[role="status"]');
+  const show = (message) => { if (status) { status.hidden = false; status.textContent = message; } showToast(message); };
+  button.disabled = true;
+  const label = button.textContent;
+  button.textContent = 'Enviando…';
+  try {
+    const res = await fetch(`/api/admin/access/tickets/${encodeURIComponent(number)}/send-email`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    const data = await res.json().catch(() => ({}));
+    show(data.message || (res.ok ? 'Entrada enviada.' : 'No se pudo enviar la entrada.'));
+  } catch (_) {
+    show('No se pudo confirmar el envío. Revisa tu conexión e inténtalo de nuevo.');
+  } finally {
+    button.disabled = false;
+    button.textContent = label;
+  }
+}
+const sendTicketBlock = (number, recipient) => `<div class="od-send">
+  <button type="button" class="od-approve" onclick="sendTicketByEmail('${escapeHtml(number)}', this, '${escapeHtml(recipient || '')}')">Enviar entrada por correo</button>
+  <p class="od-muted" role="status" hidden></p>
+</div>`;
 
 // Shares the PDF itself from the phone (WhatsApp appears in the share sheet); where the browser cannot
 // share files, it downloads it so it can be attached in WhatsApp.
@@ -427,6 +453,7 @@ function inspectSeat(ticketNumber) {
     `;
   }
   html += arrivalLine(ticket);
+  if (ticket.status === 'SOLD' && order?.status === 'APPROVED') html += sendTicketBlock(ticket.ticket_number, order.buyer_email);
 
   html += `</div>`;
   openModal(`Detalle de la entrada #${ticketNumber}`, html);
@@ -468,7 +495,8 @@ async function openTicketArbitration(number) {
           ${order.screenshot_path ? `<button type="button" class="od-cancel" onclick="viewScreenshot(${Number(order.id)})">Ver comprobante</button>` : ''}
           ${order.pdf_path ? `<a class="od-cancel" href="${escapeHtml(order.pdf_path)}" target="_blank" rel="noopener">Abrir PDF</a>` : ''}
           ${details.canResendCorrectedPdf ? '<button type="button" class="od-approve" data-resend-pdf>Reenviar PDF corregido</button>' : ''}
-        </div>` : ''}
+        </div>
+        ${status === 'SOLD' && order.status === 'APPROVED' && order.pdf_path ? sendTicketBlock(number, order.buyer_email) : ''}` : ''}
       ${details.canResendCorrectedPdf ? `<p class="od-muted" data-resend-status role="status">Destinatario: ${escapeHtml(order.buyer_email)}</p>` : ''}
       ${attended ? '<p class="od-muted">La asistencia ya está registrada.</p>' : ''}
       <div class="od-actions">${actions.filter(action => action !== 'cancel' || !attended).map(action => `<button type="button" class="${action === 'cancel' ? 'od-reject' : action === 'approve' || action === 'assist' ? 'od-approve' : 'od-cancel'}" data-ticket-action="${action}">${arbitrationActions[action][0]}</button>`).join('')}</div>

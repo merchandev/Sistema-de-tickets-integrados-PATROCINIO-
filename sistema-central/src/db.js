@@ -838,7 +838,7 @@ function getAllTicketsForAdmin() {
   const rows = db.prepare(`
     SELECT t.ticket_number, t.numeric_id, t.status, t.locked_by_source, t.locked_until, t.current_order_id,
       o.checked_in_at, o.checked_in_by, o.checked_in_conference, o.checked_in_concert,
-      o.buyer_name, o.buyer_cedula, o.source_web
+      o.buyer_name, o.buyer_cedula, o.buyer_email, o.source_web
     FROM tickets t
     LEFT JOIN orders o ON o.id = t.current_order_id AND t.status IN ('PENDING', 'SOLD')
     ORDER BY t.numeric_id ASC
@@ -858,6 +858,7 @@ function getAllTicketsForAdmin() {
       checked_in_by: r.status === 'SOLD' ? (r.checked_in_by || null) : null,
       buyer_name: r.buyer_name || null,
       buyer_cedula: r.buyer_cedula || null,
+      buyer_email: r.buyer_email || null,
       order_source: r.source_web || null,
       remaining_seconds: r.status === 'LOCKED' && r.locked_until
         ? Math.max(0, Math.ceil((r.locked_until - now) / 1000))

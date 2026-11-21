@@ -2415,3 +2415,7 @@ button.is-read-only:disabled { opacity: .45; cursor: not-allowed; }
 .door-pdf-btn.is-primary:hover { background: #18633e; }
 .door-pdf-btn[disabled] { opacity: .6; cursor: progress; }
 @media (max-width: 640px) { .door-pdf-btn { flex: 1 1 100%; } }
+
+/* Send the ticket again by email from the map */
+.door-pdf-status { margin: 0; font-size: 12px; color: #1f4f7a; background: #eef5fb; border: 1px solid #cfe0f0; border-radius: 8px; padding: 6px 10px; }
+.od-send { display: grid; gap: 6px; justify-items: start; margin-top: 4px; }
