@@ -46,7 +46,8 @@ function noticeText(notice, group, baseUrl, cfg = getPublicConfig()) {
   const tickets = group.orders.map(o => `#${o.ticket_number}`);
   const ticketsText = tickets.length > 1 ? `tus entradas ${joinNames(tickets)}` : `tu entrada ${tickets[0]}`;
   const entry = twelveHour(cfg.event_entry_time || '15:00');
-  const place = cfg.event_location;
+  // The saved location may end with a period: the sentence adds its own punctuation
+  const place = String(cfg.event_location || '').trim().replace(/[.\s]+$/, '');
   const opening = {
     REMINDER_TODAY: `¡Hoy es el evento! Hola ${names}, te esperamos hoy en ${place} para ${cfg.event_title}. El acceso y registro comienzan a las ${entry}.`,
     REMINDER_REGISTRATION: `Hola ${names}, te recordamos que hoy a las ${entry} abre el registro de ${cfg.event_title} en ${place}. Llega con tiempo para entrar sin filas.`,

@@ -970,7 +970,7 @@ app.post('/api/admin/access/tickets/:number/whatsapp', (req, res) => {
   const name = order.buyer_first_name || String(order.buyer_name || '').split(' ')[0];
   const text = [
     `Hola ${name}, te enviamos tu entrada #${number} para ${cfg.event_title}.`,
-    `El acceso y registro comienzan a las ${twelveHour(cfg.event_entry_time || '15:00')} en ${cfg.event_location}.`,
+    `El acceso y registro comienzan a las ${twelveHour(cfg.event_entry_time || '15:00')} en ${String(cfg.event_location || '').trim().replace(/[.\s]+$/, '')}.`,
     `Descarga tu entrada en PDF aquí: ${link}`,
     'Muestra el código QR y tu cédula en el acceso. ¡Te esperamos!'
   ].join('\n\n');
