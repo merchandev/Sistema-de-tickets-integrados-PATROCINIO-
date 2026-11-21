@@ -2503,3 +2503,5 @@ button.is-read-only:disabled { opacity: .45; cursor: not-allowed; }
 .door-closed #qr-reader { opacity: .35; pointer-events: none; }
 .door-closed #tab-panel-qr button[disabled], .door-closed #qr-token-input[disabled] { opacity: .5; cursor: not-allowed; }
 .door-countdown { margin-bottom: 16px; }
+/* Breathing room between the mail banner and the section below */
+.mail-alert:not([hidden]) { margin-bottom: 20px; }
