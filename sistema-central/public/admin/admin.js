@@ -1024,7 +1024,10 @@ document.addEventListener('click', (event) => {
 
 // `register`: door scans (camera, code typed in the verifier, QR link opened with the phone camera)
 // record the arrival right away. "Comprobar QR" from the orders list only checks the ticket.
+let qrVerificationBusy = false;
+
 function testTokenInScanner(token, { register = false } = {}) {
+  if (qrVerificationBusy) return;
   switchTab('qr');
   document.getElementById('qr-token-input').value = token;
   verifyQrToken(token, { register });
@@ -1037,12 +1040,16 @@ function verifyQrTokenManual() {
 }
 
 async function verifyQrToken(rawToken, { silent = false, register = false } = {}) {
+  if (qrVerificationBusy) return;
+  qrVerificationBusy = true;
+  document.getElementById('qr-token-input').value = rawToken;
   const box = document.getElementById('qr-verification-result');
-  box.innerHTML = `<div class="py-8 text-slate-500">Verificando autenticidad criptográfica del QR...</div>`;
+  box.className = 'p-6 rounded-xl border-2 border-slate-300 bg-slate-50 text-slate-900';
+  box.innerHTML = '<div class="py-8 text-slate-500">Verificando y procesando la entrada…</div>';
 
   try {
     const encoded = encodeURIComponent(rawToken);
-    const res = await fetch(`/api/admin/verify-qr/${encoded}`);
+    const res = await fetch(`/api/admin/verify-qr/${encoded}`, { signal: AbortSignal.timeout(15000) });
     let data = await res.json();
 
     // A valid ticket not scanned yet: save the arrival so it appears in the history and on the map.
@@ -1050,7 +1057,7 @@ async function verifyQrToken(rawToken, { silent = false, register = false } = {}
     let registerError = '';
     if (register && data.valid && !(data.order.checked_in_at || data.order.checked_in_conference || data.order.checked_in_concert)) {
       try {
-        const checkin = await fetch(`/api/admin/verify-qr/${encodeURIComponent(data.order.verification_token)}/checkin`, { method: 'POST' });
+        const checkin = await fetch(`/api/admin/verify-qr/${encodeURIComponent(data.order.verification_token)}/checkin`, { method: 'POST', signal: AbortSignal.timeout(15000) });
         const result = await checkin.json();
         if (result.ok) {
           data.order = result.order;
@@ -1086,13 +1093,15 @@ async function verifyQrToken(rawToken, { silent = false, register = false } = {}
 
     const o = data.order;
     const attendanceRecorded = o.checked_in_at || o.checked_in_conference || o.checked_in_concert;
-    box.className = attendanceRecorded && !justRegistered
+    box.className = registerError || (attendanceRecorded && !justRegistered)
       ? 'p-6 rounded-xl border-2 border-amber-500 bg-amber-50 text-slate-900 space-y-4 text-left'
       : 'p-6 rounded-xl border-2 border-emerald-500 bg-emerald-50/60 text-slate-900 space-y-4 text-left';
     box.innerHTML = `
       <div class="flex items-center justify-between border-b border-emerald-200 pb-3">
         <div>
-          ${justRegistered
+          ${registerError
+            ? '<span class="scan-badge-warn">INGRESO PENDIENTE DE REGISTRAR · ESPERA CONFIRMACIÓN</span>'
+            : justRegistered
             ? '<span class="px-2.5 py-1 rounded-full text-xs font-extrabold bg-emerald-600 text-white">✓ INGRESO REGISTRADO · PUEDE PASAR</span>'
             : attendanceRecorded
             ? '<span class="scan-badge-warn">⚠ YA ESCANEADA · NO PERMITIR UN SEGUNDO INGRESO</span>'
@@ -1138,29 +1147,18 @@ async function verifyQrToken(rawToken, { silent = false, register = false } = {}
     if (justRegistered) fetchAdminOverview();
   } catch (err) {
     if (!silent) playTone('invalid');
-    box.innerHTML = `<div class="text-red-600">Error verificando el código QR.</div>`;
+    box.className = 'p-6 rounded-xl border-2 border-red-500 bg-red-50 text-red-900';
+    box.innerHTML = '<div class="font-bold">INGRESO SIN CONFIRMAR</div><p>Vuelve a consultar el QR para comprobar si se guardó la asistencia.</p>';
+  } finally {
+    qrVerificationBusy = false;
   }
 }
 
 async function checkInAttendee(button) {
-  const token = button.dataset.token;
+  if (qrVerificationBusy) return;
   button.disabled = true;
   try {
-    const res = await fetch(`/api/admin/verify-qr/${encodeURIComponent(token)}/checkin`, {
-      method: 'POST'
-    });
-    const data = await res.json();
-    if (!data.ok) {
-      playTone('invalid');
-      if (data.alreadyCheckedIn && data.order) showAlreadyScanned(data.order);
-      else alert(data.message);
-    } else {
-      playTone('valid');
-    }
-    await verifyQrToken(token, { silent: true });
-    await fetchAdminOverview();
-  } catch (err) {
-    alert('No se pudo registrar la asistencia.');
+    await verifyQrToken(button.dataset.token, { register: true });
   } finally {
     button.disabled = false;
   }
@@ -1207,6 +1205,7 @@ function toggleQrCamera() {
     { facingMode: 'environment' },
     { fps: 10, qrbox: { width: 220, height: 220 } },
     (decodedText) => {
+      if (qrVerificationBusy) return;
       const now = Date.now();
       if (decodedText === lastScan.text && now - lastScan.at < 3000) return;
       lastScan = { text: decodedText, at: now };
