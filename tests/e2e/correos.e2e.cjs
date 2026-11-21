@@ -664,6 +664,32 @@ function parseMail(file) {
     const otherBank = await api('POST', '/api/public/payment-reports', { form: buyerForm({ ...multi, payment_bank: 'Mercantil (0105)', submission_id: 'envio-multi-otro-banco' }) });
     check('El tope de 11 cuenta por banco y referencia', otherBank.status === 201);
 
+
+    // --- Backup mail account: used when the main account limits the rate (Hostinger 451 Ratelimit) ---
+    const blockedPort = SMTP_PORT + 7;
+    const blockedSink = spawn(process.execPath, [path.join(__dirname, 'smtp-sink.cjs'), path.join(work, 'bloqueado'), String(blockedPort), 'ratelimit'], { stdio: 'ignore' });
+    try {
+      await sleep(400);
+      const noBackupTest = await api('POST', '/api/admin/mail/test', { cookie: sup.cookie, json: { account: 'respaldo' } });
+      check('Sin cuenta de respaldo, «Probar respaldo» lo indica', noBackupTest.data.ok === false && /cuenta de respaldo/.test(noBackupTest.data.smtp.message));
+      const savedBackup = await api('PUT', '/api/admin/settings', { cookie: sup.cookie, json: { smtp_port: String(blockedPort), smtp2_host: '127.0.0.1', smtp2_port: String(SMTP_PORT), smtp2_user: 'respaldo@prueba.test', smtp2_pass: 'clave-de-aplicacion' } });
+      check('El superadministrador guarda la cuenta de respaldo sin exponer su contraseña', savedBackup.status === 200 && savedBackup.data.settings.smtp2_pass_set === true && !('smtp2_pass' in savedBackup.data.settings));
+      check('Un administrador no cambia la cuenta de respaldo', (await api('PUT', '/api/admin/settings', { cookie: adm.cookie, json: { smtp2_host: 'otro.test' } })).status === 403);
+      const beforeBackup = mailFiles().length;
+      const viaBackup = await api('POST', '/api/admin/access/tickets/001/send-email', { cookie: adm.cookie, json: {} });
+      await waitMails(beforeBackup + 1);
+      const backupMail = mailFiles().length > beforeBackup ? fs.readFileSync(path.join(mailDir, mailFiles()[mailFiles().length - 1]), 'utf8').replace(/\r?\n[ \t]+/g, ' ') : '';
+      const backupLog = (await api('GET', '/api/admin/overview', { admin: true })).data.emailLogs[0];
+      check('Si la cuenta principal limita el envío, la entrada sale por la cuenta de respaldo', viaBackup.status === 200 &&
+        /^From: .*respaldo@prueba\.test/m.test(backupMail) && /^Reply-To: .*/m.test(backupMail) && backupLog.status === 'SENT_SMTP' && backupLog.sent_via === 'respaldo',
+        JSON.stringify({ headers: backupMail.split('\n').filter(l => /^(From|Reply-To):/i.test(l)), log: backupLog && { s: backupLog.status, v: backupLog.sent_via, t: backupLog.type } }));
+      const backupTest = await api('POST', '/api/admin/mail/test', { cookie: sup.cookie, json: { account: 'respaldo', to: 'prueba-respaldo@prueba.test' } });
+      check('«Probar respaldo» conecta y envía solo por la cuenta de respaldo', backupTest.data.ok === true && backupTest.data.sent?.ok === true, JSON.stringify(backupTest.data));
+    } finally {
+      blockedSink.kill();
+      await api('PUT', '/api/admin/settings', { cookie: sup.cookie, json: { smtp_port: String(SMTP_PORT), smtp2_host: '' } });
+    }
+
     sheetApp.close();
 
     check('Log del servidor sin errores inesperados', !/Error (approving|rejecting|submitting)|Unhandled|TypeError/.test(serverLog));

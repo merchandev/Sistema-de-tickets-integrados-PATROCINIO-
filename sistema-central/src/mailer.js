@@ -67,6 +67,34 @@ function getTransporter(s) {
   };
 }
 
+// Rejections that mean "too many messages for now" (Hostinger: 451 4.7.1 Ratelimit, 450 too many messages;
+// Gmail: 550 5.4.5 daily sending quota exceeded)
+const RATE_LIMITED = /ratelimit|rate limit|too many|throttl|quota|4\.7\.1|5\.4\.5|\b(421|450|451|452)\b/i;
+// After the main account limits the rate, messages go straight to the backup account for a while
+const PRIMARY_REST_MS = Number(process.env.MAIL_PRIMARY_REST_MS || 10 * 60 * 1000);
+let primaryRestUntil = 0;
+
+const displayName = (from) => (/^\s*"?([^"<]+?)"?\s*</.exec(String(from || ''))?.[1] || '').trim();
+const hasBackup = (s) => Boolean(String(s.smtp2_host || '').trim() && String(s.smtp2_user || '').trim());
+
+// Backup account: its own address as sender (Gmail and Brevo require it), with the main sender's name.
+function getBackupTransporter(s) {
+  if (!hasBackup(s)) return null;
+  const name = displayName(s.smtp_from) || 'Sistema de envío Espressivo Venezuela';
+  const from = String(s.smtp2_from || '').trim() || `${name} <${s.smtp2_user.trim()}>`;
+  return {
+    from,
+    transporter: nodemailer.createTransport({
+      host: s.smtp2_host.trim(),
+      port: parseInt(s.smtp2_port || '587', 10),
+      secure: String(s.smtp2_port) === '465',
+      name: senderDomain(from),
+      auth: { user: s.smtp2_user.trim(), pass: s.smtp2_pass },
+      connectionTimeout: 10000, greetingTimeout: 10000, socketTimeout: 20000
+    })
+  };
+}
+
 /**
  * IMAP client for the optional "Sent" copy. Without its own user/password it reuses the SMTP account,
  * which is the usual case when both belong to the same mailbox.
@@ -118,7 +146,8 @@ async function sendSystemEmail({
   ticketNumber = null,
   attachments = [],
   attachmentUrl = null,
-  bulk = false
+  bulk = false,
+  forceBackup = false
 }) {
   const settings = getAllSettings();
   const { isLiveSmtp, from, transporter } = getTransporter(settings);
@@ -142,15 +171,38 @@ async function sendSystemEmail({
     date: new Date()
   };
 
-  try {
-    await transporter.sendMail(mailOptions);
-  } catch (err) {
-    status = 'ERROR';
-    errorMessage = err.message;
-    console.error(`[SMTP Error] Failed to send email to ${toEmail}:`, err.message);
+  const backup = isLiveSmtp ? getBackupTransporter(settings) : null;
+  let sentVia = null;
+  // The main account is skipped while it rests after limiting the rate, or when the backup is being tested
+  const skipPrimary = backup && (forceBackup || Date.now() < primaryRestUntil);
+  if (!skipPrimary) {
+    try {
+      await transporter.sendMail(mailOptions);
+      sentVia = 'principal';
+    } catch (err) {
+      status = 'ERROR';
+      errorMessage = err.message;
+      if (RATE_LIMITED.test(err.message)) primaryRestUntil = Date.now() + PRIMARY_REST_MS;
+      console.error(`[SMTP Error] Failed to send email to ${toEmail}:`, err.message);
+    }
+  }
+  if (!sentVia && backup) {
+    const backupOptions = { ...mailOptions, from: backup.from, messageId: `<${crypto.randomUUID()}@${senderDomain(backup.from)}>` };
+    if (bulk) backupOptions.headers = { ...headers, 'List-Unsubscribe': `<mailto:${senderAddress(from)}?subject=${encodeURIComponent('Baja de avisos del evento')}>` };
+    try {
+      await backup.transporter.sendMail(backupOptions);
+      status = 'SENT_SMTP';
+      errorMessage = null;
+      sentVia = 'respaldo';
+    } catch (err) {
+      status = 'ERROR';
+      errorMessage = `${errorMessage ? `Principal: ${errorMessage} · ` : ''}Respaldo: ${err.message}`;
+      console.error(`[SMTP Error] Backup account failed for ${toEmail}:`, err.message);
+    }
   }
 
-  if (status === 'SENT_SMTP' && settings.imap_host) {
+  // The Sent copy belongs to the main mailbox: only for messages that left through it
+  if (status === 'SENT_SMTP' && sentVia === 'principal' && settings.imap_host) {
     try {
       await saveToSentFolder(settings, mailOptions);
       imapSaved = true;
@@ -161,13 +213,13 @@ async function sendSystemEmail({
   }
 
   // One line per message in the container log (no personal data beyond the recipient's domain)
-  console.log(`[Mail] ${type} -> ${status}${imapSaved ? ' + copia en Enviados' : ''} (@${String(toEmail).split('@')[1] || '?'})${errorMessage ? `: ${errorMessage}` : ''}`);
+  console.log(`[Mail] ${type} -> ${status}${sentVia === 'respaldo' ? ' por la cuenta de respaldo' : ''}${imapSaved ? ' + copia en Enviados' : ''} (@${String(toEmail).split('@')[1] || '?'})${errorMessage ? `: ${errorMessage}` : ''}`);
 
   const insertStmt = db.prepare(`
     INSERT INTO email_logs (
       recipient_email, recipient_name, subject, type,
-      order_id, ticket_number, status, body_html, attachment_path, error_message
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      order_id, ticket_number, status, body_html, attachment_path, error_message, sent_via
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   const res = insertStmt.run(
@@ -180,7 +232,8 @@ async function sendSystemEmail({
     status,
     html,
     attachmentUrl,
-    errorMessage
+    errorMessage,
+    sentVia
   );
 
   return {
@@ -188,7 +241,8 @@ async function sendSystemEmail({
     status,
     isLiveSmtp,
     imapSaved,
-    errorMessage
+    errorMessage,
+    sentVia
   };
 }
 
@@ -459,11 +513,38 @@ async function sendCampaignEmail(campaignKey, orders) {
   });
 }
 
+// Connects to the backup account and, with an address, sends a test message through it only.
+async function testBackupAccount(s, to) {
+  const result = { smtp: { ok: false, message: 'Configura el servidor, el usuario y la contraseña de la cuenta de respaldo y guárdalos.' }, imap: null, sent: null };
+  const backup = getBackupTransporter(s);
+  if (!backup) return result;
+  try {
+    await backup.transporter.verify();
+    result.smtp = { ok: true, message: `Cuenta de respaldo conectada con ${s.smtp2_host}. Se usará solo si la principal rechaza o limita un envío.` };
+  } catch (err) {
+    result.smtp = { ok: false, message: `Respaldo: ${err.message}` };
+  }
+  if (to && result.smtp.ok) {
+    const sent = await sendSystemEmail({
+      toEmail: to,
+      subject: 'Correo de prueba · Cuenta de respaldo',
+      html: layout(brandFor('pagina-web-1'), { preheader: 'Correo de prueba', title: 'La cuenta de respaldo funciona', paragraphs: ['Este mensaje salió por la cuenta de respaldo del sistema de entradas.'] }),
+      type: 'TEST',
+      forceBackup: true
+    });
+    result.sent = sent.sentVia === 'respaldo'
+      ? { ok: true, message: `La cuenta de respaldo aceptó el correo de prueba para ${to}. Comprueba si llegó (revisa también spam).` }
+      : { ok: false, message: `No se pudo enviar el correo de prueba por el respaldo: ${sent.errorMessage}` };
+  }
+  return result;
+}
+
 /**
  * Checks the saved SMTP and IMAP accounts for the dashboard and optionally sends a test message.
  */
-async function testMailConnections(to = '') {
+async function testMailConnections(to = '', account = 'principal') {
   const s = getAllSettings();
+  if (account === 'respaldo') return testBackupAccount(s, to);
   const result = {
     smtp: { ok: false, message: 'Configura el servidor SMTP para enviar correos reales.' },
     imap: { ok: null, message: 'IMAP sin configurar: los correos se envían igual, pero no se guarda copia en Enviados.' },
@@ -601,6 +682,8 @@ module.exports = {
   sendTicketEmail,
   sendPaymentRejectedEmail,
   sendCampaignEmail,
+  RATE_LIMITED,
+  hasBackup,
   CAMPAIGN_KEYS,
   testMailConnections,
   htmlToText,

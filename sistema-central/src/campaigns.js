@@ -30,7 +30,7 @@ const LABELS = {
 };
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-const RATE_LIMITED = /ratelimit|rate limit|too many|throttl|4\.7\.1|\b(421|450|451|452)\b/i;
+const { RATE_LIMITED } = mailer;
 
 // Caracas wall clock as "YYYY-MM-DD HH:MM", independent of the server's time zone.
 function caracasClock(now = new Date()) {

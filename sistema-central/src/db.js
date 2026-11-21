@@ -114,6 +114,8 @@ for (const [column, type] of [
 ]) {
   if (!db.prepare('PRAGMA table_info(orders)').all().some(c => c.name === column)) db.exec(`ALTER TABLE orders ADD COLUMN ${column} ${type}`);
 }
+// Which account delivered each message: 'principal' or 'respaldo'
+if (!db.prepare('PRAGMA table_info(email_logs)').all().some(c => c.name === 'sent_via')) db.exec('ALTER TABLE email_logs ADD COLUMN sent_via TEXT');
 db.exec('CREATE INDEX IF NOT EXISTS orders_submission_id ON orders(submission_id) WHERE submission_id IS NOT NULL');
 
 // Pago Móvil account of the event, shown in the checkout popup.
@@ -187,6 +189,13 @@ const defaultSettings = {
   smtp_user: process.env.SMTP_USER || '',
   smtp_pass: process.env.SMTP_PASS || '',
   smtp_from: process.env.SMTP_FROM || 'Entradas Labor Social <entradas@laborsocial.org>',
+  // Optional backup SMTP account (for example Gmail with an app password or Brevo): used only when the
+  // main account refuses a message or is limiting the sending rate.
+  smtp2_host: '',
+  smtp2_port: '587',
+  smtp2_user: '',
+  smtp2_pass: '',
+  smtp2_from: '',
   // Optional IMAP account: a copy of every message sent by SMTP is saved in its "Sent" folder.
   imap_host: process.env.IMAP_HOST || '',
   imap_port: process.env.IMAP_PORT || '993',

@@ -562,7 +562,7 @@ function adminSettings() {
   delete settings.secret_hmac_key;
   delete settings.admin_user;
   delete settings.admin_password_hash;
-  for (const key of ['smtp_pass', 'imap_pass', 'sheets_secret']) {
+  for (const key of ['smtp_pass', 'imap_pass', 'smtp2_pass', 'sheets_secret']) {
     settings[`${key}_set`] = Boolean(settings[key]);
     delete settings[key];
   }
@@ -813,14 +813,14 @@ app.put('/api/admin/settings', superadminOnly, (req, res) => {
   try {
     const updates = {...(req.body || {})};
     // An empty password field means "keep the stored one" (the dashboard never receives it).
-    for (const key of ['smtp_pass', 'imap_pass', 'sheets_secret']) if (key in updates && !updates[key]) delete updates[key];
+    for (const key of ['smtp_pass', 'imap_pass', 'smtp2_pass', 'sheets_secret']) if (key in updates && !updates[key]) delete updates[key];
     delete updates.sheets_last_status;
     for (const key of ['sheets_webapp_url', 'sheets_sheet_url']) if (typeof updates[key] === 'string') updates[key] = updates[key].trim();
     if (updates.sheets_webapp_url && !googleSheets.validWebAppUrl(updates.sheets_webapp_url)) return res.status(400).json({ ok: false, field: 'sheets_webapp_url', message: 'La URL de la aplicación web debe ser como https://script.google.com/macros/s/…/exec.' });
     if (updates.sheets_sheet_url && !googleSheets.validSheetUrl(updates.sheets_sheet_url)) return res.status(400).json({ ok: false, field: 'sheets_sheet_url', message: 'El enlace de la hoja debe ser como https://docs.google.com/spreadsheets/d/…' });
     const allowed = new Set(Object.keys(getAllSettings()).filter(k => k !== 'secret_hmac_key' && !k.startsWith('admin_') && (!k.startsWith('bcv_') || ['bcv_mode', 'bcv_manual_rate'].includes(k))));
     if (Object.keys(updates).some(k => !allowed.has(k))) return res.status(400).json({ok:false, message:'Parámetro no permitido.'});
-    for (const key of ['ticket_price_usd', 'bcv_manual_rate', 'lock_duration_seconds', 'smtp_port', 'imap_port']) if (key in updates && (!Number.isFinite(Number(updates[key])) || Number(updates[key]) <= 0)) return res.status(400).json({ok:false, message:'Valor numérico no válido.'});
+    for (const key of ['ticket_price_usd', 'bcv_manual_rate', 'lock_duration_seconds', 'smtp_port', 'imap_port', 'smtp2_port']) if (key in updates && (!Number.isFinite(Number(updates[key])) || Number(updates[key]) <= 0)) return res.status(400).json({ok:false, message:'Valor numérico no válido.'});
     updateSettings(updates);
     broadcastConfigUpdate();
     return res.json({
@@ -1150,8 +1150,8 @@ app.post('/api/admin/mail/test', superadminOnly, ticketRoute(async (req, res) =>
   try {
     const to = typeof req.body?.to === 'string' ? req.body.to.trim() : '';
     if (to && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) return res.status(400).json({ ok: false, message: 'El correo de prueba no es válido.' });
-    const result = await testMailConnections(to);
-    return res.json({ ok: result.smtp.ok && result.imap.ok !== false && (!result.sent || result.sent.ok), ...result });
+    const result = await testMailConnections(to, req.body?.account === 'respaldo' ? 'respaldo' : 'principal');
+    return res.json({ ok: result.smtp.ok && result.imap?.ok !== false && (!result.sent || result.sent.ok), ...result });
   } catch (err) {
     return res.status(500).json({ ok: false, message: err.message });
   }

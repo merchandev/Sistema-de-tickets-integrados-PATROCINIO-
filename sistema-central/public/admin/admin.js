@@ -1179,7 +1179,12 @@ function populateMailForm(s) {
   document.getElementById('imap-port').value = s.imap_port || '993';
   document.getElementById('imap-user').value = s.imap_user || '';
   document.getElementById('imap-sent-folder').value = s.imap_sent_folder || '';
-  for (const [id, isSet, fallback] of [['smtp-pass', s.smtp_pass_set, '••••••••'], ['imap-pass', s.imap_pass_set, 'La misma de SMTP']]) {
+  document.getElementById('smtp2-host').value = s.smtp2_host || '';
+  document.getElementById('smtp2-port').value = s.smtp2_port || '587';
+  document.getElementById('smtp2-user').value = s.smtp2_user || '';
+  document.getElementById('smtp2-from').value = s.smtp2_from || '';
+  if (s.smtp2_host && s.smtp2_user) mode.textContent += ' Cuenta de respaldo configurada.';
+  for (const [id, isSet, fallback] of [['smtp-pass', s.smtp_pass_set, '••••••••'], ['imap-pass', s.imap_pass_set, 'La misma de SMTP'], ['smtp2-pass', s.smtp2_pass_set, '••••••••']]) {
     const input = document.getElementById(id);
     input.value = '';
     input.required = false;
@@ -1307,7 +1312,12 @@ async function saveSmtpSettings(e) {
     imap_port: value('imap-port') || '993',
     imap_user: value('imap-user'),
     imap_pass: document.getElementById('imap-pass').value,
-    imap_sent_folder: value('imap-sent-folder')
+    imap_sent_folder: value('imap-sent-folder'),
+    smtp2_host: value('smtp2-host'),
+    smtp2_port: value('smtp2-port') || '587',
+    smtp2_user: value('smtp2-user'),
+    smtp2_pass: document.getElementById('smtp2-pass').value.replace(/\s+/g, ''),
+    smtp2_from: value('smtp2-from')
   };
   const status = document.getElementById('mail-save-status');
   status.textContent = 'Guardando…';
@@ -1329,16 +1339,16 @@ async function saveSmtpSettings(e) {
   }
 }
 
-async function testMailSettings() {
-  const button = document.getElementById('mail-test-btn');
+async function testMailSettings(account = 'principal') {
+  const button = document.getElementById(account === 'respaldo' ? 'mail-test-backup-btn' : 'mail-test-btn');
   const list = document.getElementById('mail-test-result');
   button.disabled = true;
-  list.innerHTML = '<li>Conectando con el servidor de correo…</li>';
+  list.innerHTML = `<li>Conectando con ${account === 'respaldo' ? 'la cuenta de respaldo' : 'el servidor de correo'}…</li>`;
   try {
     const res = await fetch('/api/admin/mail/test', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ to: document.getElementById('mail-test-to').value.trim() })
+      body: JSON.stringify({ to: document.getElementById('mail-test-to').value.trim(), account })
     });
     const data = await res.json();
     if (!data.smtp) throw new Error(data.message || 'No se pudo probar la configuración');
@@ -1414,7 +1424,7 @@ function renderEmailLogs() {
         ${l.attachment_path ? `<a href="${l.attachment_path}" target="_blank" class="text-blue-600 font-semibold hover:underline">📄 PDF Adjunto</a>` : '-'}
       </td>
       <td class="py-2.5 px-3">
-        <span class="px-2 py-0.5 rounded text-[10px] font-bold ${l.status === 'SENT_SMTP' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-700'}">${escapeHtml(statusLabels[l.status] || l.status)}</span>
+        <span class="px-2 py-0.5 rounded text-[10px] font-bold ${l.status === 'SENT_SMTP' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-700'}">${escapeHtml(statusLabels[l.status] || l.status)}</span>${l.sent_via === 'respaldo' ? ' <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-sky-100 text-sky-800">Respaldo</span>' : ''}
         ${l.error_message ? `<div class="text-[10px] text-red-700 mt-1">${escapeHtml(l.error_message)}</div>` : ''}
       </td>
       <td class="py-2.5 px-3 text-right">
