@@ -1022,29 +1022,53 @@ document.addEventListener('click', (event) => {
 // QR VERIFIER & CAMERA SCANNER
 // ============================================================================
 
-function testTokenInScanner(token) {
+// `register`: door scans (camera, code typed in the verifier, QR link opened with the phone camera)
+// record the arrival right away. "Comprobar QR" from the orders list only checks the ticket.
+function testTokenInScanner(token, { register = false } = {}) {
   switchTab('qr');
   document.getElementById('qr-token-input').value = token;
-  verifyQrToken(token);
+  verifyQrToken(token, { register });
 }
 
 function verifyQrTokenManual() {
   const raw = document.getElementById('qr-token-input').value.trim();
   if (!raw) return;
-  verifyQrToken(raw);
+  verifyQrToken(raw, { register: true });
 }
 
-async function verifyQrToken(rawToken, { silent = false } = {}) {
+async function verifyQrToken(rawToken, { silent = false, register = false } = {}) {
   const box = document.getElementById('qr-verification-result');
   box.innerHTML = `<div class="py-8 text-slate-500">Verificando autenticidad criptográfica del QR...</div>`;
 
   try {
     const encoded = encodeURIComponent(rawToken);
     const res = await fetch(`/api/admin/verify-qr/${encoded}`);
-    const data = await res.json();
+    let data = await res.json();
 
-    const alreadyScanned = Boolean(data.valid && (data.order.checked_in_at || data.order.checked_in_conference || data.order.checked_in_concert));
-    if (!silent) playTone(data.valid && !alreadyScanned ? 'valid' : 'invalid');
+    // A valid ticket not scanned yet: save the arrival so it appears in the history and on the map.
+    let justRegistered = false;
+    let registerError = '';
+    if (register && data.valid && !(data.order.checked_in_at || data.order.checked_in_conference || data.order.checked_in_concert)) {
+      try {
+        const checkin = await fetch(`/api/admin/verify-qr/${encodeURIComponent(data.order.verification_token)}/checkin`, { method: 'POST' });
+        const result = await checkin.json();
+        if (result.ok) {
+          data.order = result.order;
+          justRegistered = true;
+        } else if (result.alreadyCheckedIn && result.order) {
+          data.order = result.order; // another device registered it a moment earlier
+        } else if (result.code === 'CHECKIN_NOT_OPEN') {
+          data = result;
+        } else {
+          registerError = result.message || 'error desconocido';
+        }
+      } catch (err) {
+        registerError = 'sin conexión con el servidor';
+      }
+    }
+
+    const alreadyScanned = Boolean(data.valid && !justRegistered && (data.order.checked_in_at || data.order.checked_in_conference || data.order.checked_in_concert));
+    if (!silent) playTone(data.valid && !alreadyScanned && !registerError ? 'valid' : 'invalid');
     if (alreadyScanned && !silent) showAlreadyScanned(data.order);
     if (data.code === 'CHECKIN_NOT_OPEN') {
       box.className = 'p-6 rounded-xl border-2 border-amber-500 bg-amber-50 text-slate-900 space-y-2';
@@ -1062,13 +1086,15 @@ async function verifyQrToken(rawToken, { silent = false } = {}) {
 
     const o = data.order;
     const attendanceRecorded = o.checked_in_at || o.checked_in_conference || o.checked_in_concert;
-    box.className = attendanceRecorded
+    box.className = attendanceRecorded && !justRegistered
       ? 'p-6 rounded-xl border-2 border-amber-500 bg-amber-50 text-slate-900 space-y-4 text-left'
       : 'p-6 rounded-xl border-2 border-emerald-500 bg-emerald-50/60 text-slate-900 space-y-4 text-left';
     box.innerHTML = `
       <div class="flex items-center justify-between border-b border-emerald-200 pb-3">
         <div>
-          ${attendanceRecorded
+          ${justRegistered
+            ? '<span class="px-2.5 py-1 rounded-full text-xs font-extrabold bg-emerald-600 text-white">✓ INGRESO REGISTRADO · PUEDE PASAR</span>'
+            : attendanceRecorded
             ? '<span class="scan-badge-warn">⚠ YA ESCANEADA · NO PERMITIR UN SEGUNDO INGRESO</span>'
             : '<span class="px-2.5 py-1 rounded-full text-xs font-extrabold bg-emerald-600 text-white">✓ QR VÁLIDO Y AUTÉNTICO</span>'}
           <h4 class="text-xl font-black text-slate-900 mt-2">ENTRADA #${o.ticket_number}</h4>
@@ -1101,6 +1127,7 @@ async function verifyQrToken(rawToken, { silent = false } = {}) {
       <div class="p-3 rounded-xl border border-emerald-200 bg-white space-y-2">
         <div class="text-sm font-bold text-slate-900">Acceso a todo el evento</div>
         <p class="text-xs text-slate-600">La misma entrada incluye las conferencias y el concierto.</p>
+        ${registerError ? `<div class="text-xs text-red-700 font-semibold">No se pudo registrar el ingreso (${escapeHtml(registerError)}). Pulsa «Registrar asistencia» antes de dejar pasar.</div>` : ''}
         ${
           attendanceRecorded
             ? `<div class="text-xs text-emerald-800 font-semibold mt-1">✓ Asistencia registrada${o.checked_in_at ? ` el ${escapeHtml(formatDateTime(o.checked_in_at))}` : ''}${o.checked_in_by ? ` por ${escapeHtml(o.checked_in_by)}` : ''}</div>`
@@ -1108,6 +1135,7 @@ async function verifyQrToken(rawToken, { silent = false } = {}) {
         }
       </div>
     `;
+    if (justRegistered) fetchAdminOverview();
   } catch (err) {
     if (!silent) playTone('invalid');
     box.innerHTML = `<div class="text-red-600">Error verificando el código QR.</div>`;
@@ -1183,7 +1211,7 @@ function toggleQrCamera() {
       if (decodedText === lastScan.text && now - lastScan.at < 3000) return;
       lastScan = { text: decodedText, at: now };
       document.getElementById('qr-token-input').value = decodedText;
-      verifyQrToken(decodedText);
+      verifyQrToken(decodedText, { register: true });
     },
     () => {}
   ).then(() => {
@@ -1758,7 +1786,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   const params = new URLSearchParams(window.location.search);
   const verifyToken = params.get('verifyToken');
   if (verifyToken) {
-    testTokenInScanner(verifyToken);
+    testTokenInScanner(verifyToken, { register: true });
   }
 });
 
