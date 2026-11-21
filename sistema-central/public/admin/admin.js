@@ -1046,6 +1046,11 @@ async function verifyQrToken(rawToken, { silent = false } = {}) {
     const alreadyScanned = Boolean(data.valid && (data.order.checked_in_at || data.order.checked_in_conference || data.order.checked_in_concert));
     if (!silent) playTone(data.valid && !alreadyScanned ? 'valid' : 'invalid');
     if (alreadyScanned && !silent) showAlreadyScanned(data.order);
+    if (data.code === 'CHECKIN_NOT_OPEN') {
+      box.className = 'p-6 rounded-xl border-2 border-amber-500 bg-amber-50 text-slate-900 space-y-2';
+      box.innerHTML = `<div class="text-lg font-extrabold">${escapeHtml(data.message)}</div>`;
+      return;
+    }
     if (!data.valid) {
       box.className = 'p-6 rounded-xl border-2 border-red-500 bg-red-50 text-red-900 space-y-2';
       box.innerHTML = `
@@ -1149,8 +1154,8 @@ function showAlreadyScanned(order) {
       <dl class="scan-alert-grid">
         <div><dt>Titular</dt><dd>${escapeHtml(order.buyer_name || '—')}</dd></div>
         <div><dt>Cédula</dt><dd>${escapeHtml(order.buyer_cedula || '—')}</dd></div>
-        <div><dt>Fecha</dt><dd>${when ? escapeHtml(when.toLocaleDateString('es-VE', { day: 'numeric', month: 'long', year: 'numeric' })) : '—'}</dd></div>
-        <div><dt>Hora</dt><dd>${when ? escapeHtml(when.toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit', second: '2-digit' })) : 'Registrada antes del control por usuario'}</dd></div>
+        <div><dt>Fecha</dt><dd>${when ? escapeHtml(when.toLocaleDateString('es-VE', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'America/Caracas' })) : '—'}</dd></div>
+        <div><dt>Hora</dt><dd>${when ? escapeHtml(when.toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'America/Caracas' })) : 'Registrada antes del control por usuario'}</dd></div>
         <div class="is-wide"><dt>Escaneada por</dt><dd>${escapeHtml(order.checked_in_by || 'No registrado')}</dd></div>
       </dl>
       <button type="button" class="scan-alert-ok" onclick="closeModal()">Entendido</button>
@@ -1566,7 +1571,7 @@ function renderEmailLogs() {
 
   tbody.innerHTML = logs.map((l, idx) => `
     <tr class="hover:bg-slate-50">
-      <td class="py-2.5 px-3 text-slate-500">${l.created_at}</td>
+      <td class="py-2.5 px-3 text-slate-500">${escapeHtml(formatDateTime(l.created_at))}</td>
       <td class="py-2.5 px-3"><span class="px-2 py-0.5 rounded bg-slate-100 font-mono text-[10px] font-bold">${l.type}</span></td>
       <td class="py-2.5 px-3 font-medium">${escapeHtml(l.recipient_name)} &lt;${escapeHtml(l.recipient_email)}&gt;</td>
       <td class="py-2.5 px-3">${escapeHtml(l.subject)}</td>
@@ -1792,8 +1797,38 @@ async function loadSession() {
     // The initial account can still change its user name as well; named users change their password
     document.getElementById('account-change').textContent = data.named ? 'Cambiar contraseña' : 'Cambiar usuario y contraseña';
     applySettingsPermission(Boolean(data.canEditSettings));
-    if (data.accessOnly) applyAccessRole();
+    if (data.accessOnly) { applyAccessRole(); startDoorCountdown(data); }
   } catch (_) {}
+}
+
+// Access-control staff cannot scan before the door opens (2:59 PM Venezuela time on the event day):
+// a countdown, based on the server's clock, sits above every section and the scanner stays disabled.
+let doorTimer = null;
+function startDoorCountdown(session) {
+  const opensAt = Date.parse(session.checkinOpensAt || '');
+  const banner = document.getElementById('door-countdown');
+  if (!banner || !opensAt) return;
+  const offset = Date.parse(session.serverTime) - Date.now();
+  const label = new Intl.DateTimeFormat('es-VE', { weekday: 'long', day: 'numeric', month: 'long', hour: 'numeric', minute: '2-digit', timeZone: 'America/Caracas' }).format(opensAt);
+  const controls = () => [document.getElementById('qr-token-input'), document.getElementById('btn-toggle-camera'), document.querySelector('[onclick="verifyQrTokenManual()"]')].filter(Boolean);
+  const tick = () => {
+    const left = opensAt - (Date.now() + offset);
+    const closed = left > 0;
+    banner.hidden = !closed;
+    document.body.classList.toggle('door-closed', closed);
+    controls().forEach(el => { el.disabled = closed; });
+    if (!closed) {
+      clearInterval(doorTimer);
+      showToast('El control de acceso está abierto: ya puedes escanear entradas.');
+      return;
+    }
+    const s = Math.floor(left / 1000);
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+    banner.innerHTML = `<strong>El escaneo de entradas abre en <span class="door-clock">${h ? `${h} h ` : ''}${String(m).padStart(2, '0')} min ${String(sec).padStart(2, '0')} s</span></strong><span>A partir del ${escapeHtml(label)} (hora de Venezuela). Mientras tanto puedes consultar el mapa, el historial y enviar entradas.</span>`;
+  };
+  clearInterval(doorTimer);
+  tick();
+  if (Date.parse(session.checkinOpensAt) - (Date.now() + offset) > 0) doorTimer = setInterval(tick, 1000);
 }
 
 // Access-control staff: only the ticket map, the door scanner and the history
@@ -1837,8 +1872,8 @@ function renderAccessHistory() {
   }
   body.innerHTML = rows.map(e => {
     const when = parseDbDate(e.checked_in_at);
-    const date = when ? when.toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
-    const time = when ? when.toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—';
+    const date = when ? when.toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'America/Caracas' }) : '—';
+    const time = when ? when.toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'America/Caracas' }) : '—';
     return `<tr>
       <td data-label="Entrada"><strong>#${escapeHtml(e.ticket_number)}</strong></td>
       <td data-label="Titular">${escapeHtml(e.buyer_name || '—')}</td>
@@ -1980,7 +2015,7 @@ async function saveAccount(event) {
 function formatAccess(value) {
   if (!value) return 'Nunca ha iniciado sesión';
   const date = new Date(`${value.replace(' ', 'T')}Z`);
-  return `Último acceso: ${date.toLocaleString('es-VE', { dateStyle: 'medium', timeStyle: 'short' })}`;
+  return `Último acceso: ${date.toLocaleString('es-VE', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'America/Caracas' })}`;
 }
 
 async function loadUsers() {

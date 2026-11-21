@@ -104,6 +104,24 @@ app.use(['/admin', '/api/admin', '/storage'], (req, res, next) => {
   return res.status(403).json({ ok: false, message: 'Tu usuario solo tiene acceso al mapa de entradas, al control de acceso y al historial.' });
 });
 
+// Door scanning for access-control staff opens one minute before the entry time of the event day, in
+// Venezuela time (UTC-4 all year), so nobody registers an arrival by accident beforehand.
+function checkinOpensAt(cfg = getPublicConfig()) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(cfg.event_date || '')) return null;
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(cfg.event_entry_time || '15:00'));
+  const minutes = (m ? Number(m[1]) * 60 + Number(m[2]) : 15 * 60) - 1;
+  const time = `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+  return Date.parse(`${cfg.event_date}T${time}:00-04:00`);
+}
+function doorClosedFor(req) {
+  if (!isAccessStaff(req)) return null;
+  const opensAt = checkinOpensAt();
+  if (!opensAt || Date.now() >= opensAt) return null;
+  const label = new Intl.DateTimeFormat('es-VE', { weekday: 'long', day: 'numeric', month: 'long', hour: 'numeric', minute: '2-digit', timeZone: 'America/Caracas' }).format(opensAt);
+  return { ok: false, valid: false, code: 'CHECKIN_NOT_OPEN', opensAt: new Date(opensAt).toISOString(),
+    message: `El control de acceso abre el ${label} (hora de Venezuela). Todavía no se pueden escanear entradas.` };
+}
+
 // What the door needs to identify the holder: no contact data, payment or proof.
 function doorView(order) {
   if (!order) return order;
@@ -716,6 +734,8 @@ app.post('/api/admin/orders/:id/reject', ticketRoute(async (req, res) => {
  * Verify QR Code / Token authenticity in Admin Dashboard
  */
 app.get('/api/admin/verify-qr/:rawToken', (req, res) => {
+  const closed = doorClosedFor(req);
+  if (closed) return res.status(423).json(closed);
   try {
     let token = decodeURIComponent(req.params.rawToken || '').trim();
     // Extract the token from full QR links as well as from manually entered codes.
@@ -761,6 +781,8 @@ app.get('/api/admin/verify-qr/:rawToken', (req, res) => {
  * Record one arrival for the entire event.
  */
 app.post('/api/admin/verify-qr/:rawToken/checkin', (req, res) => {
+  const closed = doorClosedFor(req);
+  if (closed) return res.status(423).json(closed);
   try {
     let token = decodeURIComponent(req.params.rawToken || '').trim();
     if (token.includes('/verify/')) {
@@ -854,7 +876,10 @@ app.get('/api/admin/session', (req, res) => res.json({
   canArbitrateTickets: canArbitrateTickets(req),
   canEditSettings: canEditSettings(req),
   canManageUsers: req.admin.role === 'superadmin',
-  accessOnly: isAccessStaff(req)
+  accessOnly: isAccessStaff(req),
+  // The panel counts down with the server's clock, not the phone's
+  serverTime: new Date().toISOString(),
+  checkinOpensAt: checkinOpensAt() ? new Date(checkinOpensAt()).toISOString() : null
 }));
 
 // Ticket map for the door: status of every ticket and, for sold ones, holder and arrival.

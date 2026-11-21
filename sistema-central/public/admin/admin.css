@@ -2494,3 +2494,12 @@ button.is-read-only:disabled { opacity: .45; cursor: not-allowed; }
 @keyframes scan-alert-pulse { 50% { transform: scale(1.12); } }
 @media (prefers-reduced-motion: reduce) { .scan-alert-icon { animation: none; } }
 .scan-badge-warn { display: inline-block; padding: 4px 10px; border-radius: 999px; background: #b42318; color: #fff; font-size: 11px; font-weight: 800; letter-spacing: .02em; }
+
+/* Access staff: countdown until the door opens */
+.door-countdown { display: grid; gap: 4px; padding: 14px 18px; border: 1px solid #f0dca6; border-radius: 14px; background: #fff6e0; color: #6b4a00; font-size: 13px; }
+.door-countdown[hidden] { display: none; }
+.door-countdown strong { font-size: 16px; }
+.door-clock { font-variant-numeric: tabular-nums; color: #b45309; }
+.door-closed #qr-reader { opacity: .35; pointer-events: none; }
+.door-closed #tab-panel-qr button[disabled], .door-closed #qr-token-input[disabled] { opacity: .5; cursor: not-allowed; }
+.door-countdown { margin-bottom: 16px; }

@@ -137,6 +137,7 @@
   }
   function date(value) {
     return new Date(value).toLocaleString("es-VE", {
+      timeZone: "America/Caracas",
       dateStyle: "medium",
       timeStyle: "short",
       timeZone: "America/Caracas",

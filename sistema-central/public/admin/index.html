@@ -82,6 +82,7 @@
   <!-- Main Content -->
   <main class="dashboard-main space-y-6">
     <div id="mail-alert" class="mail-alert" role="alert" hidden></div>
+    <div id="door-countdown" class="door-countdown" role="status" aria-live="off" hidden></div>
     <section class="overview-heading"><div><h1>Pagos y ventas</h1><p>Revisa las solicitudes de pago y las ventas de cada página.</p></div><span id="sales-state" class="sales-state">Consultando estado de venta…</span></section>
     <section class="exchange-bar" aria-label="Precio de la entrada"><div><span>Tasa BCV</span><strong id="header-bcv-rate">Bs. —</strong></div><div><span>Entrada general</span><strong id="header-ticket-price">$5.00 (<span id="header-price-ves">Bs. —</span>)</strong></div><button onclick="forceRefreshBcv()" title="Consultar tasa oficial del BCV">↻ Actualizar tasa</button><details class="rate-detail"><summary>Fuente y actualización</summary><p id="admin-bcv-source"></p></details></section>
 
@@ -805,7 +806,7 @@
 
   <script src="/admin/blog-turndown.js"></script>
   <script src="/admin/blog.js?v=seo-1"></script>
-  <script src="/admin/admin.js?v=scan-alert"></script>
+  <script src="/admin/admin.js?v=door-opening"></script>
   <script src="/admin/sponsors.js"></script>
   <script src="/admin/hoja-google.js"></script>
 </body>

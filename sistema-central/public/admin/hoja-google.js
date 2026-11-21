@@ -17,7 +17,7 @@
     const [when, ...rest] = line.split(' · ');
     const date = new Date(when);
     if (!line || Number.isNaN(date.getTime())) return '';
-    const stamp = date.toLocaleString('es-VE', { dateStyle: 'medium', timeStyle: 'short' });
+    const stamp = date.toLocaleString('es-VE', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'America/Caracas' });
     return `Último envío (${stamp}): ${rest.join(' · ')}`;
   }
 

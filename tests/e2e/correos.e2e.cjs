@@ -407,6 +407,15 @@ function parseMail(file) {
     ].map(([method, url]) => api(method, url, { cookie: ctl.cookie, json: method === 'GET' ? undefined : {} })));
     check('Control de acceso no entra a pagos, comprobantes, usuarios, configuración, blog ni patrocinio', blocked.every(r => r.status === 403), blocked.map(r => r.status).join(','));
     check('Control de acceso carga el panel', (await api('GET', '/admin/', { cookie: ctl.cookie })).status === 200);
+    const realEventDate = (await api('GET', '/api/admin/overview', { admin: true })).data.settings.event_date;
+    await api('PUT', '/api/admin/settings', { cookie: sup.cookie, json: { event_date: '2099-12-31' } });
+    const closedVerify = await api('GET', '/api/admin/verify-qr/Espressivo-000-PRUEBA', { cookie: ctl.cookie });
+    const closedCheckin = await api('POST', '/api/admin/verify-qr/Espressivo-000-PRUEBA/checkin', { cookie: ctl.cookie });
+    const closedSession = (await api('GET', '/api/admin/session', { cookie: ctl.cookie })).data;
+    const adminBeforeOpening = await api('GET', '/api/admin/verify-qr/Espressivo-000-PRUEBA', { cookie: adm.cookie });
+    check('Control de acceso no escanea antes de las 2:59 PM (hora de Venezuela) del día del evento', closedVerify.status === 423 && closedVerify.data.code === 'CHECKIN_NOT_OPEN' &&
+      closedCheckin.status === 423 && closedSession.checkinOpensAt === '2099-12-31T18:59:00.000Z' && /2:59/.test(closedVerify.data.message) && adminBeforeOpening.status === 404, closedVerify.data.message);
+    await api('PUT', '/api/admin/settings', { cookie: sup.cookie, json: { event_date: realEventDate } });
     const doorLock = await api('POST', '/api/public/tickets/lock', { json: { session_id: 'sess_e2e_door', source_web: 'pagina-web-1' } });
     const doorNumber = doorLock.data.ticket?.ticket_number;
     const doorOrder = await api('POST', '/api/public/orders', { form: buyerForm({ ticket_number: doorNumber, session_id: 'sess_e2e_door', buyer_first_name: 'Carla', buyer_email: 'puerta@prueba.test', submission_id: 'envio-e2e-door' }) });
