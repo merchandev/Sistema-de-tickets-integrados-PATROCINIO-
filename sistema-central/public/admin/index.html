@@ -459,8 +459,9 @@
         <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-4">
           <h2 class="text-base font-bold text-slate-900">Envío de notificaciones del evento por correo</h2>
           <p class="text-xs text-slate-500">
-            Además del programador automático por fecha, puedes disparar en cualquier momento las notificaciones oficiales a todos los compradores con entrada verificada:
+            Los avisos salen solos a la hora programada (hora de Venezuela), uno a uno para no superar el límite del proveedor de correo. Cada comprador recibe un solo correo por aviso con todas sus entradas, y quien compre más tarde recibe el aviso vigente. Los botones envían el aviso ahora a quienes todavía no lo han recibido; nunca lo repiten.
           </p>
+          <div id="campaign-schedule" class="campaign-schedule" aria-live="polite"></div>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <button onclick="triggerCampaign('REMINDER_2_DAYS')" class="p-3 rounded-xl border border-slate-200 hover:border-blue-500 hover:bg-blue-50 text-left transition">
               <div class="font-bold text-sm text-slate-900">📅 "Faltan 2 días"</div>
@@ -473,6 +474,10 @@
             <button onclick="triggerCampaign('REMINDER_TODAY')" class="p-3 rounded-xl border border-slate-200 hover:border-emerald-500 hover:bg-emerald-50 text-left transition">
               <div class="font-bold text-sm text-slate-900">🎉 "¡Falta hoy! (Hoy es el evento)"</div>
               <div class="text-xs text-slate-500 mt-0.5">Aviso con hora de ingreso y recomendaciones QR</div>
+            </button>
+            <button onclick="triggerCampaign('REMINDER_REGISTRATION')" class="p-3 rounded-xl border border-slate-200 hover:border-amber-500 hover:bg-amber-50 text-left transition">
+              <div class="font-bold text-sm text-slate-900">🕒 "Hoy a las 3:00 PM abre el registro"</div>
+              <div class="text-xs text-slate-500 mt-0.5">Recordatorio del mediodía para llegar al registro</div>
             </button>
             <button onclick="triggerCampaign('EVENT_STARTED')" class="p-3 rounded-xl border border-slate-200 hover:border-indigo-500 hover:bg-indigo-50 text-left transition">
               <div class="font-bold text-sm text-slate-900">🚀 "¡Ya comenzamos el evento!"</div>
@@ -750,7 +755,7 @@
 
   <script src="/admin/blog-turndown.js"></script>
   <script src="/admin/blog.js?v=seo-1"></script>
-  <script src="/admin/admin.js?v=access-control"></script>
+  <script src="/admin/admin.js?v=paced-campaigns"></script>
   <script src="/admin/sponsors.js"></script>
   <script src="/admin/hoja-google.js"></script>
 </body>

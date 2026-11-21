@@ -378,19 +378,18 @@ async function sendPaymentRejectedEmail(order, reason) {
 }
 
 /**
- * 5. Sends mass event notifications to all approved buyers:
+ * 5. Event reminders, one email per buyer address listing all of that buyer's tickets.
+ * Sending order, schedule and rate limits are handled by campaigns.js.
  * - REMINDER_2_DAYS ("Faltan 2 días")
  * - REMINDER_1_DAY ("Falta 1 día")
- * - REMINDER_TODAY ("¡Falta hoy! Hoy es el evento")
- * - EVENT_STARTED ("¡Ya comenzamos el evento!")
+ * - REMINDER_TODAY ("¡Falta hoy! Hoy es el evento"), 7:00 AM of the event day
+ * - REMINDER_REGISTRATION (registration opens at the entry time), 12:00 PM of the event day
+ * - EVENT_STARTED ("¡Ya comenzamos el evento!"), one minute before the conferences
  */
-async function sendEventCampaignNotification(campaignKey, triggeredBy = 'MANUAL_ADMIN') {
-  const cfg = getPublicConfig();
-  const approvedOrders = db.prepare(`
-    SELECT * FROM orders WHERE status = 'APPROVED' ORDER BY ticket_number ASC
-  `).all();
-
-  const templates = {
+function campaignTemplates(cfg) {
+  const entry = escapeHtml(formatTime(cfg.event_entry_time || '15:00'));
+  const place = escapeHtml(cfg.event_location);
+  return {
     REMINDER_2_DAYS: {
       subjectPrefix: 'Faltan 2 días',
       headline: 'Faltan solo 2 días para el encuentro',
@@ -404,7 +403,12 @@ async function sendEventCampaignNotification(campaignKey, triggeredBy = 'MANUAL_
     REMINDER_TODAY: {
       subjectPrefix: 'Es hoy',
       headline: 'Hoy es el evento',
-      intro: `Te esperamos en <strong>${escapeHtml(cfg.event_location)}</strong>. El acceso y registro comienzan a las ${escapeHtml(formatTime(cfg.event_entry_time || '15:00'))}. Al llegar, muestra el QR de tu entrada y tu cédula.`
+      intro: `Te esperamos en <strong>${place}</strong>. El acceso y registro comienzan a las ${entry}. Al llegar, muestra el QR de tu entrada y tu cédula.`
+    },
+    REMINDER_REGISTRATION: {
+      subjectPrefix: `El registro abre a las ${formatTime(cfg.event_entry_time || '15:00')}`,
+      headline: `Hoy a las ${formatTime(cfg.event_entry_time || '15:00')} abre el registro`,
+      intro: `Te recordamos que el acceso y registro comienzan a las <strong>${entry}</strong> en <strong>${place}</strong>. Llega con tiempo para entrar sin filas: ten a mano el QR de tu entrada (en el teléfono o impreso) y tu cédula.`
     },
     EVENT_STARTED: {
       subjectPrefix: 'Ya comenzamos',
@@ -412,51 +416,47 @@ async function sendEventCampaignNotification(campaignKey, triggeredBy = 'MANUAL_
       intro: 'Las puertas están abiertas. Si vienes en camino, consulta los horarios de las actividades a continuación. Al llegar, muestra el QR de tu entrada y tu cédula.'
     }
   };
+}
+const CAMPAIGN_KEYS = ['REMINDER_2_DAYS', 'REMINDER_1_DAY', 'REMINDER_TODAY', 'REMINDER_REGISTRATION', 'EVENT_STARTED'];
 
-  const tpl = templates[campaignKey];
-  if (!tpl) {
-    throw new Error(`Tipo de notificación inválido: ${campaignKey}`);
-  }
+// "#001", "#001 y #005", "#001, #005 y #009"
+function ticketList(numbers) {
+  const tags = numbers.map(n => `#${n}`);
+  return tags.length > 1 ? `${tags.slice(0, -1).join(', ')} y ${tags.at(-1)}` : tags[0];
+}
 
-  let sentCount = 0;
-  for (const order of approvedOrders) {
-    const brand = brandFor(order.source_web);
-    const html = layout(brand, {
-      preheader: 'Consulta el lugar, la hora de registro y los horarios de las actividades.',
-      title: tpl.headline,
-      paragraphs: [
-        `Hola ${escapeHtml(firstName(order))}, tienes confirmada la entrada <strong>#${escapeHtml(order.ticket_number)}</strong> para <strong>${escapeHtml(cfg.event_title)}</strong>.`,
-        tpl.intro,
-        fullEventAccess
-      ],
-      rowsTitle: 'Fecha, lugar y horarios del evento',
-      rows: eventRows(cfg)
-    });
-
-    await sendSystemEmail({
-      toEmail: order.buyer_email,
-      toName: order.buyer_name,
-      subject: `${tpl.subjectPrefix} · Entrada #${order.ticket_number} · ${brand.name}`,
-      html,
-      type: campaignKey,
-      orderId: order.id,
-      ticketNumber: order.ticket_number,
-      attachmentUrl: order.pdf_path || null,
-      bulk: true
-    });
-    sentCount++;
-  }
-
-  db.prepare(`
-    INSERT INTO notification_campaigns (campaign_key, triggered_by, recipients_count)
-    VALUES (?, ?, ?)
-  `).run(campaignKey, triggeredBy, sentCount);
-
-  return {
-    campaignKey,
-    triggeredBy,
-    recipientsCount: sentCount
-  };
+// `orders`: the approved orders of one buyer address, sorted by ticket number.
+async function sendCampaignEmail(campaignKey, orders) {
+  const cfg = getPublicConfig();
+  const tpl = campaignTemplates(cfg)[campaignKey];
+  if (!tpl) throw new Error(`Tipo de notificación inválido: ${campaignKey}`);
+  const first = orders[0];
+  const brand = brandFor(first.source_web);
+  const numbers = orders.map(o => o.ticket_number);
+  const several = numbers.length > 1;
+  const html = layout(brand, {
+    preheader: 'Consulta el lugar, la hora de registro y los horarios de las actividades.',
+    title: tpl.headline,
+    paragraphs: [
+      `Hola ${escapeHtml(firstName(first))}, tienes ${several ? 'confirmadas las entradas' : 'confirmada la entrada'} <strong>${escapeHtml(ticketList(numbers))}</strong> para <strong>${escapeHtml(cfg.event_title)}</strong>.`,
+      tpl.intro,
+      several ? 'Cada entrada tiene su propio QR: muestra uno por persona en el acceso.' : fullEventAccess
+    ],
+    rowsTitle: 'Fecha, lugar y horarios del evento',
+    rows: eventRows(cfg)
+  });
+  const subjectTickets = several ? `Entradas ${ticketList(numbers.slice(0, 3))}${numbers.length > 3 ? ` y ${numbers.length - 3} más` : ''}` : `Entrada #${first.ticket_number}`;
+  return sendSystemEmail({
+    toEmail: first.buyer_email,
+    toName: first.buyer_name,
+    subject: `${tpl.subjectPrefix} · ${subjectTickets} · ${brand.name}`,
+    html,
+    type: campaignKey,
+    orderId: first.id,
+    ticketNumber: numbers.join(', '),
+    attachmentUrl: first.pdf_path || null,
+    bulk: true
+  });
 }
 
 /**
@@ -600,7 +600,8 @@ module.exports = {
   sendPaymentSubmittedEmail,
   sendTicketEmail,
   sendPaymentRejectedEmail,
-  sendEventCampaignNotification,
+  sendCampaignEmail,
+  CAMPAIGN_KEYS,
   testMailConnections,
   htmlToText,
   mailDeliveryMode,

@@ -2388,3 +2388,13 @@ button.is-read-only:disabled { opacity: .45; cursor: not-allowed; }
   .history-table td.history-empty::before { content: none; }
   .history-tools input { width: 100%; }
 }
+
+/* Event reminder schedule */
+.campaign-schedule ul { list-style: none; margin: 0; padding: 0; border: 1px solid #e7e2ec; border-radius: 10px; overflow: hidden; }
+.campaign-schedule li { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; align-items: center; padding: 8px 12px; font-size: 13px; border-bottom: 1px solid #f0edf3; }
+.campaign-schedule li:last-child { border-bottom: 0; }
+.campaign-schedule li.is-active { background: #eefaf3; }
+.campaign-when { grid-column: 1 / -1; color: #6b6275; font-size: 12px; }
+.campaign-state { font-size: 12px; font-weight: 650; color: #4b4453; text-align: right; }
+.campaign-schedule li.is-active .campaign-state { color: #1f7a4d; }
+.campaign-paused { margin: 8px 0 0; font-size: 12px; color: #8a5a00; background: #fff6e0; border: 1px solid #f0dca6; border-radius: 8px; padding: 6px 10px; }

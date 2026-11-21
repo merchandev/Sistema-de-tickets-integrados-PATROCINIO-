@@ -34,11 +34,11 @@ const { generateTicketPdf, generateDemoTicketPdf, correctedTicketPdfFilename } =
 const { parsePaymentForm, parseTicketNumber } = require('./paymentForm');
 const { resetTickets } = require('./ticketReset');
 const ticketArbitration = require('./ticketArbitration');
+const campaigns = require('./campaigns');
 const {
   sendPaymentSubmittedEmail,
   sendTicketEmail,
   sendPaymentRejectedEmail,
-  sendEventCampaignNotification,
   testMailConnections,
   mailDeliveryMode,
   retryOrderEmail,
@@ -575,7 +575,7 @@ app.get('/api/admin/overview', (req, res) => {
   const emailLogs = db.prepare(`SELECT * FROM email_logs WHERE (? OR type != 'TICKET_DETAILS_CORRECTION') ORDER BY id DESC LIMIT 100`)
     .all(Number(canArbitrateTickets(req)));
   const undelivered = undeliveredOrderEmails();
-  const campaigns = db.prepare('SELECT * FROM notification_campaigns ORDER BY id DESC LIMIT 50').all();
+  const campaignHistory = db.prepare('SELECT * FROM notification_campaigns ORDER BY id DESC LIMIT 50').all();
   const rawSettings = adminSettings();
   const publicConfig = getPublicConfig();
 
@@ -628,7 +628,8 @@ app.get('/api/admin/overview', (req, res) => {
     tickets: ticketsState.tickets,
     orders,
     emailLogs,
-    campaigns,
+    campaigns: campaignHistory,
+    campaignSchedule: campaigns.status(),
     undeliveredEmails: undelivered.length,
     retryableEmailIds: undelivered.map(log => log.id)
   });
@@ -1154,19 +1155,11 @@ app.post('/api/admin/sheets/sync-all', superadminOnly, async (_req, res) => {
   return res.status(result.ok ? 200 : 502).json({ ...result, settings: adminSettings() });
 });
 
-app.post('/api/admin/notifications/send', superadminOnly, ticketRoute(async (req, res) => {
-  try {
-    const { campaign_key } = req.body;
-    const result = await sendEventCampaignNotification(campaign_key, 'MANUAL_ADMIN');
-    return res.json({
-      ok: true,
-      message: `Notificación "${campaign_key}" enviada a ${result.recipientsCount} comprador(es) verificado(s).`,
-      result
-    });
-  } catch (err) {
-    return res.status(500).json({ ok: false, message: err.message });
-  }
-}));
+// Queues a reminder for the buyers who have not received it; campaigns.js sends it one by one.
+app.post('/api/admin/notifications/send', superadminOnly, (req, res) => {
+  const { status = 200, ...result } = campaigns.queueCampaign(req.body?.campaign_key);
+  return res.status(status).json({ ...result, campaigns: campaigns.status() });
+});
 
 // ============================================================================
 // REAL-TIME SOCKET.IO & BACKGROUND TIMERS
@@ -1198,30 +1191,8 @@ setInterval(() => {
   }
 }, 1000);
 
-// Automatic date-based notification checker (runs every 60s)
-setInterval(async () => {
-  try {
-    const cfg = getPublicConfig();
-    if (!cfg.event_date) return;
-
-    for (const targetCampaign of require('./notificationSchedule').dueCampaigns(cfg)) {
-
-      const alreadySent = db.prepare(`
-        SELECT id FROM notification_campaigns
-        WHERE campaign_key = ? AND date(created_at, '-4 hours') = date('now', '-4 hours')
-      `).get(targetCampaign);
-
-      if (!alreadySent) {
-        const approvedCount = db.prepare("SELECT COUNT(*) as c FROM orders WHERE status = 'APPROVED'").get().c;
-        if (approvedCount > 0) {
-          await runTicketOperation(() => sendEventCampaignNotification(targetCampaign, 'AUTO_CRON'));
-        }
-      }
-    }
-  } catch (err) {
-    console.error('Auto notification check error:', err.message);
-  }
-}, 60 * 1000);
+// Scheduled event reminders and automatic resends of undelivered notices (see campaigns.js)
+campaigns.start();
 
 // Initial BCV scrape on startup + periodic refresh every 15 minutes
 scrapeBcvRate().then((r) => {

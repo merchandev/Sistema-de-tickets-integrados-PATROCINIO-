@@ -113,6 +113,7 @@ async function fetchAdminOverview() {
     renderEmailLogs();
     renderNotifications();
     renderMailAlert();
+    renderCampaignSchedule();
 
     if (!cmsPopulated) {
       populateCmsAndSmtpForms();
@@ -1260,14 +1261,37 @@ async function testMailSettings() {
 }
 
 async function triggerCampaign(campaignKey) {
+  const item = (state.campaignSchedule?.schedule || []).find(c => c.key === campaignKey);
+  if (item && !confirm(`¿Enviar ahora «${item.label}» a los ${item.pending} comprador(es) que aún no lo recibieron?`)) return;
   const res = await fetch('/api/admin/notifications/send', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ campaign_key: campaignKey })
   });
   const data = await res.json();
-  alert(data.message || 'Notificación enviada');
+  alert(data.message || 'No se pudo poner en cola el aviso.');
   await fetchAdminOverview();
+}
+
+// Schedule of the event reminders, with what is still missing of each one
+function renderCampaignSchedule() {
+  const box = document.getElementById('campaign-schedule');
+  const info = state.campaignSchedule;
+  if (!box || !info) return;
+  const fmt = (at) => {
+    const [date, time] = at.split(' ');
+    const [h, m] = time.split(':').map(Number);
+    const day = new Date(`${date}T12:00:00Z`).toLocaleDateString('es-VE', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+    return `${day}, ${h % 12 || 12}:${String(m).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`;
+  };
+  const rows = info.schedule.map(c => {
+    const now = info.active === c.key;
+    const sending = info.sending === c.key || info.queued.includes(c.key);
+    const stateText = sending ? 'Enviando…' : now ? (c.pending ? 'En curso' : 'Enviado a todos') : c.pending ? `${c.pending} pendiente(s)` : 'Enviado a todos';
+    return `<li class="${now ? 'is-active' : ''}"><span class="campaign-when">${escapeHtml(fmt(c.at))}</span><strong>${escapeHtml(c.label)}</strong><span class="campaign-state">${escapeHtml(stateText)}${now && c.pending ? ` · faltan ${c.pending}` : ''}</span></li>`;
+  }).join('');
+  const paused = info.pausedUntil ? `<p class="campaign-paused">El proveedor de correo limitó el envío. Se reanuda solo a las ${new Date(info.pausedUntil).toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })}.</p>` : '';
+  box.innerHTML = `<ul>${rows}</ul>${paused}${info.automatic ? '' : '<p class="campaign-paused">El envío automático está desactivado en este servidor.</p>'}`;
 }
 
 async function forceRefreshBcv() {

@@ -34,7 +34,7 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 const sink = spawn(process.execPath, [path.join(__dirname, 'smtp-sink.cjs'), mailDir, String(SMTP_PORT)], { stdio: 'ignore' });
 const server = spawn(process.execPath, ['--no-warnings', 'src/server.js'], {
   cwd: central,
-  env: { ...process.env, PORT: String(PORT), DATA_DIR: dataDir, ADMIN_USER: 'admin', ADMIN_PASSWORD: password, PUBLIC_BASE_URL: BASE, SALES_ENABLED: 'true', BLOG_STORAGE_DIR: path.join(dataDir, 'storage'), SHEETS_TEST_URLS: '1' },
+  env: { ...process.env, PORT: String(PORT), DATA_DIR: dataDir, ADMIN_USER: 'admin', ADMIN_PASSWORD: password, PUBLIC_BASE_URL: BASE, SALES_ENABLED: 'true', BLOG_STORAGE_DIR: path.join(dataDir, 'storage'), SHEETS_TEST_URLS: '1', CAMPAIGN_PACE_MS: '20', CAMPAIGN_TICK_MS: '3600000', CAMPAIGNS_AUTO: 'false' },
   stdio: ['ignore', 'pipe', 'pipe']
 });
 let serverLog = '';
@@ -306,15 +306,25 @@ function parseMail(file) {
     check('El aviso reenviado llega al buzón', (await waitMails(9)) === 9 && /^Estamos verificando tu pago$/.test(parseMail(mailFiles()[8]).subject));
     check('Ya no quedan avisos pendientes', (await api('GET', '/api/admin/overview', { admin: true })).data.undeliveredEmails === 0);
 
-    for (const campaignKey of ['REMINDER_2_DAYS', 'REMINDER_1_DAY', 'REMINDER_TODAY', 'EVENT_STARTED']) {
+    for (const campaignKey of ['REMINDER_2_DAYS', 'REMINDER_1_DAY', 'REMINDER_TODAY', 'REMINDER_REGISTRATION', 'EVENT_STARTED']) {
       const before = mailFiles().length;
       const campaign = await api('POST', '/api/admin/notifications/send', { admin: true, json: { campaign_key: campaignKey } });
       await waitMails(before + 2);
+      await sleep(300);
       const reminders = mailFiles().slice(before).map(file => htmlOf(parseMail(file)));
       check(`Recordatorio ${campaignKey} con acceso completo y horario de ingreso`,
-        campaign.status === 200 && reminders.length === 2 &&
-        reminders.every(html => html.includes('acceso a todo el evento') && /Acceso y registro con QR[\s\S]*?3:00\s*PM/i.test(html)));
+        campaign.status === 200 && campaign.ms < 1500 && campaign.data.pending === 2 && reminders.length === 2 &&
+        reminders.every(html => html.includes('acceso a todo el evento') && /Acceso y registro con QR[\s\S]*?3:00\s*PM/i.test(html)), campaign.data.message);
     }
+    const registration = mailFiles().slice(-4, -2).map(file => parseMail(file));
+    check('El recordatorio del mediodía anuncia el registro de las 3:00 PM', registration.length === 2 && registration.every(m => /El registro abre a las 3:00 PM/.test(m.subject) && /Hoy a las 3:00 PM abre el registro/.test(htmlOf(m))));
+    const beforeRepeat = mailFiles().length;
+    const repeat = await api('POST', '/api/admin/notifications/send', { admin: true, json: { campaign_key: 'REMINDER_TODAY' } });
+    await sleep(500);
+    check('Pulsar otra vez no repite el aviso a quien ya lo recibió', repeat.status === 200 && repeat.data.pending === 0 && mailFiles().length === beforeRepeat, repeat.data.message);
+    const plan = (await api('GET', '/api/admin/overview', { admin: true })).data.campaignSchedule;
+    check('El panel muestra la programación y lo que falta de cada aviso', plan.schedule.map(c => c.at.slice(11)).join(',') === '09:00,09:00,07:00,12:00,15:59' && plan.schedule.every(c => c.pending === 0));
+    check('Un tipo de aviso desconocido se rechaza', (await api('POST', '/api/admin/notifications/send', { admin: true, json: { campaign_key: 'SPAM' } })).status === 400);
 
     // --- 7. Users: superadmin from the console, admins from the panel ---
     const cli = (args, input) => new Promise(resolve => {
