@@ -328,6 +328,10 @@ function parseMail(file) {
     check('Pulsar otra vez no repite el aviso a quien ya lo recibió', repeat.status === 200 && repeat.data.pending === 0 && mailFiles().length === beforeRepeat, repeat.data.message);
     const plan = (await api('GET', '/api/admin/overview', { admin: true })).data.campaignSchedule;
     check('El panel muestra la programación y lo que falta de cada aviso', plan.schedule.map(c => c.at.slice(11)).join(',') === '09:00,09:00,07:00,12:00,15:59' && plan.schedule.every(c => c.pending === 0));
+    const pausedByDefault = plan.paused === true;
+    const resumed = await api('POST', '/api/admin/notifications/pause', { admin: true, json: { paused: false } });
+    const repaused = await api('POST', '/api/admin/notifications/pause', { admin: true, json: { paused: true } });
+    check('Los recordatorios empiezan en pausa y el superadministrador los reanuda o pausa', pausedByDefault && resumed.data.paused === false && resumed.data.campaigns.paused === false && repaused.data.campaigns.paused === true && (await api('POST', '/api/admin/notifications/pause', { admin: true, json: {} })).status === 400);
     check('Un tipo de aviso desconocido se rechaza', (await api('POST', '/api/admin/notifications/send', { admin: true, json: { campaign_key: 'SPAM' } })).status === 400);
 
     // --- 7. Users: superadmin from the console, admins from the panel ---
@@ -434,6 +438,16 @@ function parseMail(file) {
     const freeTicket = doorMap.tickets.find(t => t.status === 'AVAILABLE').ticket_number;
     check('No hay PDF de una entrada sin vender ni de un número inválido', (await api('GET', `/api/admin/access/tickets/${freeTicket}/pdf`, { cookie: ctl.cookie })).status === 404 &&
       (await api('GET', '/api/admin/access/tickets/999/pdf', { cookie: ctl.cookie })).status === 404 && (await api('GET', '/api/admin/access/tickets/abc/pdf', { cookie: ctl.cookie })).status === 403);
+    const waBad = await api('POST', `/api/admin/access/tickets/${doorNumber}/whatsapp`, { cookie: ctl.cookie, json: { phone: '123' } });
+    const wa = await api('POST', `/api/admin/access/tickets/${doorNumber}/whatsapp`, { cookie: ctl.cookie, json: { phone: '0414-123.45.67' } });
+    check('WhatsApp: valida el número y arma el mensaje para ese número con el enlace del PDF', waBad.status === 400 && waBad.data.field === 'phone' &&
+      wa.status === 200 && wa.data.url.startsWith('https://wa.me/584141234567?text=') && decodeURIComponent(wa.data.url.split('text=')[1]).includes(wa.data.link) &&
+      new RegExp(`entrada #${doorNumber}`).test(wa.data.text), wa.data.message || wa.data.text);
+    const publicPath = new URL(wa.data.link).pathname;
+    const publicPdf = await api('GET', publicPath);
+    const forged = await api('GET', publicPath.replace(/\/[^/]+\.pdf$/, '/' + 'A'.repeat(32) + '.pdf'));
+    check('El enlace del PDF abre la entrada sin sesión y no se puede adivinar', publicPdf.status === 200 && publicPdf.data.subarray(0, 5).toString() === '%PDF-' &&
+      forged.status === 404 && (await api('GET', publicPath.replace(`/entrada/${wa.data.link.split('/entrada/')[1].split('/')[0]}/`, '/entrada/99999/'))).status === 404);
     const mailsBeforeSend = mailFiles().length;
     const forcedSend = await api('POST', `/api/admin/access/tickets/${doorNumber}/send-email`, { cookie: ctl.cookie, json: {} });
     await waitMails(mailsBeforeSend + 1);

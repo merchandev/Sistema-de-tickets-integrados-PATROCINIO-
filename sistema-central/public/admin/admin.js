@@ -346,16 +346,7 @@ function inspectDoorSeat(ticket) {
         <div><strong>Origen:</strong> ${sourceBadge(ticket.order_source)}</div>
       </div>` : ''}
       ${arrivalLine(ticket) || (ticket.status === 'SOLD' ? '<div class="p-3 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-600">Todavía no se ha escaneado en la entrada.</div>' : '')}
-      ${ticket.status === 'SOLD' ? `<div class="door-pdf">
-        <p>¿El invitado no pudo descargar su entrada? Ábrela o compártela por WhatsApp.</p>
-        <div class="door-pdf-actions">
-          <a class="door-pdf-btn" href="${ticketPdfUrl(ticket.ticket_number)}" target="_blank" rel="noopener">Ver entrada en PDF</a>
-          <a class="door-pdf-btn" href="${ticketPdfUrl(ticket.ticket_number)}?descargar=1" download="Entrada-${ticket.ticket_number}.pdf">Descargar</a>
-          <button type="button" class="door-pdf-btn is-primary" onclick="shareTicketPdf('${ticket.ticket_number}', this)">Compartir por WhatsApp</button>
-          <button type="button" class="door-pdf-btn" onclick="sendTicketByEmail('${ticket.ticket_number}', this, '${escapeHtml(ticket.email_hint || '')}')">Enviar por correo</button>
-        </div>
-        <p class="door-pdf-status" role="status" hidden></p>
-      </div>` : ''}
+      ${ticket.status === 'SOLD' ? ticketShareBlock(ticket.ticket_number, { emailHint: ticket.email_hint }) : ''}
     </div>`);
 }
 
@@ -364,7 +355,7 @@ const ticketPdfUrl = (number) => `/api/admin/access/tickets/${encodeURIComponent
 // Sends the ticket email with its PDF again, from any role's ticket detail
 async function sendTicketByEmail(number, button, recipient) {
   if (!confirm(`¿Enviar la entrada #${number} en PDF${recipient ? ` a ${recipient}` : ' al correo del comprador'}?`)) return;
-  const status = button.closest('.door-pdf, .od-send')?.querySelector('[role="status"]');
+  const status = button.closest('.door-pdf')?.querySelector('[role="status"]');
   const show = (message) => { if (status) { status.hidden = false; status.textContent = message; } showToast(message); };
   button.disabled = true;
   const label = button.textContent;
@@ -380,10 +371,54 @@ async function sendTicketByEmail(number, button, recipient) {
     button.textContent = label;
   }
 }
-const sendTicketBlock = (number, recipient) => `<div class="od-send">
-  <button type="button" class="od-approve" onclick="sendTicketByEmail('${escapeHtml(number)}', this, '${escapeHtml(recipient || '')}')">Enviar entrada por correo</button>
-  <p class="od-muted" role="status" hidden></p>
-</div>`;
+// Same actions for door staff, admins and the superadmin: open or download the PDF, send it by email,
+// or send it by WhatsApp to a number (message with a link to the PDF) or attach the file from the phone.
+function ticketShareBlock(number, { emailHint = '', phone = '' } = {}) {
+  const n = escapeHtml(number);
+  return `<div class="door-pdf">
+    <p>¿El invitado no tiene su entrada? Ábrela, envíala por correo o por WhatsApp.</p>
+    <div class="door-pdf-actions">
+      <a class="door-pdf-btn" href="${ticketPdfUrl(number)}" target="_blank" rel="noopener">Ver PDF</a>
+      <a class="door-pdf-btn" href="${ticketPdfUrl(number)}?descargar=1" download="Entrada-${n}.pdf">Descargar</a>
+      <button type="button" class="door-pdf-btn" onclick="sendTicketByEmail('${n}', this, '${escapeHtml(emailHint || '')}')">Enviar por correo</button>
+    </div>
+    <div class="door-wa">
+      <label for="wa-${n}">WhatsApp del invitado</label>
+      <div class="door-wa-row">
+        <input id="wa-${n}" type="tel" inputmode="tel" autocomplete="off" placeholder="0414-1234567" value="${escapeHtml(phone || '')}" />
+        <button type="button" class="door-pdf-btn is-primary" onclick="sendTicketWhatsApp('${n}', this)">Enviar por WhatsApp</button>
+        <button type="button" class="door-pdf-btn" onclick="shareTicketPdf('${n}', this)" title="Comparte el archivo PDF desde el teléfono">Adjuntar PDF</button>
+      </div>
+      <small>«Enviar por WhatsApp» abre el chat con ese número y un mensaje con el enlace para descargar el PDF. «Adjuntar PDF» envía el archivo desde el teléfono eligiendo el contacto.</small>
+    </div>
+    <p class="door-pdf-status" role="status" hidden></p>
+  </div>`;
+}
+
+async function sendTicketWhatsApp(number, button) {
+  const block = button.closest('.door-pdf');
+  const input = block.querySelector('input[type="tel"]');
+  const status = block.querySelector('[role="status"]');
+  const show = (message) => { status.hidden = false; status.textContent = message; };
+  if (!input.value.trim()) { input.focus(); return show('Escribe el número de WhatsApp del invitado.'); }
+  // Opened right away so the browser does not block it; it goes to WhatsApp once the message is ready
+  const chat = window.open('', '_blank');
+  button.disabled = true;
+  try {
+    const res = await fetch(`/api/admin/access/tickets/${encodeURIComponent(number)}/whatsapp`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: input.value })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) { chat?.close(); if (data.field === 'phone') input.focus(); return show(data.message || 'No se pudo preparar el mensaje.'); }
+    if (chat) chat.location.href = data.url; else location.href = data.url;
+    show('Se abrió WhatsApp con el mensaje y el enlace del PDF. Revísalo y pulsa enviar.');
+  } catch (_) {
+    chat?.close();
+    show('No se pudo preparar el mensaje. Revisa tu conexión e inténtalo de nuevo.');
+  } finally {
+    button.disabled = false;
+  }
+}
 
 // Shares the PDF itself from the phone (WhatsApp appears in the share sheet); where the browser cannot
 // share files, it downloads it so it can be attached in WhatsApp.
@@ -453,7 +488,7 @@ function inspectSeat(ticketNumber) {
     `;
   }
   html += arrivalLine(ticket);
-  if (ticket.status === 'SOLD' && order?.status === 'APPROVED') html += sendTicketBlock(ticket.ticket_number, order.buyer_email);
+  if (ticket.status === 'SOLD' && order?.status === 'APPROVED') html += ticketShareBlock(ticket.ticket_number, { emailHint: order.buyer_email, phone: order.buyer_phone });
 
   html += `</div>`;
   openModal(`Detalle de la entrada #${ticketNumber}`, html);
@@ -493,10 +528,10 @@ async function openTicketArbitration(number) {
         ${field('Monto reportado', `Bs. ${Number(order.amount_ves).toFixed(2)}`)}</div>
         <div class="od-actions">
           ${order.screenshot_path ? `<button type="button" class="od-cancel" onclick="viewScreenshot(${Number(order.id)})">Ver comprobante</button>` : ''}
-          ${order.pdf_path ? `<a class="od-cancel" href="${escapeHtml(order.pdf_path)}" target="_blank" rel="noopener">Abrir PDF</a>` : ''}
+          ${order.pdf_path && !(status === 'SOLD' && order.status === 'APPROVED') ? `<a class="od-cancel" href="${escapeHtml(order.pdf_path)}" target="_blank" rel="noopener">Abrir PDF</a>` : ''}
           ${details.canResendCorrectedPdf ? '<button type="button" class="od-approve" data-resend-pdf>Reenviar PDF corregido</button>' : ''}
         </div>
-        ${status === 'SOLD' && order.status === 'APPROVED' && order.pdf_path ? sendTicketBlock(number, order.buyer_email) : ''}` : ''}
+        ${status === 'SOLD' && order.status === 'APPROVED' && order.pdf_path ? ticketShareBlock(number, { emailHint: order.buyer_email, phone: order.buyer_phone }) : ''}` : ''}
       ${details.canResendCorrectedPdf ? `<p class="od-muted" data-resend-status role="status">Destinatario: ${escapeHtml(order.buyer_email)}</p>` : ''}
       ${attended ? '<p class="od-muted">La asistencia ya está registrada.</p>' : ''}
       <div class="od-actions">${actions.filter(action => action !== 'cancel' || !attended).map(action => `<button type="button" class="${action === 'cancel' ? 'od-reject' : action === 'approve' || action === 'assist' ? 'od-approve' : 'od-cancel'}" data-ticket-action="${action}">${arbitrationActions[action][0]}</button>`).join('')}</div>
@@ -1204,11 +1239,9 @@ function renderMailAlert() {
     const r = state.mailResend || { pending, delivered: 0, total: pending };
     const share = r.total ? Math.round((r.delivered / r.total) * 100) : 0;
     const timer = r.nextCheckAt ? `<b id="resend-countdown" data-at="${escapeHtml(r.nextCheckAt)}">${countdown(r.nextCheckAt)}</b>` : '';
-    const phase = r.sending ? 'Reenviando ahora, uno a uno…'
-      : r.pausedUntil ? `El proveedor de correo limitó el envío. Se reintenta solo en ${timer}.`
-      : `Se reenvían solos cada ${r.intervalMinutes || 3} minutos hasta que lleguen.${timer ? ` Próxima verificación en ${timer}.` : ''}`;
+    const phase = r.sending ? 'Enviando…' : timer ? `Próximo envío en ${timer}` : '';
     box.innerHTML = `<div class="mail-resend">
-        <strong>${pending} aviso${pending === 1 ? '' : 's'} sin entregar${r.delivered ? ` · ${r.delivered} entregado${r.delivered === 1 ? '' : 's'} en este reenvío` : ''}.</strong>
+        <strong>${pending} aviso${pending === 1 ? '' : 's'} sin entregar</strong>
         <div class="resend-bar" role="progressbar" aria-label="Avance del reenvío" aria-valuemin="0" aria-valuemax="${r.total}" aria-valuenow="${r.delivered}"><span style="width:${Math.max(share, r.sending ? 3 : 0)}%"></span></div>
         <span>${phase}</span>
       </div><button type="button" onclick="retryPendingEmails(this)"${r.sending ? ' disabled' : ''}>${r.sending ? 'Reenviando…' : 'Reenviar ahora'}</button>`;
@@ -1391,8 +1424,26 @@ function renderCampaignSchedule() {
     const stateText = sending ? 'Enviando…' : now ? (c.pending ? 'En curso' : 'Enviado a todos') : c.pending ? `${c.pending} pendiente(s)` : 'Enviado a todos';
     return `<li class="${now ? 'is-active' : ''}"><span class="campaign-when">${escapeHtml(fmt(c.at))}</span><strong>${escapeHtml(c.label)}</strong><span class="campaign-state">${escapeHtml(stateText)}${now && c.pending ? ` · faltan ${c.pending}` : ''}</span></li>`;
   }).join('');
-  const paused = info.pausedUntil ? `<p class="campaign-paused">El proveedor de correo limitó el envío. Se reanuda solo a las ${new Date(info.pausedUntil).toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })}.</p>` : '';
-  box.innerHTML = `<ul>${rows}</ul>${paused}${info.automatic ? '' : '<p class="campaign-paused">El envío automático está desactivado en este servidor.</p>'}`;
+  const canEdit = Boolean(adminSession?.canEditSettings);
+  const toggle = `<div class="campaign-toggle ${info.paused ? 'is-paused' : 'is-on'}">
+    <span>${info.paused ? 'Recordatorios automáticos en pausa' : 'Recordatorios automáticos activos'}</span>
+    ${canEdit ? `<button type="button" onclick="toggleCampaigns(${info.paused ? 'false' : 'true'}, this)">${info.paused ? 'Reanudar' : 'Pausar'}</button>` : ''}
+  </div>`;
+  box.innerHTML = `${toggle}<ul>${rows}</ul>${info.automatic ? '' : '<p class="campaign-paused">El envío automático está desactivado en este servidor.</p>'}`;
+}
+
+async function toggleCampaigns(pause, button) {
+  if (!pause && !confirm('¿Reanudar los recordatorios automáticos? Saldrán a la hora programada a quienes todavía no los recibieron.')) return;
+  button.disabled = true;
+  try {
+    const res = await fetch('/api/admin/notifications/pause', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ paused: pause }) });
+    const data = await res.json();
+    showToast(data.message || 'No se pudo cambiar el estado de los recordatorios.');
+    if (data.campaigns) { state.campaignSchedule = data.campaigns; renderCampaignSchedule(); }
+  } catch (_) {
+    showToast('No se pudo cambiar el estado de los recordatorios.');
+    button.disabled = false;
+  }
 }
 
 async function forceRefreshBcv() {

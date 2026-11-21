@@ -191,6 +191,8 @@ const defaultSettings = {
   smtp_from: process.env.SMTP_FROM || 'Entradas Labor Social <entradas@laborsocial.org>',
   // Optional backup SMTP account (for example Gmail with an app password or Brevo): used only when the
   // main account refuses a message or is limiting the sending rate.
+  // Automatic event reminders: 'true' keeps them paused (ticket and payment emails are never paused)
+  campaigns_paused: 'true',
   smtp2_host: '',
   smtp2_port: '587',
   smtp2_user: '',

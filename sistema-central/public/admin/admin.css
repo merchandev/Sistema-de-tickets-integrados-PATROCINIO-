@@ -2422,3 +2422,23 @@ button.is-read-only:disabled { opacity: .45; cursor: not-allowed; }
 .mail-test-row { flex-wrap: wrap; }
 .mail-test-row input { flex: 1 1 100%; }
 .mail-test-row button { flex: 1 1 auto; }
+
+/* Ticket actions side by side: PDF, email and WhatsApp with the guest's number */
+.door-pdf-actions .door-pdf-btn { flex: 1 1 0; white-space: nowrap; }
+.door-wa { display: grid; gap: 6px; padding-top: 8px; border-top: 1px dashed #e7e2ec; }
+.door-wa label { font-size: 12px; font-weight: 650; color: #2d2633; }
+.door-wa small { font-size: 11px; color: #6b6275; line-height: 1.4; }
+.door-wa-row { display: flex; gap: 8px; align-items: stretch; }
+.door-wa-row input { flex: 1 1 140px; min-width: 0; min-height: 40px; border: 1px solid #d6d0dc; border-radius: 10px; padding: 8px 12px; font-size: 14px; }
+.door-wa-row .door-pdf-btn { flex: 0 0 auto; white-space: nowrap; }
+@media (max-width: 640px) {
+  .door-pdf-btn { flex: 1 1 0 !important; padding: 8px 10px; font-size: 12px; }
+  .door-wa-row { flex-wrap: wrap; }
+  .door-wa-row input { flex: 1 1 100%; }
+}
+/* Pause switch of the automatic reminders */
+.campaign-toggle { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 12px; margin-bottom: 8px; border-radius: 10px; font-size: 13px; font-weight: 650; }
+.campaign-toggle.is-paused { background: #fff6e0; border: 1px solid #f0dca6; color: #7a5200; }
+.campaign-toggle.is-on { background: #eefaf3; border: 1px solid #c9ead6; color: #1f7a4d; }
+.campaign-toggle button { border: 1px solid currentColor; background: #fff; color: inherit; border-radius: 8px; padding: 5px 12px; font-weight: 700; cursor: pointer; }
+.campaign-toggle button[disabled] { opacity: .6; cursor: progress; }

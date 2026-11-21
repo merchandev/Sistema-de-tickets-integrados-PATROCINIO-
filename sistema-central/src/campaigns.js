@@ -9,7 +9,7 @@
 // Schedule (Caracas time): 2 and 1 days before at 9:00 AM; on the event day "Es hoy" at 7:00 AM,
 // the registration reminder at 12:00 PM and "Ya comenzamos" one minute before the conferences.
 // A reminder is current from its time until the next one starts, only on its own day and never at night.
-const { db, getPublicConfig } = require('./db');
+const { db, getPublicConfig, getAllSettings, updateSettings } = require('./db');
 const mailer = require('./mailer');
 
 const PACE_MS = Number(process.env.CAMPAIGN_PACE_MS || 8000);
@@ -125,7 +125,9 @@ async function resendUndelivered() {
   const force = state.force;
   state.force = false;
   state.lastCheck = Date.now();
-  const rows = mailer.undeliveredOrderEmails();
+  // Paid and verified tickets first, then payment notices
+  const priority = (type) => (type === 'TICKET_APPROVED' || type === 'TICKET_TIME_CORRECTION' ? 0 : 1);
+  const rows = mailer.undeliveredOrderEmails().sort((a, b) => priority(a.type) - priority(b.type) || a.id - b.id);
   if (!rows.length) { state.resendDelivered = 0; return; }
   state.resending = true;
   try {
@@ -177,13 +179,24 @@ async function tick() {
       if (!left) state.manual.delete(key);
     }
     const cfg = getPublicConfig();
-    const key = AUTO && activeCampaign(cfg);
-    if (key && !blocked()) await sendCampaign(key, 'AUTO_CRON', () => activeCampaign(getPublicConfig()) === key);
+    const key = AUTO && !paused() && activeCampaign(cfg);
+    if (key && !blocked()) await sendCampaign(key, 'AUTO_CRON', () => !paused() && activeCampaign(getPublicConfig()) === key);
   } catch (err) {
     console.error('[Campañas] Error en el envío programado:', err.message);
   } finally {
     state.running = false;
   }
+}
+
+// The superadmin pauses or resumes the automatic reminders; pausing also stops a reminder being sent.
+const paused = () => getAllSettings().campaigns_paused === 'true';
+function setPaused(value) {
+  updateSettings({ campaigns_paused: value ? 'true' : 'false' });
+  if (value) state.manual.clear();
+  else setImmediate(tick);
+  return { ok: true, paused: Boolean(value), message: value
+    ? 'Recordatorios en pausa. Las entradas y los avisos de pago se siguen enviando.'
+    : 'Recordatorios reanudados: saldrán a la hora programada a quienes aún no los recibieron.' };
 }
 
 // Manual button: queue the reminder for every buyer who has not received it yet (never twice).
@@ -231,6 +244,7 @@ function status(now = new Date()) {
   const cfg = getPublicConfig();
   return {
     automatic: AUTO,
+    paused: paused(),
     active: activeCampaign(cfg, now),
     sending: state.current,
     queued: [...state.manual],
@@ -249,4 +263,4 @@ function start() {
 
 const onProgress = (fn) => { progressListener = fn; };
 
-module.exports = { start, tick, queueCampaign, forceResend, resendStatus, onProgress, status, schedule, activeCampaign, caracasClock, pendingRecipients, RATE_LIMITED };
+module.exports = { start, tick, queueCampaign, setPaused, forceResend, resendStatus, onProgress, status, schedule, activeCampaign, caracasClock, pendingRecipients, RATE_LIMITED };

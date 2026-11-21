@@ -89,7 +89,7 @@ const ACCESS_STAFF_ROUTES = [
   ['GET', /^\/api\/admin\/session$/],
   ['GET', /^\/api\/admin\/access\/(map|history)$/],
   ['GET', /^\/api\/admin\/access\/tickets\/\d{1,3}\/pdf$/],
-  ['POST', /^\/api\/admin\/access\/tickets\/\d{1,3}\/send-email$/],
+  ['POST', /^\/api\/admin\/access\/tickets\/\d{1,3}\/(send-email|whatsapp)$/],
   ['GET', /^\/api\/admin\/verify-qr\/[^/]+$/],
   ['POST', /^\/api\/admin\/verify-qr\/[^/]+\/checkin$/],
   ['PUT', /^\/api\/admin\/account$/]
@@ -933,6 +933,62 @@ app.post('/api/admin/access/tickets/:number/send-email', ticketRoute(async (req,
   }
 }));
 
+// Public link to one ticket's PDF for a WhatsApp message, signed so it cannot be guessed and valid only
+// while the ticket stays sold to that order (a new QR or a cancellation invalidates it).
+function ticketPdfSignature(order) {
+  const key = getAllSettings().secret_hmac_key || 'entradas';
+  return crypto.createHmac('sha256', key).update(`pdf:${order.id}:${order.verification_token}`).digest('base64url').slice(0, 32);
+}
+app.get('/verify/entrada/:id/:signature', (req, res) => {
+  const order = db.prepare(`SELECT o.* FROM orders o JOIN tickets t ON t.current_order_id = o.id AND t.status = 'SOLD'
+    WHERE o.id = ? AND o.status = 'APPROVED'`).get(Number(req.params.id) || 0);
+  const expected = order?.verification_token && ticketPdfSignature(order);
+  const given = String(req.params.signature || '').replace(/\.pdf$/, '');
+  const filename = /^\/storage\/tickets\/([\w-]+\.pdf)$/.exec(order?.pdf_path || '')?.[1];
+  const file = filename && path.join(ticketsDir, filename);
+  if (!expected || given.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(given), Buffer.from(expected)) || !file || !fs.existsSync(file)) {
+    return res.status(404).type('text/plain').send('Este enlace de entrada no es válido o la entrada cambió. Pide un enlace nuevo al equipo del evento.');
+  }
+  res.setHeader('Cache-Control', 'private, no-store');
+  res.setHeader('X-Robots-Tag', 'noindex');
+  res.setHeader('Content-Disposition', `inline; filename="Entrada-${order.ticket_number}.pdf"`);
+  return res.type('application/pdf').sendFile(file);
+});
+
+// "0414-123.45.67" -> "584141234567"; numbers with country code keep it.
+function whatsappNumber(value) {
+  const raw = String(value || '').trim();
+  let digits = raw.replace(/\D/g, '');
+  if (raw.startsWith('+') || digits.startsWith('58')) return digits.length >= 10 && digits.length <= 15 ? digits : null;
+  if (digits.startsWith('0')) digits = digits.slice(1);
+  return digits.length === 10 ? `58${digits}` : null;
+}
+const twelveHour = (time) => {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(time || ''));
+  return m ? `${Number(m[1]) % 12 || 12}:${m[2]} ${Number(m[1]) >= 12 ? 'PM' : 'AM'}` : time || '';
+};
+
+// WhatsApp message for a sold ticket: the panel opens wa.me with this number and text (link to the PDF).
+app.post('/api/admin/access/tickets/:number/whatsapp', (req, res) => {
+  const number = parseTicketNumber(req.params.number);
+  const order = number && db.prepare(`SELECT o.* FROM tickets t JOIN orders o ON o.id = t.current_order_id
+    WHERE t.ticket_number = ? AND t.status = 'SOLD' AND o.status = 'APPROVED'`).get(number);
+  if (!order?.verification_token || !order.pdf_path) return res.status(404).json({ ok: false, message: 'Esta entrada no tiene un PDF emitido.' });
+  const phone = whatsappNumber(req.body?.phone);
+  if (!phone) return res.status(400).json({ ok: false, field: 'phone', message: 'Escribe un número de WhatsApp válido, por ejemplo 0414-1234567.' });
+  const cfg = getPublicConfig();
+  const link = `${PUBLIC_BASE_URL}/verify/entrada/${order.id}/${ticketPdfSignature(order)}.pdf`;
+  const name = order.buyer_first_name || String(order.buyer_name || '').split(' ')[0];
+  const text = [
+    `Hola ${name}, te enviamos tu entrada #${number} para ${cfg.event_title}.`,
+    `El acceso y registro comienzan a las ${twelveHour(cfg.event_entry_time || '15:00')} en ${cfg.event_location}.`,
+    `Descarga tu entrada en PDF aquí: ${link}`,
+    'Muestra el código QR y tu cédula en el acceso. ¡Te esperamos!'
+  ].join('\n\n');
+  console.log(`[Puerta] ${req.adminUser} preparó el WhatsApp de la entrada #${number}`);
+  return res.json({ ok: true, url: `https://wa.me/${phone}?text=${encodeURIComponent(text)}`, link, text });
+});
+
 // Who checked in each ticket and when, newest first.
 app.get('/api/admin/access/history', (req, res) => {
   const entries = db.prepare(`
@@ -1208,6 +1264,12 @@ app.post('/api/admin/sheets/test', superadminOnly, async (_req, res) => {
 app.post('/api/admin/sheets/sync-all', superadminOnly, async (_req, res) => {
   const result = await googleSheets.syncAll();
   return res.status(result.ok ? 200 : 502).json({ ...result, settings: adminSettings() });
+});
+
+// Pauses or resumes the automatic event reminders (ticket and payment emails always go out).
+app.post('/api/admin/notifications/pause', superadminOnly, (req, res) => {
+  if (typeof req.body?.paused !== 'boolean') return res.status(400).json({ ok: false, message: 'Indica si los recordatorios quedan en pausa.' });
+  return res.json({ ...campaigns.setPaused(req.body.paused), campaigns: campaigns.status() });
 });
 
 // Queues a reminder for the buyers who have not received it; campaigns.js sends it one by one.
