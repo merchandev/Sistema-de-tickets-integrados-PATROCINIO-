@@ -1267,6 +1267,7 @@ function populateMailForm(s) {
 function renderMailAlert() {
   const box = document.getElementById('mail-alert');
   const mode = state.settings?.smtp_delivery_mode;
+  if (!mode) { box.hidden = true; return; }
   const pending = Number(state.undeliveredEmails || 0);
   const waiting = pending ? ` ${pending} aviso${pending === 1 ? ' espera' : 's esperan'} envío.` : '';
   if (mode !== 'smtp') {
@@ -1282,7 +1283,8 @@ function renderMailAlert() {
         <span>${phase}</span>
       </div><button type="button" onclick="retryPendingEmails(this)"${r.sending ? ' disabled' : ''}>${r.sending ? 'Reenviando…' : 'Reenviar ahora'}</button>`;
   }
-  box.hidden = mode === 'smtp' && !pending;
+  // Only in Correos y avisos: the other sections stay clear while the resend works on its own
+  box.hidden = (mode === 'smtp' && !pending) || currentTab !== 'smtp';
   scheduleMailRefresh(mode === 'smtp' && pending > 0);
 }
 
@@ -1681,6 +1683,7 @@ async function updateTicketDemo() {
 }
 
 const ACCESS_STAFF_TABS = ['seats', 'qr', 'history'];
+let currentTab = 'orders';
 function switchTab(tabName) {
   if (!Object.hasOwn(sectionTitles, tabName)) return;
   if (adminSession?.accessOnly && !ACCESS_STAFF_TABS.includes(tabName)) tabName = 'seats';
@@ -1698,6 +1701,8 @@ function switchTab(tabName) {
   if (tabName === 'users') loadUsers();
   if (tabName === 'history') loadAccessHistory();
   if (tabName === 'smtp') loadWaNotice();
+  currentTab = tabName;
+  renderMailAlert();
   if (tabName === 'sponsors') window.loadSponsors?.();
   if (tabName !== 'orders') window.scrollTo({top: 0});
 }
