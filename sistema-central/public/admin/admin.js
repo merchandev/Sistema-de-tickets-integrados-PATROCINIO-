@@ -83,7 +83,23 @@ socket.on('admin:tickets_reset', () => {
   document.getElementById('qr-verification-result').textContent = 'Escanea una entrada o escribe su código para verificarla.';
 });
 
+async function fetchAccessOverview() {
+  try {
+    const res = await fetch('/api/admin/access/map');
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error('No se pudo cargar el mapa');
+    state.tickets = data.tickets;
+    renderSeatsMap();
+    if (!document.getElementById('tab-panel-history').classList.contains('hidden')) loadAccessHistory();
+  } catch (err) {
+    connectionStatus('No se pudo actualizar', true);
+    console.error('Error loading access map:', err);
+  }
+}
+
 async function fetchAdminOverview() {
+  await sessionReady;
+  if (adminSession?.accessOnly) return fetchAccessOverview();
   try {
     const res = await fetch('/api/admin/overview');
     const data = await res.json();
@@ -102,6 +118,7 @@ async function fetchAdminOverview() {
       populateCmsAndSmtpForms();
       cmsPopulated = true;
     }
+    if (!document.getElementById('tab-panel-history').classList.contains('hidden')) loadAccessHistory();
   } catch (err) {
     connectionStatus('No se pudo actualizar', true);
     console.error('Error loading admin overview:', err);
@@ -291,12 +308,14 @@ function renderSeatsMap() {
       subtitle = 'Vendida';
     }
 
+    const scanned = Boolean(t.checked_in_at);
     return `
       <button type="button"
         onclick="inspectSeat('${t.ticket_number}')"
-        class="seat-pill cursor-pointer rounded-lg p-1.5 text-center select-none shadow-sm ${classes}"
-        title="Entrada #${t.ticket_number} (${t.status})" aria-label="Entrada ${t.ticket_number}: ${subtitle}"
+        class="seat-pill cursor-pointer rounded-lg p-1.5 text-center select-none shadow-sm ${classes}${scanned ? ' is-scanned' : ''}"
+        title="Entrada #${t.ticket_number} (${t.status})${scanned ? ' · escaneada' : ''}" aria-label="Entrada ${t.ticket_number}: ${subtitle}${scanned ? ', ya escaneada' : ''}"
       >
+        ${scanned ? '<span class="seat-scanned" aria-hidden="true"></span>' : ''}
         <div class="text-xs font-extrabold leading-none">${t.ticket_number}</div>
         <div class="text-[9px] leading-tight mt-0.5 opacity-90">${subtitle}</div>
       </button>
@@ -304,7 +323,36 @@ function renderSeatsMap() {
   }).join('');
 }
 
+function arrivalLine(t) {
+  if (!t?.checked_in_at) return '';
+  return `<div class="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-xs text-emerald-900"><strong>✓ Escaneada en la entrada</strong> el ${escapeHtml(formatDateTime(t.checked_in_at))}${t.checked_in_by ? ` por <strong>${escapeHtml(t.checked_in_by)}</strong>` : ''}</div>`;
+}
+
+function inspectDoorSeat(ticket) {
+  const status = { AVAILABLE: 'Disponible', LOCKED: 'Reservada', PENDING: 'Pago en verificación', SOLD: 'Vendida' }[ticket.status] || ticket.status;
+  openModal(`Detalle de la entrada #${ticket.ticket_number}`, `
+    <div class="space-y-3">
+      <div class="p-3 rounded-lg bg-slate-100 flex justify-between items-center">
+        <div>
+          <span class="text-xs text-slate-500 uppercase font-bold">Número de entrada</span>
+          <div class="text-2xl font-extrabold text-slate-900">#${ticket.ticket_number}</div>
+        </div>
+        <span class="px-3 py-1 rounded-full text-xs font-bold bg-slate-900 text-white">${escapeHtml(status)}</span>
+      </div>
+      ${ticket.status === 'SOLD' ? `<div class="p-4 rounded-lg border border-slate-200 space-y-1.5 text-xs">
+        <div><strong>Titular:</strong> ${escapeHtml(ticket.buyer_name || '—')}</div>
+        <div><strong>Cédula:</strong> ${escapeHtml(ticket.buyer_cedula || '—')}</div>
+        <div><strong>Origen:</strong> ${sourceBadge(ticket.order_source)}</div>
+      </div>` : ''}
+      ${arrivalLine(ticket) || (ticket.status === 'SOLD' ? '<div class="p-3 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-600">Todavía no se ha escaneado en la entrada.</div>' : '')}
+    </div>`);
+}
+
 function inspectSeat(ticketNumber) {
+  if (adminSession?.accessOnly) {
+    const doorTicket = (state.tickets || []).find(t => t.ticket_number === ticketNumber);
+    return doorTicket && inspectDoorSeat(doorTicket);
+  }
   if (adminSession?.canArbitrateTickets) return openTicketArbitration(ticketNumber);
   const ticket = (state.tickets || []).find(t => t.ticket_number === ticketNumber);
   const order = (state.orders || []).find(o => o.id === ticket?.current_order_id);
@@ -344,6 +392,7 @@ function inspectSeat(ticketNumber) {
       </div>
     `;
   }
+  html += arrivalLine(ticket);
 
   html += `</div>`;
   openModal(`Detalle de la entrada #${ticketNumber}`, html);
@@ -931,14 +980,14 @@ async function verifyQrToken(rawToken, { silent = false } = {}) {
           <span class="text-slate-400 uppercase font-bold block text-[10px]">Cédula de identidad</span>
           <strong class="text-sm font-mono text-slate-900">${escapeHtml(o.buyer_cedula)}</strong>
         </div>
-        <div>
+        ${o.buyer_email !== undefined ? `<div>
           <span class="text-slate-400 uppercase font-bold block text-[10px]">Teléfono / Correo</span>
           <span class="text-slate-800">${escapeHtml(o.buyer_phone)}<br/>${escapeHtml(o.buyer_email)}</span>
         </div>
         <div>
           <span class="text-slate-400 uppercase font-bold block text-[10px]">Pago verificado</span>
           <span class="text-slate-800">Ref: <strong>${escapeHtml(o.payment_reference)}</strong><br/>Banco: ${escapeHtml(o.payment_bank || 'No indicado')}</span>
-        </div>
+        </div>` : ''}
       </div>
 
       <div class="p-3 rounded-xl border border-emerald-200 bg-white space-y-2">
@@ -946,7 +995,7 @@ async function verifyQrToken(rawToken, { silent = false } = {}) {
         <p class="text-xs text-slate-600">La misma entrada incluye las conferencias y el concierto.</p>
         ${
           attendanceRecorded
-            ? `<div class="text-xs text-emerald-800 font-semibold mt-1">✓ Asistencia registrada ${escapeHtml(o.checked_in_at || '')}</div>`
+            ? `<div class="text-xs text-emerald-800 font-semibold mt-1">✓ Asistencia registrada${o.checked_in_at ? ` el ${escapeHtml(formatDateTime(o.checked_in_at))}` : ''}${o.checked_in_by ? ` por ${escapeHtml(o.checked_in_by)}` : ''}</div>`
             : `<button type="button" data-token="${escapeHtml(o.verification_token)}" onclick="checkInAttendee(this)" class="mt-2 w-full py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold">Registrar asistencia</button>`
         }
       </div>
@@ -1240,7 +1289,7 @@ function renderEmailLogs() {
     return;
   }
 
-  tbody.innerHTML = logs.map(l => `
+  tbody.innerHTML = logs.map((l, idx) => `
     <tr class="hover:bg-slate-50">
       <td class="py-2.5 px-3 text-slate-500">${l.created_at}</td>
       <td class="py-2.5 px-3"><span class="px-2 py-0.5 rounded bg-slate-100 font-mono text-[10px] font-bold">${l.type}</span></td>
@@ -1302,6 +1351,7 @@ const sectionTitles = {
   seats: 'Mapa de entradas',
   pdf: 'Diseño de entrada',
   qr: 'Control de acceso',
+  history: 'Historial de acceso',
   cms: 'Evento y contenido',
   smtp: 'Correos y avisos',
   blog: 'Blog · Marketing',
@@ -1350,8 +1400,10 @@ async function updateTicketDemo() {
   }
 }
 
+const ACCESS_STAFF_TABS = ['seats', 'qr', 'history'];
 function switchTab(tabName) {
   if (!Object.hasOwn(sectionTitles, tabName)) return;
+  if (adminSession?.accessOnly && !ACCESS_STAFF_TABS.includes(tabName)) tabName = 'seats';
   document.getElementById('workspace-title').textContent = sectionTitles[tabName];
   document.getElementById('admin-section').value = tabName;
   document.querySelector('.dashboard-main').classList.toggle('focused-tab', tabName !== 'orders');
@@ -1364,6 +1416,7 @@ function switchTab(tabName) {
   if (tabName === 'blog') window.loadMarketingBlog();
   if (tabName === 'pdf') updateTicketDemo();
   if (tabName === 'users') loadUsers();
+  if (tabName === 'history') loadAccessHistory();
   if (tabName === 'sponsors') window.loadSponsors?.();
   if (tabName !== 'orders') window.scrollTo({top: 0});
 }
@@ -1413,7 +1466,8 @@ setInterval(() => {
 
 // Check URL params if redirected from QR scan (/admin/?verifyToken=...)
 window.addEventListener('DOMContentLoaded', async () => {
-  switchTab(window.location.hash.slice(1));
+  await sessionReady;
+  switchTab(window.location.hash.slice(1) || (adminSession?.accessOnly ? 'seats' : ''));
   await fetchAdminOverview();
   const params = new URLSearchParams(window.location.search);
   const verifyToken = params.get('verifyToken');
@@ -1445,7 +1499,7 @@ document.addEventListener('keydown', event => {
 // ACCOUNT: signed-in user, change of own password, sign-out
 // ============================================================================
 
-const roleNames = { superadmin: 'Superadministrador', admin: 'Administrador', initial: 'Cuenta inicial', service: 'Cuenta de scripts' };
+const roleNames = { superadmin: 'Superadministrador', admin: 'Administrador', control: 'Control de acceso', initial: 'Cuenta inicial', service: 'Cuenta de scripts' };
 let adminSession = null;
 let panelUsers = new Map();
 
@@ -1462,7 +1516,62 @@ async function loadSession() {
     // The initial account can still change its user name as well; named users change their password
     document.getElementById('account-change').textContent = data.named ? 'Cambiar contraseña' : 'Cambiar usuario y contraseña';
     applySettingsPermission(Boolean(data.canEditSettings));
+    if (data.accessOnly) applyAccessRole();
   } catch (_) {}
+}
+
+// Access-control staff: only the ticket map, the door scanner and the history
+function applyAccessRole() {
+  document.body.classList.add('access-only');
+  // Other sections stay in the page (other scripts use them) but hidden; switchTab sends them to the map
+  for (const tab of Object.keys(sectionTitles)) {
+    if (ACCESS_STAFF_TABS.includes(tab)) continue;
+    document.getElementById(`tab-btn-${tab}`).hidden = true;
+    document.querySelector(`#admin-section option[value="${tab}"]`)?.remove();
+  }
+  document.querySelector('.admin-brand span small')?.replaceChildren('Control de acceso');
+}
+
+// ============================================================================
+// ACCESS HISTORY
+// ============================================================================
+let accessHistory = [];
+async function loadAccessHistory() {
+  try {
+    const res = await fetch('/api/admin/access/history');
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.message);
+    accessHistory = data.entries;
+    renderAccessHistory();
+  } catch (err) {
+    document.getElementById('history-body').innerHTML = `<tr><td colspan="6" class="history-empty">No se pudo cargar el historial. ${escapeHtml(err.message || '')}</td></tr>`;
+  }
+}
+
+function renderAccessHistory() {
+  const body = document.getElementById('history-body');
+  if (!body) return;
+  const query = (document.getElementById('history-search').value || '').trim().toLowerCase();
+  const rows = accessHistory.filter(e => !query || [e.ticket_number, e.buyer_name, e.buyer_cedula, e.checked_in_by].some(v => String(v || '').toLowerCase().includes(query)));
+  const sold = (state.tickets || []).filter(t => t.status === 'SOLD').length;
+  document.getElementById('history-count').textContent = `${accessHistory.length} escaneada${accessHistory.length === 1 ? '' : 's'}${sold ? ` de ${sold} vendidas` : ''}`;
+  if (!rows.length) {
+    body.innerHTML = `<tr><td colspan="6" class="history-empty">${accessHistory.length ? 'Ningún registro coincide con la búsqueda.' : 'Todavía no se ha escaneado ninguna entrada.'}</td></tr>`;
+    return;
+  }
+  body.innerHTML = rows.map(e => {
+    const when = parseDbDate(e.checked_in_at);
+    const date = when ? when.toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+    const time = when ? when.toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—';
+    return `<tr>
+      <td data-label="Entrada"><strong>#${escapeHtml(e.ticket_number)}</strong></td>
+      <td data-label="Titular">${escapeHtml(e.buyer_name || '—')}</td>
+      <td data-label="Cédula" class="font-mono">${escapeHtml(e.buyer_cedula || '—')}</td>
+      <td data-label="Fecha">${escapeHtml(date)}</td>
+      <td data-label="Hora">${escapeHtml(time)}</td>
+      <td data-label="Escaneada por">${e.checked_in_by ? escapeHtml(e.checked_in_by) : '<span class="history-muted">No registrado</span>'}</td>
+    </tr>`;
+  }).join('');
 }
 
 // Event data, Pago Móvil, schedule, conditions, mail account and mass notices: admins can only read them
@@ -1660,7 +1769,7 @@ async function createAdminUser(event) {
     const res = await fetch('/api/admin/users', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password: form.elements.password.value })
+      body: JSON.stringify({ email, password: form.elements.password.value, role: form.elements.role.value })
     });
     const data = await res.json();
     if (!data.ok) return show(data.message, data.field);
@@ -1750,4 +1859,4 @@ document.getElementById('account-btn').addEventListener('click', (event) => {
 document.addEventListener('click', (event) => {
   if (!event.target.closest('.account')) closeAccountMenu();
 });
-loadSession();
+const sessionReady = loadSession();

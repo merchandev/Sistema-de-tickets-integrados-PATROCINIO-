@@ -374,6 +374,47 @@ function parseMail(file) {
     const noticeWorker = await api('GET', '/admin/avisos-sw.js', { cookie: sup.cookie });
     check('Service worker de los avisos del panel', noticeWorker.status === 200 && /javascript/.test(noticeWorker.headers.get('content-type') || '') && /notificationclick/.test(noticeWorker.data.toString()));
 
+    // --- 7b. Access-control staff: ticket map, door scanner and scan history only ---
+    const ctlPass = 'control-' + adminPass;
+    const ctlCreate = await api('POST', '/api/admin/users', { cookie: sup.cookie, json: { email: 'control1@marketing.test', password: ctlPass, role: 'control' } });
+    check('El superadministrador crea un usuario de control de acceso', ctlCreate.status === 201 && ctlCreate.data.user.role === 'control', ctlCreate.data.message);
+    check('El panel no crea otro superadministrador', (await api('POST', '/api/admin/users', { cookie: sup.cookie, json: { email: 'otro@marketing.test', password: ctlPass, role: 'superadmin' } })).status === 400);
+    const ctl = await signIn('control1@marketing.test', ctlPass);
+    const ctlSession = (await api('GET', '/api/admin/session', { cookie: ctl.cookie })).data;
+    check('Sesión de control de acceso', ctl.status === 200 && ctlSession.role === 'control' && ctlSession.accessOnly === true && ctlSession.canEditSettings === false && ctlSession.canManageUsers === false);
+    const blocked = await Promise.all([
+      ['GET', '/api/admin/overview'], ['GET', '/api/admin/users'], ['PUT', '/api/admin/settings'], ['POST', '/api/admin/orders/1/approve'],
+      ['POST', '/api/admin/orders/1/reject'], ['GET', '/api/admin/sponsors'], ['POST', '/api/admin/blog/media'], ['GET', '/api/admin/tickets/demo.pdf'],
+      ['GET', '/api/admin/orders/1/proof-preview'], ['GET', '/storage/uploads/captura.png'], ['POST', '/api/admin/users']
+    ].map(([method, url]) => api(method, url, { cookie: ctl.cookie, json: method === 'GET' ? undefined : {} })));
+    check('Control de acceso no entra a pagos, comprobantes, usuarios, configuración, blog ni patrocinio', blocked.every(r => r.status === 403), blocked.map(r => r.status).join(','));
+    check('Control de acceso carga el panel', (await api('GET', '/admin/', { cookie: ctl.cookie })).status === 200);
+    const doorLock = await api('POST', '/api/public/tickets/lock', { json: { session_id: 'sess_e2e_door', source_web: 'pagina-web-1' } });
+    const doorNumber = doorLock.data.ticket?.ticket_number;
+    const doorOrder = await api('POST', '/api/public/orders', { form: buyerForm({ ticket_number: doorNumber, session_id: 'sess_e2e_door', buyer_first_name: 'Carla', buyer_email: 'puerta@prueba.test', submission_id: 'envio-e2e-door' }) });
+    const doorApproved = await api('POST', `/api/admin/orders/${doorOrder.data.order?.id}/approve`, { admin: true, json: {} });
+    const doorToken = doorApproved.data.order?.verification_token;
+    const doorUrl = `/api/admin/verify-qr/${encodeURIComponent(doorToken)}`;
+    const doorVerify = await api('GET', doorUrl, { cookie: ctl.cookie });
+    const shown = doorVerify.data.order || {};
+    check('Control de acceso verifica el QR sin ver contacto ni pago', doorVerify.data.valid === true && Boolean(shown.buyer_cedula) &&
+      !('buyer_email' in shown) && !('buyer_phone' in shown) && !('payment_reference' in shown) && !('screenshot_path' in shown), JSON.stringify(Object.keys(shown)));
+    const doorCheckIn = await api('POST', doorUrl + '/checkin', { cookie: ctl.cookie });
+    const secondScan = await api('POST', doorUrl + '/checkin', { cookie: adm.cookie });
+    check('Registra quién escaneó la entrada y avisa si se repite', doorCheckIn.status === 200 && doorCheckIn.data.order.checked_in_by === 'control1@marketing.test' &&
+      secondScan.status === 409 && /control1@marketing\.test/.test(secondScan.data.message), secondScan.data.message);
+    const doorMap = (await api('GET', '/api/admin/access/map', { cookie: ctl.cookie })).data;
+    const mapped = doorMap.tickets?.find(t => t.ticket_number === doorNumber);
+    check('El mapa de control marca la entrada escaneada sin datos de pago', Boolean(mapped?.checked_in_at) && mapped.checked_in_by === 'control1@marketing.test' &&
+      doorMap.tickets.every(t => !('current_order_id' in t) && !('buyer_email' in t)) && doorMap.counts.checkedIn >= 1);
+    const accessHistory = (await api('GET', '/api/admin/access/history', { cookie: ctl.cookie })).data.entries || [];
+    check('El historial muestra entrada, fecha y hora, y quién escaneó', accessHistory[0]?.ticket_number === doorNumber &&
+      accessHistory[0].checked_in_by === 'control1@marketing.test' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(accessHistory[0].checked_in_at) && accessHistory.some(e => e.ticket_number === '001'));
+    const admTickets = (await api('GET', '/api/admin/overview', { cookie: adm.cookie })).data.tickets;
+    check('Los administradores también ven la entrada escaneada', admTickets.find(t => t.ticket_number === doorNumber)?.checked_in_by === 'control1@marketing.test');
+    check('Control de acceso cambia su propia contraseña', (await api('PUT', '/api/admin/account', { cookie: ctl.cookie, json: { current_password: ctlPass, new_password: ctlPass + '-2' } })).status === 200);
+    check('La lista de usuarios muestra el rol de control', (await api('GET', '/api/admin/users', { cookie: sup.cookie })).data.users.some(u => u.email === 'control1@marketing.test' && u.role === 'control'));
+
     // --- 8. Sponsors carousel: one list per site, mixed on both or shown separately ---
     const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
     const logos = (names, type = 'image/png', data = png) => {

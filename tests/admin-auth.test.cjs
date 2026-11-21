@@ -142,9 +142,21 @@ test("only the superadmin creates, resets and deletes admins; admins only read t
   auth.createUserRoute(as(superCookie, { body: { email: "nuevo@ejemplo.test", password: "corta" } }), res);
   assert.equal(res.statusCode, 400);
   res = fakeRes();
+  // The panel never creates a superadmin: only admins and access-control staff
   auth.createUserRoute(as(superCookie, { body: { email: "nuevo@ejemplo.test", password: "clave-nuevo-123", role: "superadmin" } }), res);
+  assert.equal(res.statusCode, 400);
+  res = fakeRes();
+  auth.createUserRoute(as(superCookie, { body: { email: "nuevo@ejemplo.test", password: "clave-nuevo-123" } }), res);
   assert.equal(res.statusCode, 201);
   assert.equal(res.body.user.role, "admin");
+  res = fakeRes();
+  auth.createUserRoute(as(superCookie, { body: { email: "puerta@ejemplo.test", password: "clave-puerta-123", role: "control" } }), res);
+  assert.equal(res.statusCode, 201);
+  assert.equal(res.body.user.role, "control");
+  const doorId = res.body.user.id;
+  res = fakeRes();
+  auth.deleteUserRoute(as(superCookie, { params: { id: String(doorId) } }), res);
+  assert.equal(res.body.ok, true);
   res = fakeRes();
   auth.createUserRoute(as(superCookie, { body: { email: "NUEVO@ejemplo.test", password: "clave-nuevo-123" } }), res);
   assert.equal(res.statusCode, 409);

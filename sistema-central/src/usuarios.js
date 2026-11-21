@@ -1,6 +1,6 @@
 // Dashboard users from the server console (inside the central container):
 //   node --no-warnings src/usuarios.js lista
-//   node --no-warnings src/usuarios.js crear <correo> <superadmin|admin>
+//   node --no-warnings src/usuarios.js crear <correo> <superadmin|admin|control>
 //   node --no-warnings src/usuarios.js contrasena <correo>
 //   node --no-warnings src/usuarios.js eliminar <correo>
 // Passwords are never taken from arguments: they come from standard input, either piped or typed
@@ -50,7 +50,7 @@ async function readPassword(email) {
 }
 
 const findUser = (email) => db.prepare('SELECT id, email, role FROM admin_users WHERE email = ?').get(auth.normalizeEmail(email));
-const USAGE = 'Uso: usuarios.js lista | crear <correo> <superadmin|admin> | contrasena <correo> | eliminar <correo>';
+const USAGE = 'Uso: usuarios.js lista | crear <correo> <superadmin|admin|control> | contrasena <correo> | eliminar <correo>';
 
 async function main([command, email, role]) {
   switch (command) {

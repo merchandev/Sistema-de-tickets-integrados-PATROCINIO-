@@ -1,8 +1,9 @@
 // Sign-in for the dashboard shared by both sites.
-// Named users (admin_users): one superadmin, who cannot be deleted, and any number of admins. Admins run
-// the daily work (payments, access control, blog, sponsors) and change their own password; the
-// superadmin also manages users and the sensitive configuration (see server.js). Passwords are salted
-// scrypt hashes.
+// Named users (admin_users): one superadmin, who cannot be deleted, any number of admins and of
+// access-control staff. Admins run the daily work (payments, access control, blog, sponsors) and change
+// their own password; the superadmin also manages users and the sensitive configuration (see server.js).
+// Access-control staff ("control") only see the ticket map, check people in at the door and read the
+// scan history. Passwords are salted scrypt hashes.
 // Until the first user exists, the initial account still signs in: the one saved from the panel or,
 // until one is saved, ADMIN_USER / ADMIN_PASSWORD. Once users exist, ADMIN_USER / ADMIN_PASSWORD only
 // work over HTTP Basic, for the verification scripts, and never on the sign-in page.
@@ -14,7 +15,7 @@ const COOKIE = 'admin_session';
 const SESSION_MS = 12 * 60 * 60 * 1000;
 const LOCKOUT_MS = 15 * 60 * 1000;
 const MAX_FAILURES = 8;
-const ROLES = { superadmin: 'Superadministrador', admin: 'Administrador' };
+const ROLES = { superadmin: 'Superadministrador', admin: 'Administrador', control: 'Control de acceso' };
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS admin_sessions (
@@ -26,7 +27,7 @@ db.exec(`
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     email TEXT NOT NULL UNIQUE COLLATE NOCASE,
     password_hash TEXT NOT NULL,
-    role TEXT NOT NULL CHECK (role IN ('superadmin', 'admin')),
+    role TEXT NOT NULL CHECK (role IN ('superadmin', 'admin', 'control')),
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by TEXT,
     last_login_at TEXT
@@ -39,6 +40,39 @@ db.exec(`
     WHEN OLD.role = 'superadmin' AND NEW.role <> 'superadmin'
     BEGIN SELECT RAISE(ABORT, 'El superadministrador no puede perder su rol.'); END;
 `);
+// Tables created before the access-control role only accept superadmin and admin: rebuild them with the
+// same rows, keeping ids so open sessions stay valid, and restore the superadmin protections.
+if (!/'control'/.test(db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'admin_users'").get().sql)) {
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    db.exec(`
+      CREATE TABLE admin_users_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        email TEXT NOT NULL UNIQUE COLLATE NOCASE,
+        password_hash TEXT NOT NULL,
+        role TEXT NOT NULL CHECK (role IN ('superadmin', 'admin', 'control')),
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        created_by TEXT,
+        last_login_at TEXT
+      );
+      INSERT INTO admin_users_new (id, email, password_hash, role, created_at, created_by, last_login_at)
+        SELECT id, email, password_hash, role, created_at, created_by, last_login_at FROM admin_users;
+      DROP TABLE admin_users;
+      ALTER TABLE admin_users_new RENAME TO admin_users;
+      CREATE UNIQUE INDEX admin_users_single_superadmin ON admin_users(role) WHERE role = 'superadmin';
+      CREATE TRIGGER admin_users_keep_superadmin BEFORE DELETE ON admin_users
+        WHEN OLD.role = 'superadmin'
+        BEGIN SELECT RAISE(ABORT, 'El superadministrador no se puede eliminar.'); END;
+      CREATE TRIGGER admin_users_keep_superadmin_role BEFORE UPDATE OF role ON admin_users
+        WHEN OLD.role = 'superadmin' AND NEW.role <> 'superadmin'
+        BEGIN SELECT RAISE(ABORT, 'El superadministrador no puede perder su rol.'); END;
+    `);
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
+}
 if (!db.prepare("SELECT 1 FROM pragma_table_info('admin_sessions') WHERE name = 'user_id'").get()) {
   db.exec('ALTER TABLE admin_sessions ADD COLUMN user_id INTEGER');
 }
@@ -228,7 +262,7 @@ function changeAccount(req, res) {
 function createUser({ email, password, role = 'admin', createdBy = null }) {
   const address = normalizeEmail(email);
   if (!validEmail(address)) return { ok: false, status: 400, field: 'email', message: 'Escribe un correo válido.' };
-  if (!Object.hasOwn(ROLES, role)) return { ok: false, status: 400, message: 'El rol debe ser superadmin o admin.' };
+  if (!Object.hasOwn(ROLES, role)) return { ok: false, status: 400, message: 'El rol debe ser superadmin, admin o control.' };
   const problem = passwordProblem(password);
   if (problem) return { ok: false, status: 400, field: 'password', message: problem };
   if (db.prepare('SELECT 1 FROM admin_users WHERE email = ?').get(address)) return { ok: false, status: 409, field: 'email', message: `Ya existe un usuario con el correo ${address}.` };
@@ -279,10 +313,13 @@ function listUsersRoute(req, res) {
 }
 function createUserRoute(req, res) {
   if (!namedUser(req, res)) return;
-  const { email, password } = req.body || {};
-  const result = createUser({ email, password, role: 'admin', createdBy: req.admin.email });
+  const { email, password, role = 'admin' } = req.body || {};
+  // The panel creates admins and access-control staff; the superadmin is created from the console.
+  if (!['admin', 'control'].includes(role)) return fail(res, { status: 400, ok: false, field: 'role', message: 'Elige si el usuario es administrador o de control de acceso.' });
+  const result = createUser({ email, password, role, createdBy: req.admin.email });
   if (!result.ok) return fail(res, result);
-  return res.status(201).json({ ok: true, user: result.user, message: `Se creó el administrador ${result.user.email}.` });
+  const kind = role === 'control' ? 'el usuario de control de acceso' : 'el administrador';
+  return res.status(201).json({ ok: true, user: result.user, message: `Se creó ${kind} ${result.user.email}.` });
 }
 function resetPasswordRoute(req, res) {
   if (!namedUser(req, res)) return;

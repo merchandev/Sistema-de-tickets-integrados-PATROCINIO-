@@ -108,7 +108,9 @@ for (const [column, type] of [
   ['buyer_comment', 'TEXT'],
   ['checked_in_at', 'TEXT'],
   // Key the buy widget keeps for one purchase attempt, so a resent form returns the same order.
-  ['submission_id', 'TEXT']
+  ['submission_id', 'TEXT'],
+  // Panel user who registered the arrival at the door
+  ['checked_in_by', 'TEXT']
 ]) {
   if (!db.prepare('PRAGMA table_info(orders)').all().some(c => c.name === column)) db.exec(`ALTER TABLE orders ADD COLUMN ${column} ${type}`);
 }
@@ -834,9 +836,12 @@ function getAllTicketsForAdmin() {
   releaseExpiredLocks();
   const now = Date.now();
   const rows = db.prepare(`
-    SELECT ticket_number, numeric_id, status, locked_by_source, locked_until, current_order_id
-    FROM tickets
-    ORDER BY numeric_id ASC
+    SELECT t.ticket_number, t.numeric_id, t.status, t.locked_by_source, t.locked_until, t.current_order_id,
+      o.checked_in_at, o.checked_in_by, o.checked_in_conference, o.checked_in_concert,
+      o.buyer_name, o.buyer_cedula, o.source_web
+    FROM tickets t
+    LEFT JOIN orders o ON o.id = t.current_order_id AND t.status IN ('PENDING', 'SOLD')
+    ORDER BY t.numeric_id ASC
   `).all();
 
   return {
@@ -848,6 +853,12 @@ function getAllTicketsForAdmin() {
       locked_by_source: r.locked_by_source,
       current_order_id: r.current_order_id,
       locked_until: r.status === 'LOCKED' ? r.locked_until : null,
+      // Arrival at the door (green mark on the map), with who registered it
+      checked_in_at: r.status === 'SOLD' ? (r.checked_in_at || null) : null,
+      checked_in_by: r.status === 'SOLD' ? (r.checked_in_by || null) : null,
+      buyer_name: r.buyer_name || null,
+      buyer_cedula: r.buyer_cedula || null,
+      order_source: r.source_web || null,
       remaining_seconds: r.status === 'LOCKED' && r.locked_until
         ? Math.max(0, Math.ceil((r.locked_until - now) / 1000))
         : 0

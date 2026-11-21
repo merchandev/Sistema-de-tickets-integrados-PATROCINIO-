@@ -26,6 +26,7 @@
       <button type="button" onclick="switchTab('seats')" id="tab-btn-seats" class="tab-btn"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h6v6H4z M14 4h6v6h-6z M4 14h6v6H4z M14 14h6v6h-6z"/></svg> Mapa de entradas</button>
       <button type="button" onclick="switchTab('pdf')" id="tab-btn-pdf" class="tab-btn"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6z M14 3v5h4 M9 13h6 M9 17h6"/></svg> Diseño de entrada</button>
       <button type="button" onclick="switchTab('qr')" id="tab-btn-qr" class="tab-btn"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5 M15 4h5v5 M20 15v5h-5 M9 20H4v-5 M9 9h6v6H9z"/></svg> Control de acceso</button>
+      <button type="button" onclick="switchTab('history')" id="tab-btn-history" class="tab-btn"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 7v5l3 2 M3.5 12a8.5 8.5 0 1 0 2.5-6 M3 4v4h4"/></svg> Historial</button>
       <button type="button" onclick="switchTab('cms')" id="tab-btn-cms" class="tab-btn"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v14H4z M8 3v6 M16 3v6 M4 11h16"/></svg> Evento y contenido</button>
       <button type="button" onclick="switchTab('smtp')" id="tab-btn-smtp" class="tab-btn"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18v14H3z M3 6l9 7 9-7"/></svg> Correos y avisos</button>
       <button type="button" onclick="switchTab('blog')" id="tab-btn-blog" class="tab-btn"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v16H5z M8 8h8 M8 12h8 M8 16h5"/></svg> Blog · Marketing</button>
@@ -38,6 +39,7 @@
       <option value="seats">Mapa de entradas</option>
       <option value="pdf">Diseño de entrada</option>
       <option value="qr">Control de acceso</option>
+      <option value="history">Historial</option>
       <option value="cms">Evento y contenido</option>
       <option value="smtp">Correos y avisos</option>
       <option value="blog">Blog · Marketing</option>
@@ -230,9 +232,33 @@
             <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-amber-500 inline-block"></span> Bloqueada (3 min)</span>
             <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-blue-600 inline-block"></span> Pago en verificación</span>
             <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-slate-800 inline-block"></span> Vendida (PDF Emitido)</span>
+            <span class="flex items-center gap-1.5"><span class="seat-scanned-legend" aria-hidden="true"></span> Escaneada en la entrada</span>
           </div>
         </div>
         <div id="admin-seats-grid" class="grid grid-cols-5 sm:grid-cols-10 md:grid-cols-15 lg:grid-cols-25 gap-1.5"></div>
+      </div>
+    </section>
+
+    <!-- ACCESS HISTORY: who checked in each ticket and when -->
+    <section id="tab-panel-history" class="hidden space-y-4" aria-labelledby="history-title">
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h2 id="history-title" class="text-lg font-bold text-slate-900">Historial de acceso</h2>
+            <p class="text-xs text-slate-500">Cada entrada escaneada en la puerta, con la fecha, la hora y el usuario que registró el ingreso.</p>
+          </div>
+          <div class="history-tools">
+            <span id="history-count" class="history-count">—</span>
+            <input id="history-search" type="search" placeholder="Buscar entrada, nombre, cédula o usuario" aria-label="Buscar en el historial" oninput="renderAccessHistory()" />
+            <button type="button" class="history-refresh" onclick="loadAccessHistory()">Actualizar</button>
+          </div>
+        </div>
+        <div class="history-table-wrap">
+          <table class="history-table">
+            <thead><tr><th scope="col">Entrada</th><th scope="col">Titular</th><th scope="col">Cédula</th><th scope="col">Fecha</th><th scope="col">Hora</th><th scope="col">Escaneada por</th></tr></thead>
+            <tbody id="history-body"><tr><td colspan="6" class="history-empty">Cargando…</td></tr></tbody>
+          </table>
+        </div>
       </div>
     </section>
 
@@ -642,7 +668,7 @@
     <section id="tab-panel-users" class="hidden" aria-labelledby="users-title">
       <header class="demo-heading">
         <h1 id="users-title">Usuarios del panel</h1>
-        <p>Los administradores gestionan pagos, control de acceso, blog y patrocinio, y cambian su propia contraseña. Solo el superadministrador crea, cambia o elimina usuarios y edita la configuración del evento y de los correos. El superadministrador no se puede eliminar.</p>
+        <p>Los administradores gestionan pagos, control de acceso, blog y patrocinio, y cambian su propia contraseña. Los usuarios de control de acceso solo ven el mapa de entradas, escanean en la puerta y consultan el historial. Solo el superadministrador crea, cambia o elimina usuarios y edita la configuración del evento y de los correos. El superadministrador no se puede eliminar.</p>
       </header>
       <div class="users-grid">
         <div class="users-card">
@@ -651,7 +677,13 @@
           <p id="users-message" class="users-message" role="status"></p>
         </div>
         <form id="user-create-form" class="users-card account-form" onsubmit="createAdminUser(event)" novalidate hidden>
-          <h2>Agregar administrador</h2>
+          <h2>Agregar usuario</h2>
+          <label for="user-create-role">Tipo de usuario
+            <select id="user-create-role" name="role">
+              <option value="admin">Administrador</option>
+              <option value="control">Control de acceso (mapa, escáner e historial)</option>
+            </select>
+          </label>
           <label for="user-create-email">Correo
             <input id="user-create-email" name="email" type="email" autocomplete="off" autocapitalize="none" spellcheck="false" required />
           </label>
@@ -662,7 +694,7 @@
             <input id="user-create-confirm" name="confirm" type="password" autocomplete="new-password" minlength="8" required />
           </label>
           <p id="user-create-error" class="od-warning" role="alert" hidden></p>
-          <button type="submit" id="user-create-save" class="admin-primary">Crear administrador</button>
+          <button type="submit" id="user-create-save" class="admin-primary">Crear usuario</button>
         </form>
         <p id="users-initial-note" class="users-card users-note" hidden>Estás usando la cuenta inicial porque todavía no hay usuarios. Crea el superadministrador desde la consola del servidor; al hacerlo, la cuenta inicial deja de funcionar en el login.</p>
       </div>
@@ -718,7 +750,7 @@
 
   <script src="/admin/blog-turndown.js"></script>
   <script src="/admin/blog.js?v=seo-1"></script>
-  <script src="/admin/admin.js?v=bank-reconciliation"></script>
+  <script src="/admin/admin.js?v=access-control"></script>
   <script src="/admin/sponsors.js"></script>
   <script src="/admin/hoja-google.js"></script>
 </body>

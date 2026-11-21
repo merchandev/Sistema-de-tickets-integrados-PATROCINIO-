@@ -82,6 +82,35 @@ app.get('/admin/brands/espressivo-venezuela.png', (_req, res) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'admin', 'brands', 'espressivo-venezuela.png'));
 });
 app.use(['/admin', '/api/admin', '/storage'], adminAuth.requireAdmin);
+
+// Access-control staff only load the panel, see the ticket map, check people in at the door, read the
+// scan history and change their own password. Everything else (payments, buyer contact data, proofs,
+// settings, mail, blog, sponsors, users) answers 403 for them.
+const ACCESS_STAFF_ROUTES = [
+  ['GET', /^\/api\/admin\/session$/],
+  ['GET', /^\/api\/admin\/access\/(map|history)$/],
+  ['GET', /^\/api\/admin\/verify-qr\/[^/]+$/],
+  ['POST', /^\/api\/admin\/verify-qr\/[^/]+\/checkin$/],
+  ['PUT', /^\/api\/admin\/account$/]
+];
+const isAccessStaff = (req) => req.admin?.role === 'control';
+app.use(['/admin', '/api/admin', '/storage'], (req, res, next) => {
+  if (!isAccessStaff(req)) return next();
+  const route = req.originalUrl.split('?')[0];
+  const panelFile = req.method === 'GET' && route.startsWith('/admin') && !route.startsWith('/admin/pdfjs');
+  if (panelFile || ACCESS_STAFF_ROUTES.some(([method, pattern]) => method === req.method && pattern.test(route))) return next();
+  return res.status(403).json({ ok: false, message: 'Tu usuario solo tiene acceso al mapa de entradas, al control de acceso y al historial.' });
+});
+
+// What the door needs to identify the holder: no contact data, payment or proof.
+function doorView(order) {
+  if (!order) return order;
+  const { id, ticket_number, status, buyer_name, buyer_first_name, buyer_last_name, buyer_cedula, source_web,
+    verification_token, checked_in_at, checked_in_by, checked_in_conference, checked_in_concert } = order;
+  return { id, ticket_number, status, buyer_name, buyer_first_name, buyer_last_name, buyer_cedula, source_web,
+    verification_token, checked_in_at, checked_in_by, checked_in_conference, checked_in_concert };
+}
+const orderFor = (req, order) => (isAccessStaff(req) ? doorView(order) : order);
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
@@ -707,7 +736,7 @@ app.get('/api/admin/verify-qr/:rawToken', (req, res) => {
         ok: false,
         valid: false,
         token,
-        order,
+        order: orderFor(req, order),
         message: `⚠️ ENTRADA NO ACTIVA: La orden asociada a este token tiene estado "${order.status}".`
       });
     }
@@ -717,7 +746,7 @@ app.get('/api/admin/verify-qr/:rawToken', (req, res) => {
       valid: true,
       token,
       message: `✅ ENTRADA AUTÉNTICA Y VERIFICADA (#${order.ticket_number}) - Titular: ${order.buyer_name} (C.I. ${order.buyer_cedula})`,
-      order
+      order: orderFor(req, order)
     });
   } catch (err) {
     return res.status(500).json({ ok: false, valid: false, message: err.message });
@@ -735,21 +764,21 @@ app.post('/api/admin/verify-qr/:rawToken/checkin', (req, res) => {
     }
 
     const updated = db.prepare(`
-      UPDATE orders SET checked_in_at = datetime('now')
+      UPDATE orders SET checked_in_at = datetime('now'), checked_in_by = ?
       WHERE verification_token = ? AND status = 'APPROVED'
         AND checked_in_at IS NULL
         AND COALESCE(checked_in_conference, 0) = 0
         AND COALESCE(checked_in_concert, 0) = 0
       RETURNING *
-    `).get(token);
+    `).get(req.adminUser || 'panel', token);
     if (!updated) {
       const order = db.prepare("SELECT * FROM orders WHERE verification_token = ? AND status = 'APPROVED'").get(token);
       if (!order) return res.status(404).json({ ok: false, message: 'Token QR no válido.' });
       return res.status(409).json({
         ok: false,
         alreadyCheckedIn: true,
-        message: `La asistencia para la entrada #${order.ticket_number} ya está registrada.`,
-        order
+        message: `La asistencia para la entrada #${order.ticket_number} ya está registrada${order.checked_in_by ? ` por ${order.checked_in_by}` : ''}.`,
+        order: orderFor(req, order)
       });
     }
 
@@ -758,7 +787,7 @@ app.post('/api/admin/verify-qr/:rawToken/checkin', (req, res) => {
     return res.json({
       ok: true,
       message: `Asistencia registrada para ${updated.buyer_name} (entrada #${updated.ticket_number}).`,
-      order: updated
+      order: orderFor(req, updated)
     });
   } catch (err) {
     return res.status(500).json({ ok: false, message: err.message });
@@ -820,8 +849,32 @@ app.get('/api/admin/session', (req, res) => res.json({
   canResetTickets: canResetTickets(req),
   canArbitrateTickets: canArbitrateTickets(req),
   canEditSettings: canEditSettings(req),
-  canManageUsers: req.admin.role === 'superadmin'
+  canManageUsers: req.admin.role === 'superadmin',
+  accessOnly: isAccessStaff(req)
 }));
+
+// Ticket map for the door: status of every ticket and, for sold ones, holder and arrival.
+app.get('/api/admin/access/map', (req, res) => {
+  const { serverTime, tickets } = getAllTicketsForAdmin();
+  const safe = tickets.map(t => ({
+    ticket_number: t.ticket_number, status: t.status, locked_until: t.locked_until, remaining_seconds: t.remaining_seconds,
+    locked_by_source: t.locked_by_source, checked_in_at: t.checked_in_at, checked_in_by: t.checked_in_by,
+    buyer_name: t.status === 'SOLD' ? t.buyer_name : null, buyer_cedula: t.status === 'SOLD' ? t.buyer_cedula : null,
+    order_source: t.status === 'SOLD' ? t.order_source : null
+  }));
+  const checkedIn = safe.filter(t => t.checked_in_at).length;
+  res.json({ ok: true, serverTime, tickets: safe, counts: { sold: safe.filter(t => t.status === 'SOLD').length, checkedIn } });
+});
+
+// Who checked in each ticket and when, newest first.
+app.get('/api/admin/access/history', (req, res) => {
+  const entries = db.prepare(`
+    SELECT ticket_number, buyer_name, buyer_cedula, source_web, checked_in_at, checked_in_by
+    FROM orders WHERE status = 'APPROVED' AND checked_in_at IS NOT NULL
+    ORDER BY checked_in_at DESC, id DESC
+  `).all();
+  res.json({ ok: true, entries });
+});
 
 function requireTicketArbitration(req, res, next) {
   if (!canArbitrateTickets(req)) return res.status(403).json({ ok: false, message: 'El arbitraje de entradas requiere una sesión de superadministrador.' });
