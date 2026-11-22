@@ -592,7 +592,7 @@ function renderArbitrationForm(container, endpoint, number, { order, revision },
   const [first, ...last] = (order?.buyer_name || '').trim().split(/\s+/);
   const defaults = { buyer_first_name: first, buyer_last_name: last.join(' ') };
   const input = (name, label, type = 'text') => `<label>${label}<input name="${name}" type="${type}" value="${escapeHtml(order?.[name] || defaults[name])}" required></label>`;
-  container.innerHTML = `<form class="od-reject-form arbitration-form">
+  container.innerHTML = `<form class="od-reject-form arbitration-form" novalidate>
     <h5>${label}</h5><p class="od-muted">${description}</p>
     ${action === 'assist' || action === 'edit' ? `<div class="od-grid">
       ${input('buyer_first_name', 'Nombre')}${input('buyer_last_name', 'Apellido')}
@@ -603,7 +603,7 @@ function renderArbitrationForm(container, endpoint, number, { order, revision },
       <label>Comprobante ${action === 'edit' ? '(opcional)' : ''}<input name="screenshot" type="file" accept=".png,.jpg,.jpeg,.heic,image/png,image/jpeg,image/heic" ${action === 'assist' ? 'required' : ''}></label>
       ${order?.report_kind === 'REPORT' ? `<label>Comentario del reporte<textarea name="buyer_comment" rows="2" maxlength="500">${escapeHtml(order.buyer_comment)}</textarea></label>` : ''}
     </div>` : ''}
-    <label>Motivo de la intervención<textarea name="reason" rows="2" minlength="3" maxlength="500" required></textarea></label>
+    <label>Motivo de la intervención<textarea name="reason" rows="2" minlength="3" maxlength="500" required>${action === 'assist' ? 'Compra asistida desde el mapa' : ''}</textarea></label>
     ${action === 'cancel' ? `<label>Escribe ANULAR ${number} para confirmar<input name="confirmation" required autocomplete="off"></label>` : ''}
     <p class="od-muted" role="status"></p>
     <div class="od-actions"><button type="submit" class="${action === 'cancel' ? 'od-reject' : 'od-approve'}">${label}</button><button type="button" class="od-cancel" data-dismiss>Volver</button></div>
@@ -611,26 +611,57 @@ function renderArbitrationForm(container, endpoint, number, { order, revision },
   const form = container.querySelector('form');
   form.querySelector('[data-dismiss]').addEventListener('click', () => container.replaceChildren());
   form.querySelector('input, textarea').focus();
+  let submitting = false;
   form.addEventListener('submit', async event => {
     event.preventDefault();
+    if (submitting) return;
+    const status = form.querySelector('[role="status"], [role="alert"]');
+    const showError = (message, name) => {
+      status.textContent = message;
+      status.setAttribute('role', 'alert');
+      status.classList.add('text-red-700');
+      const field = name && form.elements.namedItem(name);
+      if (field) {
+        field.setAttribute('aria-invalid', 'true');
+        field.focus();
+        field.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      } else status.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    };
+    for (const field of form.querySelectorAll('input,select,textarea')) {
+      field.removeAttribute('aria-invalid');
+      if (!field.checkValidity()) {
+        const label = field.closest('label')?.firstChild?.textContent?.trim() || 'este campo';
+        showError('Revisa ' + label + '. ' + field.validationMessage, field.name);
+        return;
+      }
+    }
+    const capture = form.elements.screenshot?.files[0];
+    if (capture && (!/\.(png|jpe?g|heic)$/i.test(capture.name) || capture.size > 10 * 1024 * 1024)) {
+      showError('Adjunta un comprobante PNG, JPG, JPEG o HEIC de hasta 10 MB.', 'screenshot');
+      return;
+    }
     const body = new FormData(form);
     if (!body.get('screenshot')?.size) body.delete('screenshot');
     body.set('action', action);
     body.set('revision', revision);
     const buttons = [...form.querySelectorAll('button'), ...container.parentElement.querySelectorAll('[data-ticket-action]')];
-    const status = form.querySelector('[role="status"]');
+    submitting = true;
+    status.classList.remove('text-red-700');
+    status.setAttribute('role', 'status');
     buttons.forEach(button => { button.disabled = true; });
     status.textContent = 'Guardando…';
     try {
-      const response = await fetch(endpoint, { method: 'POST', body });
-      const data = await response.json();
-      if (!response.ok) { status.textContent = data.message; return; }
+      const response = await fetch(endpoint, { method: 'POST', body, signal: AbortSignal.timeout(60000) });
+      const data = await response.json().catch(() => null);
+      if (!data) throw new Error('Respuesta inesperada');
+      if (!response.ok || !data.ok) { showError(data.message || 'No se pudo guardar la entrada.', data.field); return; }
       showToast(data.message);
       if (form.isConnected && !document.getElementById('admin-modal').classList.contains('hidden')) await openTicketArbitration(number);
       await fetchAdminOverview();
     } catch (_) {
-      status.textContent = 'No se pudo confirmar la operación. Vuelve a abrir la entrada para revisar su estado.';
+      showError('No se pudo confirmar la operación. Vuelve a abrir la entrada para revisar su estado antes de reenviar.');
     } finally {
+      submitting = false;
       buttons.forEach(button => { button.disabled = false; });
     }
   });
