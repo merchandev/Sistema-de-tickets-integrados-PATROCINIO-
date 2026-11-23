@@ -284,7 +284,7 @@ function broadcastConfigUpdate() {
 // ============================================================================
 
 function requireSalesOpen(_req, res, next) {
-  if (process.env.SALES_ENABLED === 'false') return res.status(503).json({ok:false, code:'SALES_NOT_OPEN', message:'La venta de entradas estará disponible próximamente. Aún no debes realizar pagos.'});
+  if (process.env.SALES_ENABLED === 'false') return res.status(503).json({ok:false, code:'SALES_NOT_OPEN', message:'La venta de entradas está cerrada. El evento ha finalizado. Gracias por acompañarnos.'});
   return next();
 }
 

@@ -143,7 +143,8 @@
 
   function renderConfig() {
     const salesClosed = eventConfig.sales_enabled === false;
-    if (salesClosed) showAlert("Venta de entradas próximamente. Puedes consultar el evento; aún no debes realizar pagos.", "info");
+    if (salesClosed) showAlert("Venta de entradas cerrada. El evento ha finalizado. Gracias por acompañarnos.", "info");
+    $('assignment-title').textContent = salesClosed ? 'Venta de entradas cerrada' : 'Reserva tu entrada';
     $('open-report').disabled = salesClosed;
     assignmentButton.disabled = salesClosed || assigning || restoring;
 
